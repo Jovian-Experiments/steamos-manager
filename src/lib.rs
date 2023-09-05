@@ -1,7 +1,9 @@
-use std::fs;
+use std::{fs, io};
 use std::{error::Error, future::pending};
+use std::collections::HashMap;
+
 use serde::{Serialize, Deserialize};
-use zbus::{ConnectionBuilder, dbus_interface};
+use zbus::{Connection, ConnectionBuilder, Result, dbus_interface, zvariant::Value};
 
 // We use s(teamos)m(anager) prefix on all types to help avoid conflicts
 
@@ -18,10 +20,10 @@ pub enum SmApiType {
 // TODO: This may change to better match what zbus needs.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SmDbusApi {
-    bus_name: String,
-    object_path: String,
-    method_name: String,
-    // parameters: Vec
+    bus_name: String, // The servcive name, i.e. org.freedesktop.Notifications
+    object_path: String, // The object path, i.e. /org/freedesktop/Notifications
+    interface_name: String, // The interface used i.e. org.freedesktop.Notifications
+    method_name: String // The method name, i.e. Notify
 }
 
 // SmScript represents a script to be executed
@@ -46,12 +48,23 @@ pub struct SmEntry {
     outgoing: SmOperation, // TBD: Either the outgoing zbus method or a script to run
 }
 
-pub fn initialize_apis(path: String) -> Vec::<SmEntry>
+pub fn initialize_apis(path: String) -> Result<(Vec::<SmEntry>)>
 {
-    let mut res = Vec::<SmEntry>::new();
-    for file in fs::read_dir(path).unwrap() {
-        // Deserialize the file and add all entries to res
-        
+    let res = Vec::<SmEntry>::new();
+    for file in fs::read_dir(path)? {
+        // Deserialize the file and add SmEntry to res
     }
-    return res;
+    return Ok(res);
+}
+
+pub fn create_dbus_apis(connection: zbus::Connection, entries: Vec::<SmEntry>) -> bool
+{
+    // Create each of the given apis as dbus methods that users, etc.
+    // can use to call into us.
+    for api in entries
+    {
+        // 
+
+    }
+    return true;
 }
