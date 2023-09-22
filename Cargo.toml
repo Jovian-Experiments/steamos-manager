@@ -9,3 +9,4 @@ edition = "2021"
 async-std = { version = "1.12.0", features = ["attributes"] }
 serde = { version = "1.0.188", features = ["derive"] }
 zbus = "3.14.1"
+zbus_macros = "3.14.1"

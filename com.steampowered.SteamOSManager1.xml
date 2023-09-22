@@ -1,0 +1,226 @@
+<!DOCTYPE node PUBLIC
+"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+
+<!--
+  Copyright © 2023 Collabora Ltd.
+  SPDX-License-Identifier: MIT
+
+  Permission is hereby granted, free of charge, to any person obtaining
+  a copy of this software and associated documentation files (the
+  "Software"), to deal in the Software without restriction, including
+  without limitation the rights to use, copy, modify, merge, publish,
+  distribute, sublicense, and/or sell copies of the Software, and to
+  permit persons to whom the Software is furnished to do so, subject to
+  the following conditions:
+
+  The above copyright notice and this permission notice shall be included
+  in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+  <!--
+      com.steampowered.SteamOSManager1
+      @short_description: Interface to control various aspects of SteamOS
+  -->
+  <interface name="com.steampowered.SteamOSManager1">
+
+    <!--
+        Version:
+
+        The version of this interface implemented by this object.
+        This file documents version 1 of the interface.
+    -->
+    <property name="Version" type="u" access="read"/>
+
+    <!--
+        FactoryReset:
+        @success: True on success (should reboot next, to finish the reset.). False otherwise.
+
+        Perform factory reset of device.
+        runs steamos-factory-reset script for now.
+
+        Returns true on success, false on failure.
+    -->
+    <method name="FactoryReset">
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+        DisableWifiPowerManagement:
+
+        Disable wifi chip's powermanagement.
+    -->
+    <method name="DisableWifiPowerManagement">
+    </method>
+
+    <!--
+        EnableFanControl:
+        @enable: Whether fan control should be enabled.
+
+    -->
+    <method name="EnableFanControl">
+      <arg type="b" name="enable" direction="in"/>
+    </method>
+
+    <!--
+        HardwareCheckSupport:
+        @supported: True if all hardware is supported. False otherwise.
+
+        Checks for unsupported hardware.
+    -->
+    <method name="HardwareCheckSupport">
+      <arg type="b" name="supported" direction="out"/>
+    </method>
+
+    <!--
+        ReadALSCalibration:
+        @gain: The gain from the ALS calibration, in floating point.
+
+        Read ALS calibration value.
+        Note: Will give -1.0 on error running script.
+    -->
+    <method name="ReadALSCalibration">
+      <arg type="d" name="gain" direction="out"/>
+    </method>
+
+    <!--
+        UpdateBIOS:
+        @success: True on bios update success. False otherwise.
+
+        Perform a bios update.
+    -->
+    <method name="UpdateBIOS">
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+        UpdateDock:
+        @success: True on dock update script success. False otherwise.
+
+        Perform a dock firmware update.
+    -->
+    <method name="UpdateDock">
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+        TrimDevices:
+        @success: True on script success. False otherwise.
+
+        Perform fstrim on disk devices.
+    -->
+    <method name="TrimDevices">
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      FormatSDCard:
+      @success: True on script success. False otherwise.
+
+      Format the inserted sd card.
+    -->
+    <method name="FormatSDCard">
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetGPUPerformanceLevel:
+      @level: The level to use (TODO: Fill in range here and also check it in code?)
+      @auto: True if we should set back to auto. False to use level above.
+      @success: True on success. False otherwise.
+
+      Set the GPU performance level to the given value.
+    -->
+    <method name="SetGPUPerformanceLevel">
+      <arg type="i" name="level" direction="in"/>
+      <arg type="b" name="auto" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetGPUClocks:
+      @clocks: The clocks to use.
+      @clear: True if we should clear to go back to defaults. False to use clocks above.
+      @success: True on success. False otherwise.
+
+      Set the GPU clocks to the given value.
+    -->
+    <method name="SetGPUClocks">
+      <arg type="i" name="clocks" direction="in"/>
+      <arg type="b" name="clear" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetTDPLimit:
+      @limit: The upper limit to use.
+      @success: True on success. False otherwise.
+
+      Set the TDP limit to the given value.
+    -->
+    <method name="SetTDPLimit">
+      <arg type="i" name="limit" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetBacklight:
+      @value: The backlight brightness value to use.
+      @success: True on success. False otherwise.
+
+      Set the backlight brightness to the given value.
+    -->
+    <method name="SetBacklight">
+      <arg type="i" name="value" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetALSIntegrationTime:
+      @seconds: The number of seconds to use for ALS integration.
+      @success: True on success. False otherwise.
+
+      Set the ALS integration time to the given value.
+    -->
+    <method name="SetALSIntegrationTime">
+      <arg type="i" name="seconds" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetLEDBrightness
+      @value: The value to usse for LED brightness.
+      @success: True on success. False otherwise.
+
+      Set the LED brightness to the given value.
+    -->
+    <method name="SetLEDBrightness">
+      <arg type="i" name="value" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      SetContentAdaptiveBrightness
+      @value: The value to usse for content adaptive brightness.
+      @success: True on success. False otherwise.
+
+      Set the content adaptive brightness to the given value.
+    -->
+    <method name="SetContentAdaptiveBrightness">
+      <arg type="i" name="value" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+  </interface>
+
+</node>

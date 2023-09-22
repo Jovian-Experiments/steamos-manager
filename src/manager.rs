@@ -23,26 +23,16 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use zbus::{ConnectionBuilder, Result};
+use zbus_macros::dbus_interface;
+use zbus::{ObjectServer, SignalContext, MessageHeader};
+pub struct SMManager {
 
-use steamos_manager::*;
+}
 
-#[async_std::main]
-async fn main() -> Result<()>
-{
-    // This daemon is responsible for creating a dbus api that steam client can use to do various OS
-    // level things. It implements com.steampowered.SteamOSManager1 interface
-    
-    let manager = manager::SMManager {};
-
-    let _system_connection = ConnectionBuilder::session()?
-    .name("com.steampowered.SteamOSManager1")?
-    .serve_at("/com/steampowered/SteamOSManager1", manager)?
-    .build()
-    .await?;
-    
-    loop
-    {
-        std::future::pending::<()>().await;
+#[dbus_interface(name = "com.steampowered.SteamOSManager1")]
+impl SMManager {
+    async fn say_hello(&self, name: &str) -> String {
+        format!("Hello {}!", name)
     }
 }
+
