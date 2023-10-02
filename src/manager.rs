@@ -23,18 +23,19 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+use std::ffi::OsStr;
 use subprocess::{ExitStatus::Exited, Popen, PopenConfig, Redirection};
 use zbus_macros::dbus_interface;
 use zbus::{ObjectServer, SignalContext, MessageHeader};
 pub struct SMManager {
 }
 
-fn run_script(script: String) -> bool {
+fn run_script(argv: &[impl AsRef<OsStr>]) -> bool {
     // Run given script and return true on success
-    let mut process = Popen::create(&[script], PopenConfig {
+    let mut process = Popen::create(argv, PopenConfig {
         stdout: Redirection::Pipe, ..Default::default()
     }).unwrap();
-    let (out, err) = process.communicate(None).unwrap();
+    let (_out, _err) = process.communicate(None).unwrap();
     if let Some(exit_status) = process.poll() {
         return exit_status == Exited(0);
     } else {
@@ -53,7 +54,27 @@ impl SMManager {
     
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        return run_script("steamos-factory-reset".to_string());
+        return run_script(&["steamos-factory-reset-config"]);
+    }
+
+    async fn disable_wifi_power_management(&self) -> bool {
+        // Run  what steamos-polkit-helpers/steamos-disable-wifi-power-management does
+        return run_script(&["iwconfig", "wlan0", "power", "off"]);
+    }
+    
+    async fn enable_fan_control(&self, enable: bool) -> bool {
+        // Run what steamos-polkit-helpers/jupiter-fan-control does
+        if enable {
+            return run_script(&["systemctl", "start", "jupiter-fan-control.service"]);
+        } else {
+            return run_script(&["systemctl", "stop", "jupiter-fan-control.service"]);
+        }
+    }
+
+    async fn hardware_check_support(&self) -> bool {
+        // Run jupiter-check-support note this script does exit 1 for "Support: No" case
+        // so no need to parse output, etc.
+        return run_script(&["jupiter-check-support"])
     }
 
     /// A version property.

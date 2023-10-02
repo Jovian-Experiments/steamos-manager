@@ -61,6 +61,7 @@
         Disable wifi chip's powermanagement.
     -->
     <method name="DisableWifiPowerManagement">
+      <arg type="b" name="success" direction="out"/>
     </method>
 
     <!--
@@ -70,6 +71,7 @@
     -->
     <method name="EnableFanControl">
       <arg type="b" name="enable" direction="in"/>
+      <arg type="b" name="success" direction="out"/>
     </method>
 
     <!--
