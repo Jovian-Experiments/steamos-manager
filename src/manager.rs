@@ -26,13 +26,20 @@
 use zbus_macros::dbus_interface;
 use zbus::{ObjectServer, SignalContext, MessageHeader};
 pub struct SMManager {
-
 }
 
 #[dbus_interface(name = "com.steampowered.SteamOSManager1")]
 impl SMManager {
+    const API_VERSION: u32 = 1;
+
     async fn say_hello(&self, name: &str) -> String {
         format!("Hello {}!", name)
+    }
+    
+    /// A version property.
+    #[dbus_interface(property)]
+    async fn version(&self) -> u32 {
+        SMManager::API_VERSION
     }
 }
 
