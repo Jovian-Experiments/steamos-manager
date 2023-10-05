@@ -25,7 +25,7 @@
 
 use zbus::{ConnectionBuilder, Result};
 
-use steamos_manager::*;
+pub mod manager;
 
 #[async_std::main]
 async fn main() -> Result<()>
