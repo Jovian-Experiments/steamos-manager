@@ -24,21 +24,24 @@
  */
 
 use std::ffi::OsStr;
-use subprocess::{ExitStatus::Exited, Popen, PopenConfig, Redirection};
+use subprocess::{ExitStatus::Exited, Popen, PopenConfig, PopenError};
 use zbus_macros::dbus_interface;
 pub struct SMManager {
 }
 
-fn run_script(argv: &[impl AsRef<OsStr>]) -> bool {
+fn script_exit_code(argv: &[impl AsRef<OsStr>]) -> Result<bool, PopenError> {
     // Run given script and return true on success
-    let mut process = Popen::create(argv, PopenConfig {
-        stdout: Redirection::Pipe, ..Default::default()
-    }).unwrap();
-    let (_out, _err) = process.communicate(None).unwrap();
-    if let Some(exit_status) = process.poll() {
-        exit_status == Exited(0)
-    } else {
-        false
+    let mut process = Popen::create(argv, PopenConfig::default())?;
+    let exit_status = process.wait()?;
+    Ok(exit_status == Exited(0))
+}
+
+fn run_script(name: &str, argv: &[impl AsRef<OsStr>]) -> bool {
+    // Run given script to get exit code and return true on success.
+    // Return false on failure, but also print an error if needed
+    match script_exit_code(argv) {
+        Ok(value) => value,
+        Err(err) => { println!("Error running {} {}", name, err); false }
     }
 }
 
@@ -53,27 +56,27 @@ impl SMManager {
     
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        run_script(&["steamos-factory-reset-config"])
+        run_script("factory reset", &["steamos-factory-reset-config"])
     }
 
     async fn disable_wifi_power_management(&self) -> bool {
-        // Run  what steamos-polkit-helpers/steamos-disable-wifi-power-management does
-        run_script(&["iwconfig", "wlan0", "power", "off"])
+        // Run polkit helper script and return true on success
+        run_script("disable wifi power management", &["/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management"])
     }
     
     async fn enable_fan_control(&self, enable: bool) -> bool {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         if enable {
-            run_script(&["systemctl", "start", "jupiter-fan-control.service"])
+            run_script("enable fan control", &["systemctl", "start", "jupiter-fan-control.service"])
         } else {
-            run_script(&["systemctl", "stop", "jupiter-fan-control.service"])
+            run_script("disable fan control", &["systemctl", "stop", "jupiter-fan-control.service"])
         }
     }
 
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        run_script(&["jupiter-check-support"])
+        run_script("check hardware support", &["jupiter-check-support"])
     }
 
     /// A version property.
