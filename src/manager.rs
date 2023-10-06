@@ -24,7 +24,7 @@
  */
 
 use std::ffi::OsStr;
-use subprocess::{ExitStatus::Exited, Popen, PopenConfig, PopenError};
+use subprocess::{ExitStatus::Exited, Popen, PopenConfig, PopenError, Redirection};
 use zbus_macros::dbus_interface;
 pub struct SMManager {
 }
@@ -42,6 +42,20 @@ fn run_script(name: &str, argv: &[impl AsRef<OsStr>]) -> bool {
     match script_exit_code(argv) {
         Ok(value) => value,
         Err(err) => { println!("Error running {} {}", name, err); false }
+    }
+}
+
+fn script_output(argv: &[impl AsRef<OsStr>]) -> Result<String, PopenError> {
+    // Run given command and return the output given
+    let mut process = Popen::create(argv, PopenConfig {
+        stdout: Redirection::Pipe,
+        ..Default::default()
+    })?;
+    let (output, _err) = process.communicate(None)?;
+    let _exit_status = process.wait()?;
+    match output {
+        Some(output_strings) => Ok(output_strings),
+        None => Err(PopenError::LogicError("Error getting output"))
     }
 }
 
@@ -77,6 +91,18 @@ impl SMManager {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
         run_script("check hardware support", &["jupiter-check-support"])
+    }
+
+    async fn read_als_calibration(&self) -> f32 {
+        // Run script to get calibration value
+        let result = script_output(&["/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain"]);
+        let mut value: f32 = -1.0;
+        match result {
+            Ok(as_string) => value = as_string.trim().parse().unwrap(),
+            Err(message) => println!("Unable to run als calibration script : {}", message),
+        }
+        
+        value
     }
 
     /// A version property.
