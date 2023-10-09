@@ -176,18 +176,6 @@
     </method>
 
     <!--
-      SetBacklight:
-      @value: The backlight brightness value to use.
-      @success: True on success. False otherwise.
-
-      Set the backlight brightness to the given value.
-    -->
-    <method name="SetBacklight">
-      <arg type="i" name="value" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
       SetALSIntegrationTime:
       @seconds: The number of seconds to use for ALS integration.
       @success: True on success. False otherwise.
@@ -196,30 +184,6 @@
     -->
     <method name="SetALSIntegrationTime">
       <arg type="i" name="seconds" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetLEDBrightness
-      @value: The value to usse for LED brightness.
-      @success: True on success. False otherwise.
-
-      Set the LED brightness to the given value.
-    -->
-    <method name="SetLEDBrightness">
-      <arg type="i" name="value" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetContentAdaptiveBrightness
-      @value: The value to usse for content adaptive brightness.
-      @success: True on success. False otherwise.
-
-      Set the content adaptive brightness to the given value.
-    -->
-    <method name="SetContentAdaptiveBrightness">
-      <arg type="i" name="value" direction="in"/>
       <arg type="b" name="success" direction="out"/>
     </method>
 
