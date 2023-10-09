@@ -108,6 +108,31 @@ impl SMManager {
         value
     }
 
+    async fn update_bios(&self) -> bool {
+        // Update the bios as needed
+        // Return true if the script was successful (though that might mean no update was needed), false otherwise
+        run_script("update bios", "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate", &["--auto"]).await
+    }
+
+    async fn update_dock(&self) -> bool {
+        // Update the dock firmware as needed
+        // Retur true if successful, false otherwise
+        run_script("update dock firmware", "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater", &[""]).await
+    }
+
+    async fn trim_devices(&self) -> bool {
+        // Run steamos-trim-devices script
+        // return true on success, false otherwise
+        run_script("trim devices", "/usr/bin/steamos-polkit-helpers/steamos-trim-devices", &[""]).await
+    }
+
+    async fn format_sdcard(&self) -> bool {
+        // Run steamos-format-sdcard script
+        // return true on success, false otherwise
+        run_script("format sdcard", "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard", &[""]).await
+    }
+    
+    
     /// A version property.
     #[dbus_interface(property)]
     async fn version(&self) -> u32 {
