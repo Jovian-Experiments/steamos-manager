@@ -35,7 +35,7 @@ async fn main() -> Result<()>
     
     let manager = manager::SMManager {};
 
-    let _system_connection = ConnectionBuilder::session()?
+    let _system_connection = ConnectionBuilder::system()?
     .name("com.steampowered.SteamOSManager1")?
     .serve_at("/com/steampowered/SteamOSManager1", manager)?
     .build()
