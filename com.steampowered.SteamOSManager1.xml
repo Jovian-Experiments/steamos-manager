@@ -137,15 +137,13 @@
 
     <!--
       SetGPUPerformanceLevel:
-      @level: The level to use (TODO: Fill in range here and also check it in code?)
-      @auto: True if we should set back to auto. False to use level above.
+      @level: The level to use 0 - auto, 1 - low, 2 - high, 3 - manual, 4 - profile_peak
       @success: True on success. False otherwise.
 
       Set the GPU performance level to the given value.
     -->
     <method name="SetGPUPerformanceLevel">
       <arg type="i" name="level" direction="in"/>
-      <arg type="b" name="auto" direction="in"/>
       <arg type="b" name="success" direction="out"/>
     </method>
 

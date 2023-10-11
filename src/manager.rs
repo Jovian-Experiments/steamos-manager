@@ -24,7 +24,7 @@
  */
 
 use std::{ffi::OsStr};
-use tokio::process::Command;
+use tokio::{process::Command, fs::File, io::AsyncWriteExt};
 use zbus_macros::dbus_interface;
 pub struct SMManager {
 }
@@ -132,6 +132,36 @@ impl SMManager {
         run_script("format sdcard", "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard", &[""]).await
     }
     
+    async fn set_gpu_performance_level(&self, level: i32) -> bool {
+        // Set given level to sysfs path /sys/class/drm/card0/device/power_dpm_force_performance_level
+        // Levels are defined below
+        // return true if able to write, false otherwise or if level is out of range, etc.
+        let levels = [
+            "auto",
+            "low",
+            "high",
+            "manual",
+            "peak_performance"
+        ];
+        if level < 0 || level >= levels.len() as i32 {
+            return false;
+        }
+        
+        // Open sysfs file
+        let result = File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level").await;
+        let mut myfile; 
+        match result {
+            Ok(f) => myfile = f,
+            Err(message) => { println!("Error opening sysfs file for writing {message}"); return false; }
+        };
+
+        // write value
+        let result = myfile.write_all(levels[level as usize].as_bytes()).await;
+        match result {
+            Ok(_worked) => true,
+            Err(message) => { println!("Error writing to sysfs file {message}"); false }
+        }
+    }
     
     /// A version property.
     #[dbus_interface(property)]
