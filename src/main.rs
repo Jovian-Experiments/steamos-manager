@@ -27,7 +27,7 @@ use zbus::{ConnectionBuilder, Result};
 
 pub mod manager;
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<()>
 {
     // This daemon is responsible for creating a dbus api that steam client can use to do various OS
