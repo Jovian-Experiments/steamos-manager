@@ -1,0 +1,7 @@
+[Unit]
+Description=SteamOS Manager Daemon
+
+[Service]
+Type=dbus
+BusName=com.steampowered.SteamOSManager1
+ExecStart=/usr/lib/steamos-manager

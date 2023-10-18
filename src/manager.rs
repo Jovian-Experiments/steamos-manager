@@ -23,40 +23,43 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use std::ffi::OsStr;
-use subprocess::{ExitStatus::Exited, Popen, PopenConfig, PopenError, Redirection};
+use std::{ffi::OsStr};
+use tokio::process::Command;
 use zbus_macros::dbus_interface;
 pub struct SMManager {
 }
 
-fn script_exit_code(argv: &[impl AsRef<OsStr>]) -> Result<bool, PopenError> {
+async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool, Box<dyn std::error::Error>> {
     // Run given script and return true on success
-    let mut process = Popen::create(argv, PopenConfig::default())?;
-    let exit_status = process.wait()?;
-    Ok(exit_status == Exited(0))
+    let mut child = Command::new(executable)
+        .args(args)
+        .spawn()
+        .expect("Failed to spawn {executable}");
+    let status = child.wait().await?;
+    Ok(status.success())
 }
 
-fn run_script(name: &str, argv: &[impl AsRef<OsStr>]) -> bool {
+async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> bool {
     // Run given script to get exit code and return true on success.
     // Return false on failure, but also print an error if needed
-    match script_exit_code(argv) {
+    match script_exit_code(executable, args).await {
         Ok(value) => value,
-        Err(err) => { println!("Error running {} {}", name, err); false }
+        Err(err) => { println!("Error running {} {}", name, err); false}
     }
 }
 
-fn script_output(argv: &[impl AsRef<OsStr>]) -> Result<String, PopenError> {
+async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String, Box<dyn std::error::Error>> {
     // Run given command and return the output given
-    let mut process = Popen::create(argv, PopenConfig {
-        stdout: Redirection::Pipe,
-        ..Default::default()
-    })?;
-    let (output, _err) = process.communicate(None)?;
-    let _exit_status = process.wait()?;
-    match output {
-        Some(output_strings) => Ok(output_strings),
-        None => Err(PopenError::LogicError("Error getting output"))
-    }
+    let output = Command::new(executable)
+        .args(args).output();
+
+    let output = output.await?;
+
+    let s = match std::str::from_utf8(&output.stdout) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    };
+    Ok(s.to_string())
 }
 
 #[dbus_interface(name = "com.steampowered.SteamOSManager1")]
@@ -70,32 +73,32 @@ impl SMManager {
     
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        run_script("factory reset", &["steamos-factory-reset-config"])
+        run_script("factory reset", "steamos-factory-reset-config", &[""]).await
     }
 
     async fn disable_wifi_power_management(&self) -> bool {
         // Run polkit helper script and return true on success
-        run_script("disable wifi power management", &["/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management"])
+        run_script("disable wifi power management", "/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management", &[""]).await
     }
     
     async fn enable_fan_control(&self, enable: bool) -> bool {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         if enable {
-            run_script("enable fan control", &["systemctl", "start", "jupiter-fan-control.service"])
+            run_script("enable fan control", "systemcltl", &["start", "jupiter-fan-control-service"]).await
         } else {
-            run_script("disable fan control", &["systemctl", "stop", "jupiter-fan-control.service"])
+            run_script("disable fan control", "systemctl", &["stop", "jupiter-fan-control.service"]).await
         }
     }
 
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        run_script("check hardware support", &["jupiter-check-support"])
+        run_script("check hardware support", "jupiter-check-support", &[""]).await
     }
 
     async fn read_als_calibration(&self) -> f32 {
         // Run script to get calibration value
-        let result = script_output(&["/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain"]);
+        let result = script_output("/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain", &[""]).await;
         let mut value: f32 = -1.0;
         match result {
             Ok(as_string) => value = as_string.trim().parse().unwrap(),
