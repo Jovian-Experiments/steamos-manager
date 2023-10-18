@@ -162,6 +162,43 @@ impl SMManager {
             Err(message) => { println!("Error writing to sysfs file {message}"); false }
         }
     }
+
+    async fn set_gpu_clocks(&self, clocks: i32) -> bool {
+        // Set gpu clocks to given value valid between 200 - 1600
+        // Only used when Gpu Performance Level is manual, but write whenever called.
+        // Writes value to /sys/class/drm/card0/device/pp_od_clk_voltage
+        if !(200..=1600).contains(&clocks) {
+            return false;
+        }
+
+        let result = File::create("/sys/class/drm/card0/device/pp_od_clk_voltage").await;
+        let mut myfile;
+        match result {
+            Ok(f) => myfile = f,
+            Err(message) => { println!("Error opening sysfs file for writing {message}"); return false; }
+        };
+
+        // write value
+        let data = format!("s 0 {clocks}\n");
+        let result = myfile.write(data.as_bytes()).await;
+        match result {
+            Ok(_worked) => {
+                let data = format!("s 1 {clocks}\n");
+                let result = myfile.write(data.as_bytes()).await;
+                match result {
+                    Ok(_worked) => {
+                        let result = myfile.write("c\n".as_bytes()).await;
+                        match result {
+                            Ok(_worked) => true,
+                            Err(message) => { println!("Error writing to sysfs file {message}"); false }
+                        }
+                    },
+                    Err(message) => { println!("Error writing to sysfs file {message}"); false }
+                }
+            },
+            Err(message) => { println!("Error writing to sysfs file {message}"); false }
+        }
+    }
     
     /// A version property.
     #[dbus_interface(property)]
