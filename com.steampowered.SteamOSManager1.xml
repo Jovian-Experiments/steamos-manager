@@ -160,8 +160,8 @@
     </method>
 
     <!--
-      SetTDPLimit:
-      @limit: The upper limit to use.
+      SetTdpLimit:
+      @limit: The upper limit to use (between 3 and 15).
       @success: True on success. False otherwise.
 
       Set the TDP limit to the given value.

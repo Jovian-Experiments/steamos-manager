@@ -200,6 +200,43 @@ impl SMManager {
         }
     }
     
+    async fn set_tdp_limit(&self, limit: i32) -> bool {
+        // Set TDP limit given if within range (3-15)
+        // Returns false on error or out of range
+        // Writes value to /sys/class/hwmon/hwmon5/power[12]_cap
+        if !(3..=15).contains(&limit) {
+            return false;
+        }
+
+        let result = File::create("/sys/class/hwmon/hwmon5/power1_cap").await;
+        let mut power1file;
+        match result {
+            Ok(f) => power1file = f,
+            Err(message) => { println!("Error opening sysfs power1_cap file for writing TDP limits {message}"); return false; }
+        };
+
+        let result = File::create("/sys/class/hwmon/hwmon5/power2_cap").await;
+        let mut power2file;
+        match result {
+            Ok(f) => power2file = f,
+            Err(message) => { println!("Error opening sysfs power2_cap file for wtriting TDP limits {message}"); return false; }
+        };
+
+        // Now write the value * 1,000,000
+        let data = format!("{limit}000000");
+        let result = power1file.write(data.as_bytes()).await;
+        match result {
+            Ok(_worked) => {
+                let result = power2file.write(data.as_bytes()).await;
+                match result {
+                    Ok(_worked) => true,
+                    Err(message) => { println!("Error writing to power2_cap file: {message}"); false }
+                }
+            },
+            Err(message) => { println!("Error writing to power1_cap file: {message}"); false }
+        }
+    }
+
     /// A version property.
     #[dbus_interface(property)]
     async fn version(&self) -> u32 {
