@@ -5,9 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+strip="symbols"
+
 [dependencies]
-dyn = "0.0.0"
-serde = { version = "1.0.188", features = ["derive"] }
 tokio = { version = "1.33.0", features = ["fs", "process", "io-std", "rt-multi-thread", "macros"] }
 zbus = { version = "3.14.1", features = ["tokio"] }
 zbus_macros = "3.14.1"
