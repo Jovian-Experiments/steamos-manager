@@ -136,54 +136,38 @@
     </method>
 
     <!--
-      SetGPUPerformanceLevel:
-      @level: The level to use (TODO: Fill in range here and also check it in code?)
-      @auto: True if we should set back to auto. False to use level above.
+      SetGpuPerformanceLevel:
+      @level: The level to use 0 - auto, 1 - low, 2 - high, 3 - manual, 4 - profile_peak
       @success: True on success. False otherwise.
 
       Set the GPU performance level to the given value.
     -->
-    <method name="SetGPUPerformanceLevel">
+    <method name="SetGpuPerformanceLevel">
       <arg type="i" name="level" direction="in"/>
-      <arg type="b" name="auto" direction="in"/>
       <arg type="b" name="success" direction="out"/>
     </method>
 
     <!--
-      SetGPUClocks:
-      @clocks: The clocks to use.
-      @clear: True if we should clear to go back to defaults. False to use clocks above.
+      SetGpuClocks:
+      @clocks: The clocks to use Range is 200-1600 but only takes effect when GpuPerformanceLevel is manual.
       @success: True on success. False otherwise.
 
       Set the GPU clocks to the given value.
     -->
-    <method name="SetGPUClocks">
+    <method name="SetGpuClocks">
       <arg type="i" name="clocks" direction="in"/>
-      <arg type="b" name="clear" direction="in"/>
       <arg type="b" name="success" direction="out"/>
     </method>
 
     <!--
-      SetTDPLimit:
-      @limit: The upper limit to use.
+      SetTdpLimit:
+      @limit: The upper limit to use (between 3 and 15).
       @success: True on success. False otherwise.
 
       Set the TDP limit to the given value.
     -->
     <method name="SetTDPLimit">
       <arg type="i" name="limit" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetBacklight:
-      @value: The backlight brightness value to use.
-      @success: True on success. False otherwise.
-
-      Set the backlight brightness to the given value.
-    -->
-    <method name="SetBacklight">
-      <arg type="i" name="value" direction="in"/>
       <arg type="b" name="success" direction="out"/>
     </method>
 
@@ -196,30 +180,6 @@
     -->
     <method name="SetALSIntegrationTime">
       <arg type="i" name="seconds" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetLEDBrightness
-      @value: The value to usse for LED brightness.
-      @success: True on success. False otherwise.
-
-      Set the LED brightness to the given value.
-    -->
-    <method name="SetLEDBrightness">
-      <arg type="i" name="value" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetContentAdaptiveBrightness
-      @value: The value to usse for content adaptive brightness.
-      @success: True on success. False otherwise.
-
-      Set the content adaptive brightness to the given value.
-    -->
-    <method name="SetContentAdaptiveBrightness">
-      <arg type="i" name="value" direction="in"/>
       <arg type="b" name="success" direction="out"/>
     </method>
 

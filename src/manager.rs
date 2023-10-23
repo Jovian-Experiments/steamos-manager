@@ -24,7 +24,7 @@
  */
 
 use std::{ffi::OsStr};
-use tokio::process::Command;
+use tokio::{process::Command, fs::File, io::AsyncWriteExt};
 use zbus_macros::dbus_interface;
 pub struct SMManager {
 }
@@ -106,6 +106,135 @@ impl SMManager {
         }
         
         value
+    }
+
+    async fn update_bios(&self) -> bool {
+        // Update the bios as needed
+        // Return true if the script was successful (though that might mean no update was needed), false otherwise
+        run_script("update bios", "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate", &["--auto"]).await
+    }
+
+    async fn update_dock(&self) -> bool {
+        // Update the dock firmware as needed
+        // Retur true if successful, false otherwise
+        run_script("update dock firmware", "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater", &[""]).await
+    }
+
+    async fn trim_devices(&self) -> bool {
+        // Run steamos-trim-devices script
+        // return true on success, false otherwise
+        run_script("trim devices", "/usr/bin/steamos-polkit-helpers/steamos-trim-devices", &[""]).await
+    }
+
+    async fn format_sdcard(&self) -> bool {
+        // Run steamos-format-sdcard script
+        // return true on success, false otherwise
+        run_script("format sdcard", "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard", &[""]).await
+    }
+    
+    async fn set_gpu_performance_level(&self, level: i32) -> bool {
+        // Set given level to sysfs path /sys/class/drm/card0/device/power_dpm_force_performance_level
+        // Levels are defined below
+        // return true if able to write, false otherwise or if level is out of range, etc.
+        let levels = [
+            "auto",
+            "low",
+            "high",
+            "manual",
+            "peak_performance"
+        ];
+        if level < 0 || level >= levels.len() as i32 {
+            return false;
+        }
+        
+        // Open sysfs file
+        let result = File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level").await;
+        let mut myfile; 
+        match result {
+            Ok(f) => myfile = f,
+            Err(message) => { println!("Error opening sysfs file for writing {message}"); return false; }
+        };
+
+        // write value
+        let result = myfile.write_all(levels[level as usize].as_bytes()).await;
+        match result {
+            Ok(_worked) => true,
+            Err(message) => { println!("Error writing to sysfs file {message}"); false }
+        }
+    }
+
+    async fn set_gpu_clocks(&self, clocks: i32) -> bool {
+        // Set gpu clocks to given value valid between 200 - 1600
+        // Only used when Gpu Performance Level is manual, but write whenever called.
+        // Writes value to /sys/class/drm/card0/device/pp_od_clk_voltage
+        if !(200..=1600).contains(&clocks) {
+            return false;
+        }
+
+        let result = File::create("/sys/class/drm/card0/device/pp_od_clk_voltage").await;
+        let mut myfile;
+        match result {
+            Ok(f) => myfile = f,
+            Err(message) => { println!("Error opening sysfs file for writing {message}"); return false; }
+        };
+
+        // write value
+        let data = format!("s 0 {clocks}\n");
+        let result = myfile.write(data.as_bytes()).await;
+        match result {
+            Ok(_worked) => {
+                let data = format!("s 1 {clocks}\n");
+                let result = myfile.write(data.as_bytes()).await;
+                match result {
+                    Ok(_worked) => {
+                        let result = myfile.write("c\n".as_bytes()).await;
+                        match result {
+                            Ok(_worked) => true,
+                            Err(message) => { println!("Error writing to sysfs file {message}"); false }
+                        }
+                    },
+                    Err(message) => { println!("Error writing to sysfs file {message}"); false }
+                }
+            },
+            Err(message) => { println!("Error writing to sysfs file {message}"); false }
+        }
+    }
+    
+    async fn set_tdp_limit(&self, limit: i32) -> bool {
+        // Set TDP limit given if within range (3-15)
+        // Returns false on error or out of range
+        // Writes value to /sys/class/hwmon/hwmon5/power[12]_cap
+        if !(3..=15).contains(&limit) {
+            return false;
+        }
+
+        let result = File::create("/sys/class/hwmon/hwmon5/power1_cap").await;
+        let mut power1file;
+        match result {
+            Ok(f) => power1file = f,
+            Err(message) => { println!("Error opening sysfs power1_cap file for writing TDP limits {message}"); return false; }
+        };
+
+        let result = File::create("/sys/class/hwmon/hwmon5/power2_cap").await;
+        let mut power2file;
+        match result {
+            Ok(f) => power2file = f,
+            Err(message) => { println!("Error opening sysfs power2_cap file for wtriting TDP limits {message}"); return false; }
+        };
+
+        // Now write the value * 1,000,000
+        let data = format!("{limit}000000");
+        let result = power1file.write(data.as_bytes()).await;
+        match result {
+            Ok(_worked) => {
+                let result = power2file.write(data.as_bytes()).await;
+                match result {
+                    Ok(_worked) => true,
+                    Err(message) => { println!("Error writing to power2_cap file: {message}"); false }
+                }
+            },
+            Err(message) => { println!("Error writing to power1_cap file: {message}"); false }
+        }
     }
 
     /// A version property.
