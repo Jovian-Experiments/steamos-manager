@@ -172,15 +172,14 @@
     </method>
 
     <!--
-      SetALSIntegrationTime:
-      @seconds: The number of seconds to use for ALS integration.
-      @success: True on success. False otherwise.
+      GetAlsIntegrationTimeFileDescriptor:
+      @descriptor: A unix file descriptor that can be written to to set ALS integration time.
+      Will be null if unable to open file or other error occurred.
 
-      Set the ALS integration time to the given value.
+      Get the ALS integration time file descriptor.
     -->
-    <method name="SetALSIntegrationTime">
-      <arg type="i" name="seconds" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
+    <method name="GetAlsIntegrationTimeFileDescriptor">
+      <arg type="h" name="descriptor" direction="out"/>
     </method>
 
   </interface>
