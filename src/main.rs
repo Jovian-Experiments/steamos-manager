@@ -28,21 +28,19 @@ use zbus::{ConnectionBuilder, Result};
 pub mod manager;
 
 #[tokio::main]
-async fn main() -> Result<()>
-{
+async fn main() -> Result<()> {
     // This daemon is responsible for creating a dbus api that steam client can use to do various OS
     // level things. It implements com.steampowered.SteamOSManager1 interface
-    
+
     let manager = manager::SMManager {};
 
     let _system_connection = ConnectionBuilder::system()?
-    .name("com.steampowered.SteamOSManager1")?
-    .serve_at("/com/steampowered/SteamOSManager1", manager)?
-    .build()
-    .await?;
-    
-    loop
-    {
+        .name("com.steampowered.SteamOSManager1")?
+        .serve_at("/com/steampowered/SteamOSManager1", manager)?
+        .build()
+        .await?;
+
+    loop {
         std::future::pending::<()>().await;
     }
 }
