@@ -59,6 +59,10 @@ ExecStart=/usr/lib/iwd/iwd -d
 ";
 const OVERRIDE_FOLDER: &str = "/etc/systemd/system/iwd.service.d";
 const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/override.conf";
+// Only use one path for output for now. If needed we can add a timestamp later
+// to have multiple files, etc.
+const OUTPUT_FILE: &str = "/var/log/wifitrace.dat";
+const MIN_BUFFER_SIZE: u32 = 100;
 
 async fn script_exit_code(
     executable: &str,
@@ -109,7 +113,7 @@ async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error>
     if want_override {
         // Copy it in
         // Make sure the folder exists
-        tokio::fs::create_dir(OVERRIDE_FOLDER).await?;
+        tokio::fs::create_dir_all(OVERRIDE_FOLDER).await?;
         // Then write the contents into the file
         tokio::fs::write(OVERRIDE_PATH, OVERRIDE_CONTENTS).await
     } else {
@@ -128,6 +132,20 @@ async fn restart_iwd() -> bool
 {
     // Restart the iwd service by running "systemctl restart iwd"
     run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
+}
+
+async fn stop_tracing() -> bool
+{
+    // Stop tracing and extract ring buffer to disk for capture
+    run_script("stop tracing", "trace-cmd", &["stop"]).await;
+    run_script("extract traces", "trace-cmd", &["extract", "-o", OUTPUT_FILE]).await
+}
+
+async fn start_tracing(buffer_size:u32) -> bool
+{
+    // Start tracing
+    let size_str = format!("{}", buffer_size);
+    run_script("start tracing", "trace-cmd", &["start", "-e", "ath11k_wmi_diag", "-b", &size_str]).await
 }
 
 #[dbus_interface(name = "com.steampowered.SteamOSManager1")]
@@ -397,15 +415,22 @@ impl SMManager {
 
         // If mode is 0 disable wifi debug mode
         if mode == 0 {
+            // Stop any existing trace and flush to disk.
+            stop_tracing().await;
             let _ = setup_iwd_config(false).await;
             reload_systemd().await;
             restart_iwd().await;
         }
         // If mode is 1 enable wifi debug mode
         else if mode == 1 {
+            if buffer_size < MIN_BUFFER_SIZE {
+                return false;
+            }
+
             let _ = setup_iwd_config(true).await;
             reload_systemd().await;
             restart_iwd().await;
+            start_tracing(buffer_size).await;
         }
         else {
             // Invalid mode requested, more coming later, but add this catch-all for now
