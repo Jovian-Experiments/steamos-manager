@@ -30,7 +30,35 @@ use std::{
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 use zbus::zvariant::OwnedFd;
 use zbus_macros::dbus_interface;
-pub struct SMManager {}
+
+pub struct SMManager {
+    wifi_debug_mode: u32,
+}
+
+impl SMManager
+{
+    pub fn new() -> Self
+    {
+        SMManager { wifi_debug_mode: 0 }
+    }
+}
+
+impl Default for SMManager
+{
+    fn default() -> Self
+    {
+        SMManager::new()
+    }
+
+}
+
+const OVERRIDE_CONTENTS: &str =
+"[Service]
+ExecStart=
+ExecStart=/usr/lib/iwd/iwd -d
+";
+const OVERRIDE_FOLDER: &str = "/etc/systemd/system/iwd.service.d";
+const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/override.conf";
 
 async fn script_exit_code(
     executable: &str,
@@ -71,6 +99,35 @@ async fn script_output(
         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
     };
     Ok(s.to_string())
+}
+
+async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error>
+{
+    // Copy override.conf file into place or out of place depending 
+    // on install value
+
+    if want_override {
+        // Copy it in
+        // Make sure the folder exists
+        tokio::fs::create_dir(OVERRIDE_FOLDER).await?;
+        // Then write the contents into the file
+        tokio::fs::write(OVERRIDE_PATH, OVERRIDE_CONTENTS).await
+    } else {
+        // Delete it
+        tokio::fs::remove_file(OVERRIDE_PATH).await
+    }
+}
+
+async fn reload_systemd() -> bool
+{
+    // Reload systemd so it will see our add or removal of changed files
+    run_script("reload systemd", "systemctl", &["daemon-reload"]).await
+}
+
+async fn restart_iwd() -> bool
+{
+    // Restart the iwd service by running "systemctl restart iwd"
+    run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
 }
 
 #[dbus_interface(name = "com.steampowered.SteamOSManager1")]
@@ -331,6 +388,32 @@ impl SMManager {
                 Err(zbus::fdo::Error::IOError(message.to_string()))
             }
         }
+    }
+
+    async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> bool {
+        // Set the wifi debug mode to mode, using an int for flexibility going forward but only
+        // doing things on 0 or 1 for now
+        // Return false on error
+
+        // If mode is 0 disable wifi debug mode
+        if mode == 0 {
+            let _ = setup_iwd_config(false).await;
+            reload_systemd().await;
+            restart_iwd().await;
+        }
+        // If mode is 1 enable wifi debug mode
+        else if mode == 1 {
+            let _ = setup_iwd_config(true).await;
+            reload_systemd().await;
+            restart_iwd().await;
+        }
+        else {
+            // Invalid mode requested, more coming later, but add this catch-all for now
+            println!("Invalid wifi debug mode {mode} requested"); 
+        }
+        self.wifi_debug_mode = mode;
+
+        true
     }
 
     /// A version property.
