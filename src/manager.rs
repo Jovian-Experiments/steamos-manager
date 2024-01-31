@@ -23,23 +23,50 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use std::{
-    ffi::OsStr,
-    os::fd::{FromRawFd, IntoRawFd},
-};
+use std::{ ffi::OsStr, fmt, os::fd::{FromRawFd, IntoRawFd} };
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 use zbus::zvariant::OwnedFd;
 use zbus_macros::dbus_interface;
 
+#[derive(PartialEq, Debug)]
+#[repr(u32)]
+enum WifiDebugMode {
+    Off,
+    On,
+}
+
+impl TryFrom<u32> for WifiDebugMode {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error>
+    {
+        match v {
+            x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
+            x if x == WifiDebugMode::On as u32 => Ok(WifiDebugMode::On),
+            _ => { Err("No enum match for value {v}") },
+        }
+
+    }
+
+}
+
+impl fmt::Display for WifiDebugMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WifiDebugMode::Off => write!(f, "Off"),
+            WifiDebugMode::On => write!(f, "On"),
+        }
+    }
+}
+
 pub struct SMManager {
-    wifi_debug_mode: u32,
+    wifi_debug_mode: WifiDebugMode,
 }
 
 impl SMManager
 {
     pub fn new() -> Self
     {
-        SMManager { wifi_debug_mode: 0 }
+        SMManager { wifi_debug_mode: WifiDebugMode::Off }
     }
 }
 
@@ -67,24 +94,23 @@ const MIN_BUFFER_SIZE: u32 = 100;
 async fn script_exit_code(
     executable: &str,
     args: &[impl AsRef<OsStr>],
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> std::io::Result<bool> {
     // Run given script and return true on success
     let mut child = Command::new(executable)
         .args(args)
-        .spawn()
-        .expect("Failed to spawn {executable}");
+        .spawn()?;
     let status = child.wait().await?;
     Ok(status.success())
 }
 
-async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> bool {
+async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> std::io::Result<bool> {
     // Run given script to get exit code and return true on success.
     // Return false on failure, but also print an error if needed
     match script_exit_code(executable, args).await {
-        Ok(value) => value,
+        Ok(value) => Ok(value),
         Err(err) => {
             println!("Error running {} {}", name, err);
-            false
+            Err(err)
         }
     }
 }
@@ -122,26 +148,26 @@ async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error>
     }
 }
 
-async fn reload_systemd() -> bool
+async fn reload_systemd() -> std::io::Result<bool>
 {
     // Reload systemd so it will see our add or removal of changed files
     run_script("reload systemd", "systemctl", &["daemon-reload"]).await
 }
 
-async fn restart_iwd() -> bool
+async fn restart_iwd() -> std::io::Result<bool>
 {
     // Restart the iwd service by running "systemctl restart iwd"
     run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
 }
 
-async fn stop_tracing() -> bool
+async fn stop_tracing() -> std::io::Result<bool>
 {
     // Stop tracing and extract ring buffer to disk for capture
-    run_script("stop tracing", "trace-cmd", &["stop"]).await;
+    run_script("stop tracing", "trace-cmd", &["stop"]).await?;
     run_script("extract traces", "trace-cmd", &["extract", "-o", OUTPUT_FILE]).await
 }
 
-async fn start_tracing(buffer_size:u32) -> bool
+async fn start_tracing(buffer_size:u32) -> std::io::Result<bool>
 {
     // Start tracing
     let size_str = format!("{}", buffer_size);
@@ -158,42 +184,57 @@ impl SMManager {
 
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        run_script("factory reset", "steamos-factory-reset-config", &[""]).await
+        match run_script("factory reset", "steamos-factory-reset-config", &[""]).await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn disable_wifi_power_management(&self) -> bool {
         // Run polkit helper script and return true on success
-        run_script(
+        match run_script(
             "disable wifi power management",
             "/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management",
             &[""],
         )
-        .await
+        .await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn enable_fan_control(&self, enable: bool) -> bool {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         if enable {
-            run_script(
+            match run_script(
                 "enable fan control",
                 "systemcltl",
                 &["start", "jupiter-fan-control-service"],
             )
-            .await
+            .await {
+                Ok(value) => { value },
+                Err(_) => { false }
+            }
         } else {
-            run_script(
+            match run_script(
                 "disable fan control",
                 "systemctl",
                 &["stop", "jupiter-fan-control.service"],
             )
-            .await
+            .await {
+                Ok(value) => { value },
+                Err(_) => { false }
+            }
         }
     }
 
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        run_script("check hardware support", "jupiter-check-support", &[""]).await
+        match run_script("check hardware support", "jupiter-check-support", &[""]).await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn read_als_calibration(&self) -> f32 {
@@ -215,45 +256,57 @@ impl SMManager {
     async fn update_bios(&self) -> bool {
         // Update the bios as needed
         // Return true if the script was successful (though that might mean no update was needed), false otherwise
-        run_script(
+        match run_script(
             "update bios",
             "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
-        .await
+        .await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn update_dock(&self) -> bool {
         // Update the dock firmware as needed
         // Retur true if successful, false otherwise
-        run_script(
+        match run_script(
             "update dock firmware",
             "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
             &[""],
         )
-        .await
+        .await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn trim_devices(&self) -> bool {
         // Run steamos-trim-devices script
         // return true on success, false otherwise
-        run_script(
+        match run_script(
             "trim devices",
             "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
             &[""],
         )
-        .await
+        .await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn format_sdcard(&self) -> bool {
         // Run steamos-format-sdcard script
         // return true on success, false otherwise
-        run_script(
+        match run_script(
             "format sdcard",
             "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard",
             &[""],
         )
-        .await
+        .await {
+            Ok(value) => { value },
+            Err(_) => { false }
+        }
     }
 
     async fn set_gpu_performance_level(&self, level: i32) -> bool {
@@ -413,30 +466,35 @@ impl SMManager {
         // doing things on 0 or 1 for now
         // Return false on error
 
-        // If mode is 0 disable wifi debug mode
-        if mode == 0 {
-            // Stop any existing trace and flush to disk.
-            stop_tracing().await;
-            let _ = setup_iwd_config(false).await;
-            reload_systemd().await;
-            restart_iwd().await;
-        }
-        // If mode is 1 enable wifi debug mode
-        else if mode == 1 {
-            if buffer_size < MIN_BUFFER_SIZE {
-                return false;
-            }
+        let wanted_mode = WifiDebugMode::try_from(mode);
+        match wanted_mode {
+            Ok(WifiDebugMode::Off) => {
+                // If mode is 0 disable wifi debug mode
+                // Stop any existing trace and flush to disk.
+                stop_tracing().await.expect("stop_tracing command failed somehow");
+                setup_iwd_config(false).await.expect("setup_iwd_config false command failed somehow");
+                reload_systemd().await.expect("reload_systemd command failed somehow");
+                restart_iwd().await.expect("restart_iwd command failed somehow");
+                self.wifi_debug_mode = WifiDebugMode::Off;
+            },
+            Ok(WifiDebugMode::On) => {
+                // If mode is 1 enable wifi debug mode
+                if buffer_size < MIN_BUFFER_SIZE {
+                    return false;
+                }
 
-            let _ = setup_iwd_config(true).await;
-            reload_systemd().await;
-            restart_iwd().await;
-            start_tracing(buffer_size).await;
+                setup_iwd_config(true).await.expect("setup_iwd_config true failed somehow");
+                reload_systemd().await.expect("reload_systemd command failed somehow");
+                restart_iwd().await.expect("restart_iwd command failed somehow");
+                start_tracing(buffer_size).await.expect("start tracing command failed somehow");
+                self.wifi_debug_mode = WifiDebugMode::On;
+            },
+            Err(_) => {
+                // Invalid mode requested, more coming later, but add this catch-all for now
+                println!("Invalid wifi debug mode {mode} requested"); 
+                return false;
+            },
         }
-        else {
-            // Invalid mode requested, more coming later, but add this catch-all for now
-            println!("Invalid wifi debug mode {mode} requested"); 
-        }
-        self.wifi_debug_mode = mode;
 
         true
     }
