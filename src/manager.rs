@@ -148,22 +148,33 @@ async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error>
     }
 }
 
-async fn reload_systemd() -> std::io::Result<bool>
-{
-    // Reload systemd so it will see our add or removal of changed files
-    run_script("reload systemd", "systemctl", &["daemon-reload"]).await
-}
-
 async fn restart_iwd() -> std::io::Result<bool>
 {
-    // Restart the iwd service by running "systemctl restart iwd"
-    run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
+    // First reload systemd since we modified the config most likely
+    // othorwise we wouldn't be restarting iwd.
+    match run_script("reload systemd", "systemctl", &["daemon-reload"]).await {
+        Ok(value) => {
+            if value {
+                // worked, now restart iwd
+                run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
+            } else {
+                // reload failed
+                println!("restart_iwd: reload systemd failed somehow");
+                Ok(false)
+            }
+        },
+        Err(message) => {
+            println!("restart_iwd: reload systemd got an error {message}");
+            Err(message)
+        }
+    }
 }
 
 async fn stop_tracing() -> std::io::Result<bool>
 {
     // Stop tracing and extract ring buffer to disk for capture
     run_script("stop tracing", "trace-cmd", &["stop"]).await?;
+    // stop tracing worked
     run_script("extract traces", "trace-cmd", &["extract", "-o", OUTPUT_FILE]).await
 }
 
@@ -471,11 +482,46 @@ impl SMManager {
             Ok(WifiDebugMode::Off) => {
                 // If mode is 0 disable wifi debug mode
                 // Stop any existing trace and flush to disk.
-                stop_tracing().await.expect("stop_tracing command failed somehow");
-                setup_iwd_config(false).await.expect("setup_iwd_config false command failed somehow");
-                reload_systemd().await.expect("reload_systemd command failed somehow");
-                restart_iwd().await.expect("restart_iwd command failed somehow");
-                self.wifi_debug_mode = WifiDebugMode::Off;
+                match stop_tracing().await {
+                    Ok(result) => {
+                        if result {
+                            // Stop_tracing was successful
+                            match setup_iwd_config(false).await {
+                                Ok(_) => {
+                                    // setup_iwd_config false worked
+                                    match restart_iwd().await {
+                                        Ok(value) => {
+                                            if value {
+                                                // restart iwd worked
+                                                self.wifi_debug_mode = WifiDebugMode::Off;
+                                            } else {
+                                                // restart_iwd failed
+                                                println!("restart_iwd failed somehow, check log above");
+                                                return false;
+                                            }
+                                        },
+                                        Err(message) => {
+                                            println!("restart_iwd got an error {message}");
+                                            return false;
+                                        }
+                                    }
+                                },
+                                Err(message) => {
+                                    println!("setup_iwd_config false got an error somehow {message}");
+                                    return false;
+                                }
+                            }
+                        } else {
+                            println!("stop_tracing command failed somehow, bailing");
+                            return false;
+
+                        }
+                    },
+                    Err(message) => {
+                        println!("stop_tracing command had an error {message}");
+                        return false;
+                    }
+                }
             },
             Ok(WifiDebugMode::On) => {
                 // If mode is 1 enable wifi debug mode
@@ -483,11 +529,45 @@ impl SMManager {
                     return false;
                 }
 
-                setup_iwd_config(true).await.expect("setup_iwd_config true failed somehow");
-                reload_systemd().await.expect("reload_systemd command failed somehow");
-                restart_iwd().await.expect("restart_iwd command failed somehow");
-                start_tracing(buffer_size).await.expect("start tracing command failed somehow");
-                self.wifi_debug_mode = WifiDebugMode::On;
+                match setup_iwd_config(true).await {
+                    Ok(_) => {
+                        // setup_iwd_config worked
+                        match restart_iwd().await {
+                            Ok(value) => {
+                                if value {
+                                    // restart_iwd worked
+                                    match start_tracing(buffer_size).await {
+                                        Ok(value) => {
+                                            if value {
+                                                // start_tracing worked
+                                                self.wifi_debug_mode = WifiDebugMode::On;
+                                            } else {
+                                                // start_tracing failed
+                                                println!("start_tracing failed somehow");
+                                                return false;
+                                            }
+                                        },
+                                        Err(message) => {
+                                            println!("start_tracing got an error {message}");
+                                            return false;
+                                        }
+                                    }
+                                } else {
+                                    println!("restart_iwd failed somehow");
+                                    return false;
+                                }
+                            },
+                            Err(message) => {
+                                println!("restart_iwd got an error {message}");
+                                return false;
+                            }
+                        }
+                    },
+                    Err(message) => {
+                        println!("setup_iwd_config true got an error somehow {message}");
+                        return false;
+                    }
+                }
             },
             Err(_) => {
                 // Invalid mode requested, more coming later, but add this catch-all for now
