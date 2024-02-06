@@ -23,7 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use std::{ ffi::OsStr, fmt, os::fd::{FromRawFd, IntoRawFd} };
+use std::{ fs, ffi::OsStr, fmt, os::fd::{FromRawFd, IntoRawFd} };
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 use zbus::zvariant::OwnedFd;
 use zbus_macros::dbus_interface;
@@ -60,13 +60,19 @@ impl fmt::Display for WifiDebugMode {
 
 pub struct SMManager {
     wifi_debug_mode: WifiDebugMode,
+    // Whether we should use trace-cmd or not.
+    // True on galileo devices, false otherwise
+    should_trace: bool,
 }
 
 impl SMManager
 {
     pub fn new() -> Self
     {
-        SMManager { wifi_debug_mode: WifiDebugMode::Off }
+        SMManager {
+            wifi_debug_mode: WifiDebugMode::Off,
+            should_trace: is_galileo().unwrap(),
+        }
     }
 }
 
@@ -90,6 +96,18 @@ const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/override.conf";
 // to have multiple files, etc.
 const OUTPUT_FILE: &str = "/var/log/wifitrace.dat";
 const MIN_BUFFER_SIZE: u32 = 100;
+
+const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
+const GALILEO_NAME: &str = "Galileo";
+
+fn is_galileo() -> std::io::Result<bool>
+{
+    let mut board_name = fs::read_to_string(BOARD_NAME_PATH)?;
+    board_name = board_name.trim().to_string();
+
+    let matches = board_name == GALILEO_NAME;
+    Ok(matches)
+}
 
 async fn script_exit_code(
     executable: &str,
@@ -170,16 +188,24 @@ async fn restart_iwd() -> std::io::Result<bool>
     }
 }
 
-async fn stop_tracing() -> std::io::Result<bool>
+async fn stop_tracing(should_trace: bool) -> std::io::Result<bool>
 {
+    if !should_trace {
+        return Ok(true);
+    }
+
     // Stop tracing and extract ring buffer to disk for capture
     run_script("stop tracing", "trace-cmd", &["stop"]).await?;
     // stop tracing worked
     run_script("extract traces", "trace-cmd", &["extract", "-o", OUTPUT_FILE]).await
 }
 
-async fn start_tracing(buffer_size:u32) -> std::io::Result<bool>
+async fn start_tracing(buffer_size:u32, should_trace: bool) -> std::io::Result<bool>
 {
+    if !should_trace {
+        return Ok(true);
+    }
+
     // Start tracing
     let size_str = format!("{}", buffer_size);
     run_script("start tracing", "trace-cmd", &["start", "-e", "ath11k_wmi_diag", "-b", &size_str]).await
@@ -482,7 +508,7 @@ impl SMManager {
             Ok(WifiDebugMode::Off) => {
                 // If mode is 0 disable wifi debug mode
                 // Stop any existing trace and flush to disk.
-                match stop_tracing().await {
+                match stop_tracing(self.should_trace).await {
                     Ok(result) => {
                         if result {
                             // Stop_tracing was successful
@@ -536,7 +562,7 @@ impl SMManager {
                             Ok(value) => {
                                 if value {
                                     // restart_iwd worked
-                                    match start_tracing(buffer_size).await {
+                                    match start_tracing(buffer_size, self.should_trace).await {
                                         Ok(value) => {
                                             if value {
                                                 // start_tracing worked
