@@ -28,7 +28,7 @@ use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 use zbus::zvariant::OwnedFd;
 use zbus_macros::dbus_interface;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 enum WifiDebugMode {
     Off,
@@ -496,6 +496,11 @@ impl SMManager {
                 Err(zbus::fdo::Error::IOError(message.to_string()))
             }
         }
+    }
+
+    async fn get_wifi_debug_mode(&mut self) -> u32 {
+        // Get the wifi debug mode
+        self.wifi_debug_mode as u32
     }
 
     async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> bool {

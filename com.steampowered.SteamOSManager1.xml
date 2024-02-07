@@ -195,6 +195,16 @@
       <arg type="u" name="buffer_size" direction="in"/>
     </method>
 
+    <!--
+      GetWifiDebugMode:
+      @mode: 0 for off, 1 for on. Uses an integer for fleximility.
+
+      Get method for SetWifiDebugMode.
+    -->
+    <method name="GetWifiDebugMode">
+      <arg type="u" name="mode" direction="out"/>
+    </method>
+
   </interface>
 
 </node>
