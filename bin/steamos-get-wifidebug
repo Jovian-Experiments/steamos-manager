@@ -1,0 +1,5 @@
+#!/bin/bash
+# Get wifi debugmode from steamos-manager
+
+busctl call com.steampowered.SteamOSManager1 /com/steampowered/SteamOSManager1 com.steampowered.SteamOSManager1 GetWifiDebugMode
+
