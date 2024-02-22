@@ -221,7 +221,11 @@ impl SMManager {
 
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        match run_script("factory reset", "steamos-factory-reset-config", &[""]).await {
+        match run_script(
+            "factory reset",
+            "/usr/bin/steamos-polkit-helpers/steamos-factory-reset-config",
+            &[""]
+        ).await {
             Ok(value) => { value },
             Err(_) => { false }
         }
@@ -268,7 +272,11 @@ impl SMManager {
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        match run_script("check hardware support", "jupiter-check-support", &[""]).await {
+        match run_script(
+            "check hardware support",
+            "/usr/bin/steamos-polkit-helpers/jupiter-check-support",
+            &[""],
+        ).await {
             Ok(value) => { value },
             Err(_) => { false }
         }
