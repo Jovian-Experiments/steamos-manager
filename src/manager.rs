@@ -245,8 +245,8 @@ impl SMManager {
         if enable {
             match run_script(
                 "enable fan control",
-                "systemcltl",
-                &["start", "jupiter-fan-control-service"],
+                "systemctl",
+                &["start", "jupiter-fan-control.service"],
             )
             .await {
                 Ok(value) => { value },
@@ -295,7 +295,7 @@ impl SMManager {
         // Return true if the script was successful (though that might mean no update was needed), false otherwise
         match run_script(
             "update bios",
-            "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
+            "/usr/bin/steamos-polkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
         .await {
