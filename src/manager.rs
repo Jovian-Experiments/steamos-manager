@@ -507,11 +507,13 @@ impl SMManager {
     }
 
     async fn get_wifi_debug_mode(&mut self) -> u32 {
+        return 0; // Disabled on Jovian NixOS
         // Get the wifi debug mode
         self.wifi_debug_mode as u32
     }
 
     async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> bool {
+        return false; // Disabled on Jovian NixOS
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
