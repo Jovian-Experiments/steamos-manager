@@ -1,14 +1,12 @@
 [package]
 name = "steamos-manager"
-version = "0.9.0"
+version = "24.3.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [profile.release]
 strip="symbols"
 
 [dependencies]
-tokio = { version = "1.33.0", features = ["fs", "process", "io-std", "rt-multi-thread", "macros"] }
-zbus = { version = "3.14.1", features = ["tokio"] }
-zbus_macros = "3.14.1"
+tokio = { version = "1", features = ["fs", "process", "io-std", "rt-multi-thread", "macros"] }
+zbus = { version = "3", features = ["tokio"] }
+zbus_macros = "3"
