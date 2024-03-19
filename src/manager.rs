@@ -356,27 +356,21 @@ impl SMManager {
         // write value
         let data = format!("s 0 {clocks}\n");
         let result = myfile.write(data.as_bytes()).await;
+        if let Err(message) = result {
+            println!("Error writing to sysfs file {message}");
+            return false;
+        }
+
+        let data = format!("s 1 {clocks}\n");
+        let result = myfile.write(data.as_bytes()).await;
+        if let Err(message) = result {
+            println!("Error writing to sysfs file {message}");
+            return false;
+        }
+
+        let result = myfile.write("c\n".as_bytes()).await;
         match result {
-            Ok(_worked) => {
-                let data = format!("s 1 {clocks}\n");
-                let result = myfile.write(data.as_bytes()).await;
-                match result {
-                    Ok(_worked) => {
-                        let result = myfile.write("c\n".as_bytes()).await;
-                        match result {
-                            Ok(_worked) => true,
-                            Err(message) => {
-                                println!("Error writing to sysfs file {message}");
-                                false
-                            }
-                        }
-                    }
-                    Err(message) => {
-                        println!("Error writing to sysfs file {message}");
-                        false
-                    }
-                }
-            }
+            Ok(_worked) => true,
             Err(message) => {
                 println!("Error writing to sysfs file {message}");
                 false
@@ -460,48 +454,37 @@ impl SMManager {
             Ok(WifiDebugMode::Off) => {
                 // If mode is 0 disable wifi debug mode
                 // Stop any existing trace and flush to disk.
-                match stop_tracing(self.should_trace).await {
-                    Ok(result) => {
-                        if result {
-                            // Stop_tracing was successful
-                            match setup_iwd_config(false).await {
-                                Ok(_) => {
-                                    // setup_iwd_config false worked
-                                    match restart_iwd().await {
-                                        Ok(value) => {
-                                            if value {
-                                                // restart iwd worked
-                                                self.wifi_debug_mode = WifiDebugMode::Off;
-                                            } else {
-                                                // restart_iwd failed
-                                                println!(
-                                                    "restart_iwd failed somehow, check log above"
-                                                );
-                                                return false;
-                                            }
-                                        }
-                                        Err(message) => {
-                                            println!("restart_iwd got an error {message}");
-                                            return false;
-                                        }
-                                    }
-                                }
-                                Err(message) => {
-                                    println!(
-                                        "setup_iwd_config false got an error somehow {message}"
-                                    );
-                                    return false;
-                                }
-                            }
-                        } else {
-                            println!("stop_tracing command failed somehow, bailing");
-                            return false;
-                        }
-                    }
+                let result = match stop_tracing(self.should_trace).await {
+                    Ok(result) => result,
                     Err(message) => {
                         println!("stop_tracing command had an error {message}");
                         return false;
                     }
+                };
+                if !result {
+                    println!("stop_tracing command failed somehow, bailing");
+                    return false;
+                }
+                // Stop_tracing was successful
+                if let Err(message) = setup_iwd_config(false).await {
+                    println!("setup_iwd_config false got an error somehow {message}");
+                    return false;
+                }
+                // setup_iwd_config false worked
+                let value = match restart_iwd().await {
+                    Ok(value) => value,
+                    Err(message) => {
+                        println!("restart_iwd got an error {message}");
+                        return false;
+                    }
+                };
+                if value {
+                    // restart iwd worked
+                    self.wifi_debug_mode = WifiDebugMode::Off;
+                } else {
+                    // restart_iwd failed
+                    println!("restart_iwd failed somehow, check log above");
+                    return false;
                 }
             }
             Ok(WifiDebugMode::On) => {
@@ -510,44 +493,37 @@ impl SMManager {
                     return false;
                 }
 
-                match setup_iwd_config(true).await {
-                    Ok(_) => {
-                        // setup_iwd_config worked
-                        match restart_iwd().await {
-                            Ok(value) => {
-                                if value {
-                                    // restart_iwd worked
-                                    match start_tracing(buffer_size, self.should_trace).await {
-                                        Ok(value) => {
-                                            if value {
-                                                // start_tracing worked
-                                                self.wifi_debug_mode = WifiDebugMode::On;
-                                            } else {
-                                                // start_tracing failed
-                                                println!("start_tracing failed somehow");
-                                                return false;
-                                            }
-                                        }
-                                        Err(message) => {
-                                            println!("start_tracing got an error {message}");
-                                            return false;
-                                        }
-                                    }
-                                } else {
-                                    println!("restart_iwd failed somehow");
-                                    return false;
-                                }
-                            }
-                            Err(message) => {
-                                println!("restart_iwd got an error {message}");
-                                return false;
-                            }
-                        }
-                    }
+                if let Err(message) = setup_iwd_config(true).await {
+                    println!("setup_iwd_config true got an error somehow {message}");
+                    return false;
+                }
+                // setup_iwd_config worked
+                let value = match restart_iwd().await {
+                    Ok(value) => value,
                     Err(message) => {
-                        println!("setup_iwd_config true got an error somehow {message}");
+                        println!("restart_iwd got an error {message}");
                         return false;
                     }
+                };
+                if !value {
+                    println!("restart_iwd failed somehow");
+                    return false;
+                }
+                // restart_iwd worked
+                let value = match start_tracing(buffer_size, self.should_trace).await {
+                    Ok(value) => value,
+                    Err(message) => {
+                        println!("start_tracing got an error {message}");
+                        return false;
+                    }
+                };
+                if value {
+                    // start_tracing worked
+                    self.wifi_debug_mode = WifiDebugMode::On;
+                } else {
+                    // start_tracing failed
+                    println!("start_tracing failed somehow");
+                    return false;
                 }
             }
             Err(_) => {
