@@ -23,6 +23,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+use anyhow::Result;
 use std::{ffi::OsStr, fmt, fs};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 use zbus::{interface, zvariant::Fd};
@@ -90,7 +91,7 @@ const MIN_BUFFER_SIZE: u32 = 100;
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
 const GALILEO_NAME: &str = "Galileo";
 
-fn is_galileo() -> std::io::Result<bool> {
+fn is_galileo() -> Result<bool> {
     let mut board_name = fs::read_to_string(BOARD_NAME_PATH)?;
     board_name = board_name.trim().to_string();
 
@@ -98,7 +99,7 @@ fn is_galileo() -> std::io::Result<bool> {
     Ok(matches)
 }
 
-async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> std::io::Result<bool> {
+async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
     // Run given script and return true on success
     let mut child = Command::new(executable).args(args).spawn()?;
     let status = child.wait().await?;
@@ -109,7 +110,7 @@ async fn run_script(
     name: &str,
     executable: &str,
     args: &[impl AsRef<OsStr>],
-) -> std::io::Result<bool> {
+) -> Result<bool> {
     // Run given script to get exit code and return true on success.
     // Return false on failure, but also print an error if needed
     match script_exit_code(executable, args).await {
@@ -124,20 +125,17 @@ async fn run_script(
 async fn script_output(
     executable: &str,
     args: &[impl AsRef<OsStr>],
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String> {
     // Run given command and return the output given
     let output = Command::new(executable).args(args).output();
 
     let output = output.await?;
 
-    let s = match std::str::from_utf8(&output.stdout) {
-        Ok(v) => v,
-        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-    };
+    let s = std::str::from_utf8(&output.stdout)?;
     Ok(s.to_string())
 }
 
-async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error> {
+async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     // Copy override.conf file into place or out of place depending
     // on install value
 
@@ -153,7 +151,7 @@ async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error> {
     }
 }
 
-async fn restart_iwd() -> std::io::Result<bool> {
+async fn restart_iwd() -> Result<bool> {
     // First reload systemd since we modified the config most likely
     // othorwise we wouldn't be restarting iwd.
     match run_script("reload systemd", "systemctl", &["daemon-reload"]).await {
@@ -174,7 +172,7 @@ async fn restart_iwd() -> std::io::Result<bool> {
     }
 }
 
-async fn stop_tracing(should_trace: bool) -> std::io::Result<bool> {
+async fn stop_tracing(should_trace: bool) -> Result<bool> {
     if !should_trace {
         return Ok(true);
     }
@@ -190,7 +188,7 @@ async fn stop_tracing(should_trace: bool) -> std::io::Result<bool> {
     .await
 }
 
-async fn start_tracing(buffer_size: u32, should_trace: bool) -> std::io::Result<bool> {
+async fn start_tracing(buffer_size: u32, should_trace: bool) -> Result<bool> {
     if !should_trace {
         return Ok(true);
     }
