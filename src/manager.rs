@@ -23,10 +23,9 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use std::{ fs, ffi::OsStr, fmt, os::fd::{FromRawFd, IntoRawFd} };
+use std::{ fs, ffi::OsStr, fmt };
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
-use zbus::zvariant::OwnedFd;
-use zbus_macros::dbus_interface;
+use zbus::{ interface, zvariant::Fd };
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -211,7 +210,7 @@ async fn start_tracing(buffer_size:u32, should_trace: bool) -> std::io::Result<b
     run_script("start tracing", "trace-cmd", &["start", "-e", "ath11k_wmi_diag", "-b", &size_str]).await
 }
 
-#[dbus_interface(name = "com.steampowered.SteamOSManager1")]
+#[interface(name = "com.steampowered.SteamOSManager1")]
 impl SMManager {
     const API_VERSION: u32 = 1;
 
@@ -478,19 +477,13 @@ impl SMManager {
 
     async fn get_als_integration_time_file_descriptor(
         &self,
-    ) -> Result<zbus::zvariant::OwnedFd, zbus::fdo::Error> {
+    ) -> Result<Fd, zbus::fdo::Error> {
         // Get the file descriptor for the als integration time sysfs path
         // /sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time
         // Return -1 on error
-        let result = File::create("/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time").await;
+        let result = std::fs::File::create("/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time");
         match result {
-            Ok(f) => {
-                let raw = f.into_std().await.into_raw_fd();
-                unsafe {
-                    let fd: OwnedFd = OwnedFd::from_raw_fd(raw);
-                    Ok(fd)
-                }
-            }
+            Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f))),
             Err(message) => {
                 println!("Error opening sysfs file for giving file descriptor {message}");
                 Err(zbus::fdo::Error::IOError(message.to_string()))
@@ -611,7 +604,7 @@ impl SMManager {
     }
 
     /// A version property.
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn version(&self) -> u32 {
         SMManager::API_VERSION
     }

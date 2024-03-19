@@ -8,5 +8,4 @@ strip="symbols"
 
 [dependencies]
 tokio = { version = "1", features = ["fs", "process", "io-std", "rt-multi-thread", "macros"] }
-zbus = { version = "3", features = ["tokio"] }
-zbus_macros = "3"
+zbus = { version = "4", features = ["tokio"] }
