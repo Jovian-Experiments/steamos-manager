@@ -63,17 +63,11 @@ pub struct SMManager {
 }
 
 impl SMManager {
-    pub fn new() -> Self {
-        SMManager {
+    pub fn new() -> Result<Self> {
+        Ok(SMManager {
             wifi_debug_mode: WifiDebugMode::Off,
-            should_trace: is_galileo().unwrap(),
-        }
-    }
-}
-
-impl Default for SMManager {
-    fn default() -> Self {
-        SMManager::new()
+            should_trace: is_galileo()?,
+        })
     }
 }
 
@@ -106,26 +100,15 @@ async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Resul
     Ok(status.success())
 }
 
-async fn run_script(
-    name: &str,
-    executable: &str,
-    args: &[impl AsRef<OsStr>],
-) -> Result<bool> {
+async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
     // Run given script to get exit code and return true on success.
     // Return false on failure, but also print an error if needed
-    match script_exit_code(executable, args).await {
-        Ok(value) => Ok(value),
-        Err(err) => {
-            println!("Error running {} {}", name, err);
-            Err(err)
-        }
-    }
+    script_exit_code(executable, args)
+        .await
+        .inspect_err(|message| println!("Error running {name} {message}"))
 }
 
-async fn script_output(
-    executable: &str,
-    args: &[impl AsRef<OsStr>],
-) -> Result<String> {
+async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
     // Run given command and return the output given
     let output = Command::new(executable).args(args).output();
 
@@ -213,60 +196,49 @@ impl SMManager {
 
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        match run_script("factory reset", "steamos-factory-reset-config", &[""]).await {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        run_script("factory reset", "steamos-factory-reset-config", &[""])
+            .await
+            .unwrap_or(false)
     }
 
     async fn disable_wifi_power_management(&self) -> bool {
         // Run polkit helper script and return true on success
-        match run_script(
+        run_script(
             "disable wifi power management",
             "/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management",
             &[""],
         )
         .await
-        {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        .unwrap_or(false)
     }
 
     async fn enable_fan_control(&self, enable: bool) -> bool {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         if enable {
-            match run_script(
+            run_script(
                 "enable fan control",
                 "systemcltl",
                 &["start", "jupiter-fan-control-service"],
             )
             .await
-            {
-                Ok(value) => value,
-                Err(_) => false,
-            }
+            .unwrap_or(false)
         } else {
-            match run_script(
+            run_script(
                 "disable fan control",
                 "systemctl",
                 &["stop", "jupiter-fan-control.service"],
             )
             .await
-            {
-                Ok(value) => value,
-                Err(_) => false,
-            }
+            .unwrap_or(false)
         }
     }
 
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        match run_script("check hardware support", "jupiter-check-support", &[""]).await {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        run_script("check hardware support", "jupiter-check-support", &[""])
+            .await
+            .unwrap_or(false)
     }
 
     async fn read_als_calibration(&self) -> f32 {
@@ -276,73 +248,61 @@ impl SMManager {
             &[""],
         )
         .await;
-        let mut value: f32 = -1.0;
         match result {
-            Ok(as_string) => value = as_string.trim().parse().unwrap(),
-            Err(message) => println!("Unable to run als calibration script : {}", message),
+            Ok(as_string) => as_string.trim().parse().unwrap_or(-1.0),
+            Err(message) => {
+                println!("Unable to run als calibration script: {}", message);
+                -1.0
+            }
         }
-
-        value
     }
 
     async fn update_bios(&self) -> bool {
         // Update the bios as needed
         // Return true if the script was successful (though that might mean no update was needed), false otherwise
-        match run_script(
+        run_script(
             "update bios",
             "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
         .await
-        {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        .unwrap_or(false)
     }
 
     async fn update_dock(&self) -> bool {
         // Update the dock firmware as needed
         // Retur true if successful, false otherwise
-        match run_script(
+        run_script(
             "update dock firmware",
             "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
             &[""],
         )
         .await
-        {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        .unwrap_or(false)
     }
 
     async fn trim_devices(&self) -> bool {
         // Run steamos-trim-devices script
         // return true on success, false otherwise
-        match run_script(
+        run_script(
             "trim devices",
             "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
             &[""],
         )
         .await
-        {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        .unwrap_or(false)
     }
 
     async fn format_sdcard(&self) -> bool {
         // Run steamos-format-sdcard script
         // return true on success, false otherwise
-        match run_script(
+        run_script(
             "format sdcard",
             "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard",
             &[""],
         )
         .await
-        {
-            Ok(value) => value,
-            Err(_) => false,
-        }
+        .unwrap_or(false)
     }
 
     async fn set_gpu_performance_level(&self, level: i32) -> bool {
@@ -357,9 +317,8 @@ impl SMManager {
         // Open sysfs file
         let result =
             File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level").await;
-        let mut myfile;
-        match result {
-            Ok(f) => myfile = f,
+        let mut myfile = match result {
+            Ok(f) => f,
             Err(message) => {
                 println!("Error opening sysfs file for writing {message}");
                 return false;
@@ -386,9 +345,8 @@ impl SMManager {
         }
 
         let result = File::create("/sys/class/drm/card0/device/pp_od_clk_voltage").await;
-        let mut myfile;
-        match result {
-            Ok(f) => myfile = f,
+        let mut myfile = match result {
+            Ok(f) => f,
             Err(message) => {
                 println!("Error opening sysfs file for writing {message}");
                 return false;
@@ -435,9 +393,8 @@ impl SMManager {
         }
 
         let result = File::create("/sys/class/hwmon/hwmon5/power1_cap").await;
-        let mut power1file;
-        match result {
-            Ok(f) => power1file = f,
+        let mut power1file = match result {
+            Ok(f) => f,
             Err(message) => {
                 println!("Error opening sysfs power1_cap file for writing TDP limits {message}");
                 return false;
@@ -445,9 +402,8 @@ impl SMManager {
         };
 
         let result = File::create("/sys/class/hwmon/hwmon5/power2_cap").await;
-        let mut power2file;
-        match result {
-            Ok(f) => power2file = f,
+        let mut power2file = match result {
+            Ok(f) => f,
             Err(message) => {
                 println!("Error opening sysfs power2_cap file for wtriting TDP limits {message}");
                 return false;

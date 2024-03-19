@@ -23,7 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use zbus::{ConnectionBuilder, Result};
+use anyhow::Result;
+use zbus::ConnectionBuilder;
 
 pub mod manager;
 
@@ -32,7 +33,7 @@ async fn main() -> Result<()> {
     // This daemon is responsible for creating a dbus api that steam client can use to do various OS
     // level things. It implements com.steampowered.SteamOSManager1 interface
 
-    let manager = manager::SMManager::default();
+    let manager = manager::SMManager::new()?;
 
     let _system_connection = ConnectionBuilder::system()?
         .name("com.steampowered.SteamOSManager1")?
