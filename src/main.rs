@@ -24,6 +24,7 @@
  */
 
 use anyhow::Result;
+use tracing_subscriber;
 use zbus::ConnectionBuilder;
 
 pub mod manager;
@@ -32,6 +33,8 @@ pub mod manager;
 async fn main() -> Result<()> {
     // This daemon is responsible for creating a dbus api that steam client can use to do various OS
     // level things. It implements com.steampowered.SteamOSManager1 interface
+
+    tracing_subscriber::fmt::init();
 
     let manager = manager::SMManager::new()?;
 

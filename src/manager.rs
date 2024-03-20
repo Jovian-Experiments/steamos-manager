@@ -26,6 +26,7 @@
 use anyhow::{Error, Result};
 use std::{ffi::OsStr, fmt, fs};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
+use tracing::{error, warn};
 use zbus::{interface, zvariant::Fd};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -105,7 +106,7 @@ async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) ->
     // Return false on failure, but also print an error if needed
     script_exit_code(executable, args)
         .await
-        .inspect_err(|message| println!("Error running {name} {message}"))
+        .inspect_err(|message| warn!("Error running {name} {message}"))
 }
 
 async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
@@ -144,12 +145,12 @@ async fn restart_iwd() -> Result<bool> {
                 run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
             } else {
                 // reload failed
-                println!("restart_iwd: reload systemd failed somehow");
+                error!("restart_iwd: reload systemd failed with non-zero exit code");
                 Ok(false)
             }
         }
         Err(message) => {
-            println!("restart_iwd: reload systemd got an error {message}");
+            error!("restart_iwd: reload systemd got an error: {message}");
             Err(message)
         }
     }
@@ -197,12 +198,12 @@ async fn set_gpu_performance_level(level: i32) -> Result<()> {
 
     let mut myfile = File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level")
         .await
-        .inspect_err(|message| println!("Error opening sysfs file for writing {message}"))?;
+        .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
     myfile
         .write_all(levels[level as usize].as_bytes())
         .await
-        .inspect_err(|message| println!("Error writing to sysfs file {message}"))?;
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
     Ok(())
 }
 
@@ -215,24 +216,24 @@ async fn set_gpu_clocks(clocks: i32) -> Result<()> {
 
     let mut myfile = File::create("/sys/class/drm/card0/device/pp_od_clk_voltage")
         .await
-        .inspect_err(|message| println!("Error opening sysfs file for writing {message}"))?;
+        .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
     let data = format!("s 0 {clocks}\n");
     myfile
         .write(data.as_bytes())
         .await
-        .inspect_err(|message| println!("Error writing to sysfs file {message}"))?;
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
 
     let data = format!("s 1 {clocks}\n");
     myfile
         .write(data.as_bytes())
         .await
-        .inspect_err(|message| println!("Error writing to sysfs file {message}"))?;
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
 
     myfile
         .write("c\n".as_bytes())
         .await
-        .inspect_err(|message| println!("Error writing to sysfs file {message}"))?;
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
     Ok(())
 }
 
@@ -246,13 +247,13 @@ async fn set_tdp_limit(limit: i32) -> Result<()> {
     let mut power1file = File::create("/sys/class/hwmon/hwmon5/power1_cap")
         .await
         .inspect_err(|message| {
-            println!("Error opening sysfs power1_cap file for writing TDP limits {message}")
+            error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
         })?;
 
     let mut power2file = File::create("/sys/class/hwmon/hwmon5/power2_cap")
         .await
         .inspect_err(|message| {
-            println!("Error opening sysfs power2_cap file for wtriting TDP limits {message}")
+            error!("Error opening sysfs power2_cap file for wtriting TDP limits {message}")
         })?;
 
     // Now write the value * 1,000,000
@@ -260,11 +261,11 @@ async fn set_tdp_limit(limit: i32) -> Result<()> {
     power1file
         .write(data.as_bytes())
         .await
-        .inspect_err(|message| println!("Error writing to power1_cap file: {message}"))?;
+        .inspect_err(|message| error!("Error writing to power1_cap file: {message}"))?;
     power2file
         .write(data.as_bytes())
         .await
-        .inspect_err(|message| println!("Error writing to power2_cap file: {message}"))?;
+        .inspect_err(|message| error!("Error writing to power2_cap file: {message}"))?;
     Ok(())
 }
 
@@ -333,7 +334,7 @@ impl SMManager {
         match result {
             Ok(as_string) => as_string.trim().parse().unwrap_or(-1.0),
             Err(message) => {
-                println!("Unable to run als calibration script: {}", message);
+                error!("Unable to run als calibration script: {}", message);
                 -1.0
             }
         }
@@ -406,7 +407,7 @@ impl SMManager {
         match result {
             Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f))),
             Err(message) => {
-                println!("Error opening sysfs file for giving file descriptor {message}");
+                error!("Error opening sysfs file for giving file descriptor: {message}");
                 Err(zbus::fdo::Error::IOError(message.to_string()))
             }
         }
@@ -430,24 +431,24 @@ impl SMManager {
                 let result = match stop_tracing(self.should_trace).await {
                     Ok(result) => result,
                     Err(message) => {
-                        println!("stop_tracing command had an error {message}");
+                        error!("stop_tracing command got an error: {message}");
                         return false;
                     }
                 };
                 if !result {
-                    println!("stop_tracing command failed somehow, bailing");
+                    error!("stop_tracing command returned non-zero");
                     return false;
                 }
                 // Stop_tracing was successful
                 if let Err(message) = setup_iwd_config(false).await {
-                    println!("setup_iwd_config false got an error somehow {message}");
+                    error!("setup_iwd_config false got an error: {message}");
                     return false;
                 }
                 // setup_iwd_config false worked
                 let value = match restart_iwd().await {
                     Ok(value) => value,
                     Err(message) => {
-                        println!("restart_iwd got an error {message}");
+                        error!("restart_iwd got an error: {message}");
                         return false;
                     }
                 };
@@ -456,7 +457,7 @@ impl SMManager {
                     self.wifi_debug_mode = WifiDebugMode::Off;
                 } else {
                     // restart_iwd failed
-                    println!("restart_iwd failed somehow, check log above");
+                    error!("restart_iwd failed, check log above");
                     return false;
                 }
             }
@@ -467,26 +468,26 @@ impl SMManager {
                 }
 
                 if let Err(message) = setup_iwd_config(true).await {
-                    println!("setup_iwd_config true got an error somehow {message}");
+                    error!("setup_iwd_config true got an error: {message}");
                     return false;
                 }
                 // setup_iwd_config worked
                 let value = match restart_iwd().await {
                     Ok(value) => value,
                     Err(message) => {
-                        println!("restart_iwd got an error {message}");
+                        error!("restart_iwd got an error: {message}");
                         return false;
                     }
                 };
                 if !value {
-                    println!("restart_iwd failed somehow");
+                    error!("restart_iwd failed");
                     return false;
                 }
                 // restart_iwd worked
                 let value = match start_tracing(buffer_size, self.should_trace).await {
                     Ok(value) => value,
                     Err(message) => {
-                        println!("start_tracing got an error {message}");
+                        error!("start_tracing got an error: {message}");
                         return false;
                     }
                 };
@@ -495,13 +496,13 @@ impl SMManager {
                     self.wifi_debug_mode = WifiDebugMode::On;
                 } else {
                     // start_tracing failed
-                    println!("start_tracing failed somehow");
+                    error!("start_tracing failed");
                     return false;
                 }
             }
             Err(_) => {
                 // Invalid mode requested, more coming later, but add this catch-all for now
-                println!("Invalid wifi debug mode {mode} requested");
+                warn!("Invalid wifi debug mode {mode} requested");
                 return false;
             }
         }
