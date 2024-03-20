@@ -136,7 +136,7 @@ async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
 
 async fn restart_iwd() -> Result<bool> {
     // First reload systemd since we modified the config most likely
-    // othorwise we wouldn't be restarting iwd.
+    // otherwise we wouldn't be restarting iwd.
     match run_script("reload systemd", "systemctl", &["daemon-reload"]).await {
         Ok(value) => {
             if value {
@@ -187,7 +187,7 @@ async fn start_tracing(buffer_size: u32, should_trace: bool) -> Result<bool> {
 }
 
 async fn set_gpu_performance_level(level: i32) -> Result<()> {
-    // Set given level to sysfs path /sys/class/drm/card0/device/power_dpm_force_performance_level
+    // Set given GPU performance level
     // Levels are defined below
     // return true if able to write, false otherwise or if level is out of range, etc.
     let levels = ["auto", "low", "high", "manual", "peak_performance"];
@@ -195,12 +195,10 @@ async fn set_gpu_performance_level(level: i32) -> Result<()> {
         return Err(Error::msg("Invalid performance level"));
     }
 
-    // Open sysfs file
     let mut myfile = File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level")
         .await
         .inspect_err(|message| println!("Error opening sysfs file for writing {message}"))?;
 
-    // write value
     myfile
         .write_all(levels[level as usize].as_bytes())
         .await
@@ -209,9 +207,8 @@ async fn set_gpu_performance_level(level: i32) -> Result<()> {
 }
 
 async fn set_gpu_clocks(clocks: i32) -> Result<()> {
-    // Set gpu clocks to given value valid between 200 - 1600
-    // Only used when Gpu Performance Level is manual, but write whenever called.
-    // Writes value to /sys/class/drm/card0/device/pp_od_clk_voltage
+    // Set GPU clocks to given value valid between 200 - 1600
+    // Only used when GPU Performance Level is manual, but write whenever called.
     if !(200..=1600).contains(&clocks) {
         return Err(Error::msg("Invalid clocks"));
     }
@@ -220,7 +217,6 @@ async fn set_gpu_clocks(clocks: i32) -> Result<()> {
         .await
         .inspect_err(|message| println!("Error opening sysfs file for writing {message}"))?;
 
-    // write value
     let data = format!("s 0 {clocks}\n");
     myfile
         .write(data.as_bytes())
@@ -243,7 +239,6 @@ async fn set_gpu_clocks(clocks: i32) -> Result<()> {
 async fn set_tdp_limit(limit: i32) -> Result<()> {
     // Set TDP limit given if within range (3-15)
     // Returns false on error or out of range
-    // Writes value to /sys/class/hwmon/hwmon5/power[12]_cap
     if !(3..=15).contains(&limit) {
         return Err(Error::msg("Invalid limit"));
     }
@@ -406,7 +401,6 @@ impl SMManager {
 
     async fn get_als_integration_time_file_descriptor(&self) -> Result<Fd, zbus::fdo::Error> {
         // Get the file descriptor for the als integration time sysfs path
-        // /sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time
         // Return -1 on error
         let result = std::fs::File::create("/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time");
         match result {
