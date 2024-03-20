@@ -86,6 +86,14 @@ const MIN_BUFFER_SIZE: u32 = 100;
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
 const GALILEO_NAME: &str = "Galileo";
 
+const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
+const POWER1_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power1_cap";
+const POWER2_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power2_cap";
+
+const GPU_PERFORMANCE_LEVEL_PATH: &str =
+    "/sys/class/drm/card0/device/power_dpm_force_performance_level";
+const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
+
 fn is_galileo() -> Result<bool> {
     let mut board_name = fs::read_to_string(BOARD_NAME_PATH)?;
     board_name = board_name.trim().to_string();
@@ -196,7 +204,7 @@ async fn set_gpu_performance_level(level: i32) -> Result<()> {
         return Err(Error::msg("Invalid performance level"));
     }
 
-    let mut myfile = File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level")
+    let mut myfile = File::create(GPU_PERFORMANCE_LEVEL_PATH)
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
@@ -214,7 +222,7 @@ async fn set_gpu_clocks(clocks: i32) -> Result<()> {
         return Err(Error::msg("Invalid clocks"));
     }
 
-    let mut myfile = File::create("/sys/class/drm/card0/device/pp_od_clk_voltage")
+    let mut myfile = File::create(GPU_CLOCKS_PATH)
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
@@ -244,17 +252,13 @@ async fn set_tdp_limit(limit: i32) -> Result<()> {
         return Err(Error::msg("Invalid limit"));
     }
 
-    let mut power1file = File::create("/sys/class/hwmon/hwmon5/power1_cap")
-        .await
-        .inspect_err(|message| {
-            error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
-        })?;
+    let mut power1file = File::create(POWER1_CAP_PATH).await.inspect_err(|message| {
+        error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
+    })?;
 
-    let mut power2file = File::create("/sys/class/hwmon/hwmon5/power2_cap")
-        .await
-        .inspect_err(|message| {
-            error!("Error opening sysfs power2_cap file for wtriting TDP limits {message}")
-        })?;
+    let mut power2file = File::create(POWER2_CAP_PATH).await.inspect_err(|message| {
+        error!("Error opening sysfs power2_cap file for wtriting TDP limits {message}")
+    })?;
 
     // Now write the value * 1,000,000
     let data = format!("{limit}000000");
@@ -403,7 +407,7 @@ impl SMManager {
     async fn get_als_integration_time_file_descriptor(&self) -> Result<Fd, zbus::fdo::Error> {
         // Get the file descriptor for the als integration time sysfs path
         // Return -1 on error
-        let result = std::fs::File::create("/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time");
+        let result = std::fs::File::create(ALS_INTEGRATION_PATH);
         match result {
             Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f))),
             Err(message) => {
