@@ -23,11 +23,12 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use anyhow::Result;
+use anyhow::{Error, Result};
+use tokio::signal::unix::{signal, SignalKind};
 use tracing_subscriber;
 use zbus::ConnectionBuilder;
 
-pub mod manager;
+mod manager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -35,6 +36,8 @@ async fn main() -> Result<()> {
     // level things. It implements com.steampowered.SteamOSManager1 interface
 
     tracing_subscriber::fmt::init();
+
+    let mut sigterm = signal(SignalKind::terminate())?;
 
     let manager = manager::SMManager::new()?;
 
@@ -44,7 +47,8 @@ async fn main() -> Result<()> {
         .build()
         .await?;
 
-    loop {
-        std::future::pending::<()>().await;
+    tokio::select! {
+        e = sigterm.recv() => e.ok_or(Error::msg("SIGTERM pipe broke")),
+        e = tokio::signal::ctrl_c() => Ok(e?),
     }
 }
