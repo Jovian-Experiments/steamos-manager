@@ -1,5 +1,6 @@
 /*
  * Copyright © 2023 Collabora Ltd.
+ * Copyright © 2024 Valve Software
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,10 +24,11 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use std::{ fs, ffi::OsStr, fmt, os::fd::{FromRawFd, IntoRawFd} };
+use anyhow::{ensure, Result};
+use std::{ffi::OsStr, fmt, fs};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
-use zbus::zvariant::OwnedFd;
-use zbus_macros::dbus_interface;
+use tracing::{error, warn};
+use zbus::{interface, zvariant::Fd};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -37,16 +39,13 @@ enum WifiDebugMode {
 
 impl TryFrom<u32> for WifiDebugMode {
     type Error = &'static str;
-    fn try_from(v: u32) -> Result<Self, Self::Error>
-    {
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
             x if x == WifiDebugMode::On as u32 => Ok(WifiDebugMode::On),
-            _ => { Err("No enum match for value {v}") },
+            _ => Err("No enum match for value {v}"),
         }
-
     }
-
 }
 
 impl fmt::Display for WifiDebugMode {
@@ -65,28 +64,16 @@ pub struct SMManager {
     should_trace: bool,
 }
 
-impl SMManager
-{
-    pub fn new() -> Self
-    {
-        SMManager {
+impl SMManager {
+    pub fn new() -> Result<Self> {
+        Ok(SMManager {
             wifi_debug_mode: WifiDebugMode::Off,
-            should_trace: is_galileo().unwrap(),
-        }
+            should_trace: is_galileo()?,
+        })
     }
 }
 
-impl Default for SMManager
-{
-    fn default() -> Self
-    {
-        SMManager::new()
-    }
-
-}
-
-const OVERRIDE_CONTENTS: &str =
-"[Service]
+const OVERRIDE_CONTENTS: &str = "[Service]
 ExecStart=
 ExecStart=/usr/lib/iwd/iwd -d
 ";
@@ -100,8 +87,15 @@ const MIN_BUFFER_SIZE: u32 = 100;
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
 const GALILEO_NAME: &str = "Galileo";
 
-fn is_galileo() -> std::io::Result<bool>
-{
+const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
+const POWER1_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power1_cap";
+const POWER2_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power2_cap";
+
+const GPU_PERFORMANCE_LEVEL_PATH: &str =
+    "/sys/class/drm/card0/device/power_dpm_force_performance_level";
+const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
+
+fn is_galileo() -> Result<bool> {
     let mut board_name = fs::read_to_string(BOARD_NAME_PATH)?;
     board_name = board_name.trim().to_string();
 
@@ -109,49 +103,33 @@ fn is_galileo() -> std::io::Result<bool>
     Ok(matches)
 }
 
-async fn script_exit_code(
-    executable: &str,
-    args: &[impl AsRef<OsStr>],
-) -> std::io::Result<bool> {
+async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
     // Run given script and return true on success
-    let mut child = Command::new(executable)
-        .args(args)
-        .spawn()?;
+    let mut child = Command::new(executable).args(args).spawn()?;
     let status = child.wait().await?;
     Ok(status.success())
 }
 
-async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> std::io::Result<bool> {
+async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
     // Run given script to get exit code and return true on success.
     // Return false on failure, but also print an error if needed
-    match script_exit_code(executable, args).await {
-        Ok(value) => Ok(value),
-        Err(err) => {
-            println!("Error running {} {}", name, err);
-            Err(err)
-        }
-    }
+    script_exit_code(executable, args)
+        .await
+        .inspect_err(|message| warn!("Error running {name} {message}"))
 }
 
-async fn script_output(
-    executable: &str,
-    args: &[impl AsRef<OsStr>],
-) -> Result<String, Box<dyn std::error::Error>> {
+async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
     // Run given command and return the output given
     let output = Command::new(executable).args(args).output();
 
     let output = output.await?;
 
-    let s = match std::str::from_utf8(&output.stdout) {
-        Ok(v) => v,
-        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-    };
+    let s = std::str::from_utf8(&output.stdout)?;
     Ok(s.to_string())
 }
 
-async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error>
-{
-    // Copy override.conf file into place or out of place depending 
+async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
+    // Copy override.conf file into place or out of place depending
     // on install value
 
     if want_override {
@@ -166,10 +144,9 @@ async fn setup_iwd_config(want_override: bool) -> Result<(), std::io::Error>
     }
 }
 
-async fn restart_iwd() -> std::io::Result<bool>
-{
+async fn restart_iwd() -> Result<bool> {
     // First reload systemd since we modified the config most likely
-    // othorwise we wouldn't be restarting iwd.
+    // otherwise we wouldn't be restarting iwd.
     match run_script("reload systemd", "systemctl", &["daemon-reload"]).await {
         Ok(value) => {
             if value {
@@ -177,19 +154,18 @@ async fn restart_iwd() -> std::io::Result<bool>
                 run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
             } else {
                 // reload failed
-                println!("restart_iwd: reload systemd failed somehow");
+                error!("restart_iwd: reload systemd failed with non-zero exit code");
                 Ok(false)
             }
-        },
+        }
         Err(message) => {
-            println!("restart_iwd: reload systemd got an error {message}");
+            error!("restart_iwd: reload systemd got an error: {message}");
             Err(message)
         }
     }
 }
 
-async fn stop_tracing(should_trace: bool) -> std::io::Result<bool>
-{
+async fn stop_tracing(should_trace: bool) -> Result<bool> {
     if !should_trace {
         return Ok(true);
     }
@@ -197,21 +173,105 @@ async fn stop_tracing(should_trace: bool) -> std::io::Result<bool>
     // Stop tracing and extract ring buffer to disk for capture
     run_script("stop tracing", "trace-cmd", &["stop"]).await?;
     // stop tracing worked
-    run_script("extract traces", "trace-cmd", &["extract", "-o", OUTPUT_FILE]).await
+    run_script(
+        "extract traces",
+        "trace-cmd",
+        &["extract", "-o", OUTPUT_FILE],
+    )
+    .await
 }
 
-async fn start_tracing(buffer_size:u32, should_trace: bool) -> std::io::Result<bool>
-{
+async fn start_tracing(buffer_size: u32, should_trace: bool) -> Result<bool> {
     if !should_trace {
         return Ok(true);
     }
 
     // Start tracing
     let size_str = format!("{}", buffer_size);
-    run_script("start tracing", "trace-cmd", &["start", "-e", "ath11k_wmi_diag", "-b", &size_str]).await
+    run_script(
+        "start tracing",
+        "trace-cmd",
+        &["start", "-e", "ath11k_wmi_diag", "-b", &size_str],
+    )
+    .await
 }
 
-#[dbus_interface(name = "com.steampowered.SteamOSManager1")]
+async fn set_gpu_performance_level(level: i32) -> Result<()> {
+    // Set given GPU performance level
+    // Levels are defined below
+    // return true if able to write, false otherwise or if level is out of range, etc.
+    let levels = ["auto", "low", "high", "manual", "peak_performance"];
+    ensure!(
+        level >= 0 && level < levels.len() as i32,
+        "Invalid performance level"
+    );
+
+    let mut myfile = File::create(GPU_PERFORMANCE_LEVEL_PATH)
+        .await
+        .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
+
+    myfile
+        .write_all(levels[level as usize].as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+    Ok(())
+}
+
+async fn set_gpu_clocks(clocks: i32) -> Result<()> {
+    // Set GPU clocks to given value valid between 200 - 1600
+    // Only used when GPU Performance Level is manual, but write whenever called.
+    ensure!((200..=1600).contains(&clocks), "Invalid clocks");
+
+    let mut myfile = File::create(GPU_CLOCKS_PATH)
+        .await
+        .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
+
+    let data = format!("s 0 {clocks}\n");
+    myfile
+        .write(data.as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+
+    let data = format!("s 1 {clocks}\n");
+    myfile
+        .write(data.as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+
+    myfile
+        .write("c\n".as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+    Ok(())
+}
+
+async fn set_tdp_limit(limit: i32) -> Result<()> {
+    // Set TDP limit given if within range (3-15)
+    // Returns false on error or out of range
+    ensure!((3..=15).contains(&limit), "Invalid limit");
+
+    let mut power1file = File::create(POWER1_CAP_PATH).await.inspect_err(|message| {
+        error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
+    })?;
+
+    let mut power2file = File::create(POWER2_CAP_PATH).await.inspect_err(|message| {
+        error!("Error opening sysfs power2_cap file for wtriting TDP limits {message}")
+    })?;
+
+    // Now write the value * 1,000,000
+    let data = format!("{limit}000000");
+    power1file
+        .write(data.as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to power1_cap file: {message}"))?;
+    power2file
+        .write(data.as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to power2_cap file: {message}"))?;
+    Ok(())
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1")]
 impl SMManager {
     const API_VERSION: u32 = 1;
 
@@ -221,57 +281,49 @@ impl SMManager {
 
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        match run_script("factory reset", "steamos-factory-reset-config", &[""]).await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        run_script("factory reset", "steamos-factory-reset-config", &[""])
+            .await
+            .unwrap_or(false)
     }
 
     async fn disable_wifi_power_management(&self) -> bool {
         // Run polkit helper script and return true on success
-        match run_script(
+        run_script(
             "disable wifi power management",
             "/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management",
             &[""],
         )
-        .await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        .await
+        .unwrap_or(false)
     }
 
     async fn enable_fan_control(&self, enable: bool) -> bool {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         if enable {
-            match run_script(
+            run_script(
                 "enable fan control",
                 "systemcltl",
                 &["start", "jupiter-fan-control-service"],
             )
-            .await {
-                Ok(value) => { value },
-                Err(_) => { false }
-            }
+            .await
+            .unwrap_or(false)
         } else {
-            match run_script(
+            run_script(
                 "disable fan control",
                 "systemctl",
                 &["stop", "jupiter-fan-control.service"],
             )
-            .await {
-                Ok(value) => { value },
-                Err(_) => { false }
-            }
+            .await
+            .unwrap_or(false)
         }
     }
 
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        match run_script("check hardware support", "jupiter-check-support", &[""]).await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        run_script("check hardware support", "jupiter-check-support", &[""])
+            .await
+            .unwrap_or(false)
     }
 
     async fn read_als_calibration(&self) -> f32 {
@@ -281,218 +333,82 @@ impl SMManager {
             &[""],
         )
         .await;
-        let mut value: f32 = -1.0;
         match result {
-            Ok(as_string) => value = as_string.trim().parse().unwrap(),
-            Err(message) => println!("Unable to run als calibration script : {}", message),
+            Ok(as_string) => as_string.trim().parse().unwrap_or(-1.0),
+            Err(message) => {
+                error!("Unable to run als calibration script: {}", message);
+                -1.0
+            }
         }
-
-        value
     }
 
     async fn update_bios(&self) -> bool {
         // Update the bios as needed
         // Return true if the script was successful (though that might mean no update was needed), false otherwise
-        match run_script(
+        run_script(
             "update bios",
             "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
-        .await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        .await
+        .unwrap_or(false)
     }
 
     async fn update_dock(&self) -> bool {
         // Update the dock firmware as needed
         // Retur true if successful, false otherwise
-        match run_script(
+        run_script(
             "update dock firmware",
             "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
             &[""],
         )
-        .await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        .await
+        .unwrap_or(false)
     }
 
     async fn trim_devices(&self) -> bool {
         // Run steamos-trim-devices script
         // return true on success, false otherwise
-        match run_script(
+        run_script(
             "trim devices",
             "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
             &[""],
         )
-        .await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        .await
+        .unwrap_or(false)
     }
 
     async fn format_sdcard(&self) -> bool {
         // Run steamos-format-sdcard script
         // return true on success, false otherwise
-        match run_script(
+        run_script(
             "format sdcard",
             "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard",
             &[""],
         )
-        .await {
-            Ok(value) => { value },
-            Err(_) => { false }
-        }
+        .await
+        .unwrap_or(false)
     }
 
     async fn set_gpu_performance_level(&self, level: i32) -> bool {
-        // Set given level to sysfs path /sys/class/drm/card0/device/power_dpm_force_performance_level
-        // Levels are defined below
-        // return true if able to write, false otherwise or if level is out of range, etc.
-        let levels = ["auto", "low", "high", "manual", "peak_performance"];
-        if level < 0 || level >= levels.len() as i32 {
-            return false;
-        }
-
-        // Open sysfs file
-        let result =
-            File::create("/sys/class/drm/card0/device/power_dpm_force_performance_level").await;
-        let mut myfile;
-        match result {
-            Ok(f) => myfile = f,
-            Err(message) => {
-                println!("Error opening sysfs file for writing {message}");
-                return false;
-            }
-        };
-
-        // write value
-        let result = myfile.write_all(levels[level as usize].as_bytes()).await;
-        match result {
-            Ok(_worked) => true,
-            Err(message) => {
-                println!("Error writing to sysfs file {message}");
-                false
-            }
-        }
+        set_gpu_performance_level(level).await.is_ok()
     }
 
     async fn set_gpu_clocks(&self, clocks: i32) -> bool {
-        // Set gpu clocks to given value valid between 200 - 1600
-        // Only used when Gpu Performance Level is manual, but write whenever called.
-        // Writes value to /sys/class/drm/card0/device/pp_od_clk_voltage
-        if !(200..=1600).contains(&clocks) {
-            return false;
-        }
-
-        let result = File::create("/sys/class/drm/card0/device/pp_od_clk_voltage").await;
-        let mut myfile;
-        match result {
-            Ok(f) => myfile = f,
-            Err(message) => {
-                println!("Error opening sysfs file for writing {message}");
-                return false;
-            }
-        };
-
-        // write value
-        let data = format!("s 0 {clocks}\n");
-        let result = myfile.write(data.as_bytes()).await;
-        match result {
-            Ok(_worked) => {
-                let data = format!("s 1 {clocks}\n");
-                let result = myfile.write(data.as_bytes()).await;
-                match result {
-                    Ok(_worked) => {
-                        let result = myfile.write("c\n".as_bytes()).await;
-                        match result {
-                            Ok(_worked) => true,
-                            Err(message) => {
-                                println!("Error writing to sysfs file {message}");
-                                false
-                            }
-                        }
-                    }
-                    Err(message) => {
-                        println!("Error writing to sysfs file {message}");
-                        false
-                    }
-                }
-            }
-            Err(message) => {
-                println!("Error writing to sysfs file {message}");
-                false
-            }
-        }
+        set_gpu_clocks(clocks).await.is_ok()
     }
 
     async fn set_tdp_limit(&self, limit: i32) -> bool {
-        // Set TDP limit given if within range (3-15)
-        // Returns false on error or out of range
-        // Writes value to /sys/class/hwmon/hwmon5/power[12]_cap
-        if !(3..=15).contains(&limit) {
-            return false;
-        }
-
-        let result = File::create("/sys/class/hwmon/hwmon5/power1_cap").await;
-        let mut power1file;
-        match result {
-            Ok(f) => power1file = f,
-            Err(message) => {
-                println!("Error opening sysfs power1_cap file for writing TDP limits {message}");
-                return false;
-            }
-        };
-
-        let result = File::create("/sys/class/hwmon/hwmon5/power2_cap").await;
-        let mut power2file;
-        match result {
-            Ok(f) => power2file = f,
-            Err(message) => {
-                println!("Error opening sysfs power2_cap file for wtriting TDP limits {message}");
-                return false;
-            }
-        };
-
-        // Now write the value * 1,000,000
-        let data = format!("{limit}000000");
-        let result = power1file.write(data.as_bytes()).await;
-        match result {
-            Ok(_worked) => {
-                let result = power2file.write(data.as_bytes()).await;
-                match result {
-                    Ok(_worked) => true,
-                    Err(message) => {
-                        println!("Error writing to power2_cap file: {message}");
-                        false
-                    }
-                }
-            }
-            Err(message) => {
-                println!("Error writing to power1_cap file: {message}");
-                false
-            }
-        }
+        set_tdp_limit(limit).await.is_ok()
     }
 
-    async fn get_als_integration_time_file_descriptor(
-        &self,
-    ) -> Result<zbus::zvariant::OwnedFd, zbus::fdo::Error> {
+    async fn get_als_integration_time_file_descriptor(&self) -> Result<Fd, zbus::fdo::Error> {
         // Get the file descriptor for the als integration time sysfs path
-        // /sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time
-        // Return -1 on error
-        let result = File::create("/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time").await;
+        let result = File::create(ALS_INTEGRATION_PATH).await;
         match result {
-            Ok(f) => {
-                let raw = f.into_std().await.into_raw_fd();
-                unsafe {
-                    let fd: OwnedFd = OwnedFd::from_raw_fd(raw);
-                    Ok(fd)
-                }
-            }
+            Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f.into_std().await))),
             Err(message) => {
-                println!("Error opening sysfs file for giving file descriptor {message}");
+                error!("Error opening sysfs file for giving file descriptor: {message}");
                 Err(zbus::fdo::Error::IOError(message.to_string()))
             }
         }
@@ -513,105 +429,90 @@ impl SMManager {
             Ok(WifiDebugMode::Off) => {
                 // If mode is 0 disable wifi debug mode
                 // Stop any existing trace and flush to disk.
-                match stop_tracing(self.should_trace).await {
-                    Ok(result) => {
-                        if result {
-                            // Stop_tracing was successful
-                            match setup_iwd_config(false).await {
-                                Ok(_) => {
-                                    // setup_iwd_config false worked
-                                    match restart_iwd().await {
-                                        Ok(value) => {
-                                            if value {
-                                                // restart iwd worked
-                                                self.wifi_debug_mode = WifiDebugMode::Off;
-                                            } else {
-                                                // restart_iwd failed
-                                                println!("restart_iwd failed somehow, check log above");
-                                                return false;
-                                            }
-                                        },
-                                        Err(message) => {
-                                            println!("restart_iwd got an error {message}");
-                                            return false;
-                                        }
-                                    }
-                                },
-                                Err(message) => {
-                                    println!("setup_iwd_config false got an error somehow {message}");
-                                    return false;
-                                }
-                            }
-                        } else {
-                            println!("stop_tracing command failed somehow, bailing");
-                            return false;
-
-                        }
-                    },
+                let result = match stop_tracing(self.should_trace).await {
+                    Ok(result) => result,
                     Err(message) => {
-                        println!("stop_tracing command had an error {message}");
+                        error!("stop_tracing command got an error: {message}");
                         return false;
                     }
+                };
+                if !result {
+                    error!("stop_tracing command returned non-zero");
+                    return false;
                 }
-            },
+                // Stop_tracing was successful
+                if let Err(message) = setup_iwd_config(false).await {
+                    error!("setup_iwd_config false got an error: {message}");
+                    return false;
+                }
+                // setup_iwd_config false worked
+                let value = match restart_iwd().await {
+                    Ok(value) => value,
+                    Err(message) => {
+                        error!("restart_iwd got an error: {message}");
+                        return false;
+                    }
+                };
+                if value {
+                    // restart iwd worked
+                    self.wifi_debug_mode = WifiDebugMode::Off;
+                } else {
+                    // restart_iwd failed
+                    error!("restart_iwd failed, check log above");
+                    return false;
+                }
+            }
             Ok(WifiDebugMode::On) => {
                 // If mode is 1 enable wifi debug mode
                 if buffer_size < MIN_BUFFER_SIZE {
                     return false;
                 }
 
-                match setup_iwd_config(true).await {
-                    Ok(_) => {
-                        // setup_iwd_config worked
-                        match restart_iwd().await {
-                            Ok(value) => {
-                                if value {
-                                    // restart_iwd worked
-                                    match start_tracing(buffer_size, self.should_trace).await {
-                                        Ok(value) => {
-                                            if value {
-                                                // start_tracing worked
-                                                self.wifi_debug_mode = WifiDebugMode::On;
-                                            } else {
-                                                // start_tracing failed
-                                                println!("start_tracing failed somehow");
-                                                return false;
-                                            }
-                                        },
-                                        Err(message) => {
-                                            println!("start_tracing got an error {message}");
-                                            return false;
-                                        }
-                                    }
-                                } else {
-                                    println!("restart_iwd failed somehow");
-                                    return false;
-                                }
-                            },
-                            Err(message) => {
-                                println!("restart_iwd got an error {message}");
-                                return false;
-                            }
-                        }
-                    },
+                if let Err(message) = setup_iwd_config(true).await {
+                    error!("setup_iwd_config true got an error: {message}");
+                    return false;
+                }
+                // setup_iwd_config worked
+                let value = match restart_iwd().await {
+                    Ok(value) => value,
                     Err(message) => {
-                        println!("setup_iwd_config true got an error somehow {message}");
+                        error!("restart_iwd got an error: {message}");
                         return false;
                     }
+                };
+                if !value {
+                    error!("restart_iwd failed");
+                    return false;
                 }
-            },
+                // restart_iwd worked
+                let value = match start_tracing(buffer_size, self.should_trace).await {
+                    Ok(value) => value,
+                    Err(message) => {
+                        error!("start_tracing got an error: {message}");
+                        return false;
+                    }
+                };
+                if value {
+                    // start_tracing worked
+                    self.wifi_debug_mode = WifiDebugMode::On;
+                } else {
+                    // start_tracing failed
+                    error!("start_tracing failed");
+                    return false;
+                }
+            }
             Err(_) => {
                 // Invalid mode requested, more coming later, but add this catch-all for now
-                println!("Invalid wifi debug mode {mode} requested"); 
+                warn!("Invalid wifi debug mode {mode} requested");
                 return false;
-            },
+            }
         }
 
         true
     }
 
     /// A version property.
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn version(&self) -> u32 {
         SMManager::API_VERSION
     }
