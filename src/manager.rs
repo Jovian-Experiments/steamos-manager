@@ -24,7 +24,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use anyhow::{Error, Result};
+use anyhow::{ensure, Result};
 use std::{ffi::OsStr, fmt, fs};
 use tokio::{fs::File, io::AsyncWriteExt, process::Command};
 use tracing::{error, warn};
@@ -201,9 +201,10 @@ async fn set_gpu_performance_level(level: i32) -> Result<()> {
     // Levels are defined below
     // return true if able to write, false otherwise or if level is out of range, etc.
     let levels = ["auto", "low", "high", "manual", "peak_performance"];
-    if level < 0 || level >= levels.len() as i32 {
-        return Err(Error::msg("Invalid performance level"));
-    }
+    ensure!(
+        level >= 0 && level < levels.len() as i32,
+        "Invalid performance level"
+    );
 
     let mut myfile = File::create(GPU_PERFORMANCE_LEVEL_PATH)
         .await
@@ -219,9 +220,7 @@ async fn set_gpu_performance_level(level: i32) -> Result<()> {
 async fn set_gpu_clocks(clocks: i32) -> Result<()> {
     // Set GPU clocks to given value valid between 200 - 1600
     // Only used when GPU Performance Level is manual, but write whenever called.
-    if !(200..=1600).contains(&clocks) {
-        return Err(Error::msg("Invalid clocks"));
-    }
+    ensure!((200..=1600).contains(&clocks), "Invalid clocks");
 
     let mut myfile = File::create(GPU_CLOCKS_PATH)
         .await
@@ -249,9 +248,7 @@ async fn set_gpu_clocks(clocks: i32) -> Result<()> {
 async fn set_tdp_limit(limit: i32) -> Result<()> {
     // Set TDP limit given if within range (3-15)
     // Returns false on error or out of range
-    if !(3..=15).contains(&limit) {
-        return Err(Error::msg("Invalid limit"));
-    }
+    ensure!((3..=15).contains(&limit), "Invalid limit");
 
     let mut power1file = File::create(POWER1_CAP_PATH).await.inspect_err(|message| {
         error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
