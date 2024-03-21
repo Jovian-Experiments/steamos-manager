@@ -407,10 +407,9 @@ impl SMManager {
 
     async fn get_als_integration_time_file_descriptor(&self) -> Result<Fd, zbus::fdo::Error> {
         // Get the file descriptor for the als integration time sysfs path
-        // Return -1 on error
-        let result = std::fs::File::create(ALS_INTEGRATION_PATH);
+        let result = File::create(ALS_INTEGRATION_PATH).await;
         match result {
-            Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f))),
+            Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f.into_std().await))),
             Err(message) => {
                 error!("Error opening sysfs file for giving file descriptor: {message}");
                 Err(zbus::fdo::Error::IOError(message.to_string()))
