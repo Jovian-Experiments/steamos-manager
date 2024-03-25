@@ -146,11 +146,7 @@ async fn restart_iwd() -> Result<bool> {
     }
 }
 
-async fn stop_tracing(should_trace: bool) -> Result<bool> {
-    if !should_trace {
-        return Ok(true);
-    }
-
+async fn stop_tracing() -> Result<bool> {
     // Stop tracing and extract ring buffer to disk for capture
     run_script("stop tracing", "trace-cmd", &["stop"]).await?;
     // stop tracing worked
@@ -162,11 +158,7 @@ async fn stop_tracing(should_trace: bool) -> Result<bool> {
     .await
 }
 
-async fn start_tracing(buffer_size: u32, should_trace: bool) -> Result<bool> {
-    if !should_trace {
-        return Ok(true);
-    }
-
+async fn start_tracing(buffer_size: u32) -> Result<bool> {
     // Start tracing
     let size_str = format!("{}", buffer_size);
     run_script(
@@ -410,16 +402,18 @@ impl SMManager {
             Ok(WifiDebugMode::Off) => {
                 // If mode is 0 disable wifi debug mode
                 // Stop any existing trace and flush to disk.
-                let result = match stop_tracing(self.should_trace).await {
-                    Ok(result) => result,
-                    Err(message) => {
-                        error!("stop_tracing command got an error: {message}");
+                if self.should_trace {
+                    let result = match stop_tracing().await {
+                        Ok(result) => result,
+                        Err(message) => {
+                            error!("stop_tracing command got an error: {message}");
+                            return false;
+                        }
+                    };
+                    if !result {
+                        error!("stop_tracing command returned non-zero");
                         return false;
                     }
-                };
-                if !result {
-                    error!("stop_tracing command returned non-zero");
-                    return false;
                 }
                 // Stop_tracing was successful
                 if let Err(message) = setup_iwd_config(false).await {
@@ -466,21 +460,22 @@ impl SMManager {
                     return false;
                 }
                 // restart_iwd worked
-                let value = match start_tracing(buffer_size, self.should_trace).await {
-                    Ok(value) => value,
-                    Err(message) => {
-                        error!("start_tracing got an error: {message}");
+                if self.should_trace {
+                    let value = match start_tracing(buffer_size).await {
+                        Ok(value) => value,
+                        Err(message) => {
+                            error!("start_tracing got an error: {message}");
+                            return false;
+                        }
+                    };
+                    if !value {
+                        // start_tracing failed
+                        error!("start_tracing failed");
                         return false;
                     }
-                };
-                if value {
-                    // start_tracing worked
-                    self.wifi_debug_mode = WifiDebugMode::On;
-                } else {
-                    // start_tracing failed
-                    error!("start_tracing failed");
-                    return false;
                 }
+                // start_tracing worked
+                self.wifi_debug_mode = WifiDebugMode::On;
             }
             Err(_) => {
                 // Invalid mode requested, more coming later, but add this catch-all for now
