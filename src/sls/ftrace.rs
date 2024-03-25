@@ -2,7 +2,7 @@
 use anyhow::{Error, Result};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::unix::pipe;
@@ -10,7 +10,7 @@ use tracing::{error, info};
 use zbus::connection::Connection;
 use zbus::zvariant;
 
-use crate::{get_appid, read_comm, sysbase, Service};
+use crate::{get_appid, path, read_comm, Service};
 
 #[zbus::proxy(
     interface = "com.steampowered.SteamOSLogSubmitter.Trace",
@@ -42,10 +42,9 @@ async fn setup_traces(path: &Path) -> Result<()> {
 
 impl Ftrace {
     pub async fn init(connection: Connection) -> Result<Ftrace> {
-        let base = Self::base();
-        let path = Path::new(base.as_str());
-        fs::create_dir_all(path).await?;
-        setup_traces(path).await?;
+        let path = Self::base();
+        fs::create_dir_all(&path).await?;
+        setup_traces(&path.as_path()).await?;
         let file = pipe::OpenOptions::new()
             .unchecked(true) // Thanks tracefs for making trace_pipe a "regular" file
             .open_receiver(path.join("trace_pipe"))?;
@@ -55,8 +54,8 @@ impl Ftrace {
         })
     }
 
-    fn base() -> String {
-        sysbase() + "/sys/kernel/tracing/instances/steamos-log-submitter"
+    fn base() -> PathBuf {
+        path("/sys/kernel/tracing/instances/steamos-log-submitter")
     }
 
     async fn handle_pid(data: &mut HashMap<&str, zvariant::Value<'_>>, pid: u32) -> Result<()> {
@@ -193,7 +192,7 @@ mod test {
         let h = testing::start();
         let path = h.test.path();
 
-        let tracefs = PathBuf::from(Ftrace::base());
+        let tracefs = Ftrace::base();
 
         fs::create_dir_all(tracefs.join("events/oom/mark_victim")).expect("create_dir_all");
         unistd::mkfifo(
@@ -215,7 +214,7 @@ mod test {
         let h = testing::start();
         let path = h.test.path();
 
-        let tracefs = PathBuf::from(Ftrace::base());
+        let tracefs = Ftrace::base();
 
         fs::create_dir_all(tracefs.join("events/oom/mark_victim")).expect("create_dir_all");
         unistd::mkfifo(

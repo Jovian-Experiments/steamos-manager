@@ -10,7 +10,7 @@ use tokio::fs;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
-use crate::{sysbase, Service};
+use crate::{path, Service};
 
 struct HidNode {
     id: u32,
@@ -28,11 +28,11 @@ impl HidNode {
     }
 
     fn sys_base(&self) -> PathBuf {
-        PathBuf::from(format!("{}/sys/class/hidraw/hidraw{}/device", sysbase(), self.id).as_str())
+        path(format!("/sys/class/hidraw/hidraw{}/device", self.id))
     }
 
     fn hidraw(&self) -> PathBuf {
-        PathBuf::from(format!("{}/dev/hidraw{}", sysbase(), self.id).as_str())
+        path(format!("/dev/hidraw{}", self.id))
     }
 
     async fn get_nodes(&self) -> Result<Vec<PathBuf>> {
@@ -92,7 +92,7 @@ impl HidNode {
 
     async fn check(&self) -> Result<()> {
         let hidraw = self.hidraw();
-        let mut dir = fs::read_dir(sysbase() + "/proc").await?;
+        let mut dir = fs::read_dir(path("/proc")).await?;
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
             let proc = match path.file_name().map(|p| p.to_str()) {
@@ -119,7 +119,7 @@ impl HidNode {
                     }
                 };
                 if path == hidraw {
-                    let comm = match fs::read(format!("{}/proc/{proc}/comm", sysbase())).await {
+                    let comm = match fs::read(crate::path(format!("/proc/{proc}/comm"))).await {
                         Ok(c) => c,
                         Err(e) => {
                             debug!("Process {proc} disappeared while scanning: {e}");
@@ -165,9 +165,7 @@ impl HidNode {
 impl Inhibitor {
     pub fn new() -> Result<Inhibitor> {
         let inotify = Inotify::init()?.into_event_stream([0; 512])?;
-        let dev_watch = inotify
-            .watches()
-            .add(sysbase() + "/dev", WatchMask::CREATE)?;
+        let dev_watch = inotify.watches().add(path("/dev"), WatchMask::CREATE)?;
 
         Ok(Inhibitor {
             inotify,
@@ -185,7 +183,7 @@ impl Inhibitor {
             }
         };
 
-        let mut dir = fs::read_dir(sysbase() + "/dev").await?;
+        let mut dir = fs::read_dir(path("/dev")).await?;
         while let Some(entry) = dir.next_entry().await? {
             if let Err(e) = inhibitor.watch(entry.path().as_path()).await {
                 error!("Encountered error attempting to watch: {e}");
@@ -244,7 +242,7 @@ impl Inhibitor {
                 }
             };
             debug!("New device {} found", path.display());
-            let path = PathBuf::from(sysbase() + "/dev").join(path);
+            let path = crate::path("/dev").join(path);
             sleep(QSEC); // Wait a quarter second for nodes to enumerate
             if let Err(e) = self.watch(path.as_path()).await {
                 error!("Encountered error attempting to watch: {e}");

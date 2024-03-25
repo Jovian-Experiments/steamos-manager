@@ -6,6 +6,7 @@
  */
 
 use anyhow::{bail, Error, Result};
+use std::path::PathBuf;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -58,24 +59,25 @@ where
 }
 
 #[cfg(not(test))]
-pub fn sysbase() -> String {
-    String::new()
+pub fn path<S: AsRef<str>>(path: S) -> PathBuf {
+    PathBuf::from(path.as_ref())
 }
 
 #[cfg(test)]
-pub fn sysbase() -> String {
+pub fn path<S: AsRef<str>>(path: S) -> PathBuf {
     let current_test = crate::testing::current();
-    let path = current_test.path();
-    String::from(path.as_os_str().to_str().unwrap())
+    let test_path = current_test.path();
+    PathBuf::from(test_path.as_os_str().to_str().unwrap())
+        .join(path.as_ref().trim_start_matches('/'))
 }
 
 pub fn read_comm(pid: u32) -> Result<String> {
-    let comm = std::fs::read_to_string(format!("{}/proc/{}/comm", sysbase(), pid))?;
+    let comm = std::fs::read_to_string(path(format!("/proc/{}/comm", pid)))?;
     Ok(comm.trim_end().to_string())
 }
 
 pub fn get_appid(pid: u32) -> Result<Option<u64>> {
-    let environ = std::fs::read_to_string(format!("{}/proc/{}/environ", sysbase(), pid))?;
+    let environ = std::fs::read_to_string(path(format!("/proc/{}/environ", pid)))?;
     for env_var in environ.split('\0') {
         let (key, value) = match env_var.split_once('=') {
             Some((k, v)) => (k, v),
@@ -90,7 +92,7 @@ pub fn get_appid(pid: u32) -> Result<Option<u64>> {
         };
     }
 
-    let stat = std::fs::read_to_string(format!("{}/proc/{}/stat", sysbase(), pid))?;
+    let stat = std::fs::read_to_string(path(format!("/proc/{}/stat", pid)))?;
     let stat = match stat.rsplit_once(") ") {
         Some((_, v)) => v,
         None => return Ok(None),
