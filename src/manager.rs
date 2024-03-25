@@ -6,10 +6,12 @@
  */
 
 use anyhow::{ensure, Result};
-use std::{ffi::OsStr, fmt, fs};
-use tokio::{fs::File, io::AsyncWriteExt, process::Command};
+use std::{ffi::OsStr, fmt};
+use tokio::{fs, fs::File, io::AsyncWriteExt, process::Command};
 use tracing::{error, warn};
 use zbus::{interface, zvariant::Fd};
+
+use crate::hardware::{variant, HardwareVariant};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -46,10 +48,10 @@ pub struct SMManager {
 }
 
 impl SMManager {
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         Ok(SMManager {
             wifi_debug_mode: WifiDebugMode::Off,
-            should_trace: is_galileo()?,
+            should_trace: variant().await? == HardwareVariant::Galileo,
         })
     }
 }
@@ -65,9 +67,6 @@ const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/override.conf";
 const OUTPUT_FILE: &str = "/var/log/wifitrace.dat";
 const MIN_BUFFER_SIZE: u32 = 100;
 
-const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
-const GALILEO_NAME: &str = "Galileo";
-
 const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
 const POWER1_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power1_cap";
 const POWER2_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power2_cap";
@@ -76,13 +75,8 @@ const GPU_PERFORMANCE_LEVEL_PATH: &str =
     "/sys/class/drm/card0/device/power_dpm_force_performance_level";
 const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
 
-fn is_galileo() -> Result<bool> {
-    let mut board_name = fs::read_to_string(BOARD_NAME_PATH)?;
-    board_name = board_name.trim().to_string();
-
-    let matches = board_name == GALILEO_NAME;
-    Ok(matches)
-}
+const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
+const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
 
 async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
     // Run given script and return true on success
@@ -116,23 +110,23 @@ async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     if want_override {
         // Copy it in
         // Make sure the folder exists
-        tokio::fs::create_dir_all(OVERRIDE_FOLDER).await?;
+        fs::create_dir_all(OVERRIDE_FOLDER).await?;
         // Then write the contents into the file
-        tokio::fs::write(OVERRIDE_PATH, OVERRIDE_CONTENTS).await
+        fs::write(OVERRIDE_PATH, OVERRIDE_CONTENTS).await
     } else {
         // Delete it
-        tokio::fs::remove_file(OVERRIDE_PATH).await
+        fs::remove_file(OVERRIDE_PATH).await
     }
 }
 
 async fn restart_iwd() -> Result<bool> {
     // First reload systemd since we modified the config most likely
     // otherwise we wouldn't be restarting iwd.
-    match run_script("reload systemd", "systemctl", &["daemon-reload"]).await {
+    match run_script("reload systemd", SYSTEMCTL_PATH, &["daemon-reload"]).await {
         Ok(value) => {
             if value {
                 // worked, now restart iwd
-                run_script("restart iwd", "systemctl", &["restart", "iwd"]).await
+                run_script("restart iwd", SYSTEMCTL_PATH, &["restart", "iwd"]).await
             } else {
                 // reload failed
                 error!("restart_iwd: reload systemd failed with non-zero exit code");
@@ -148,11 +142,11 @@ async fn restart_iwd() -> Result<bool> {
 
 async fn stop_tracing() -> Result<bool> {
     // Stop tracing and extract ring buffer to disk for capture
-    run_script("stop tracing", "trace-cmd", &["stop"]).await?;
+    run_script("stop tracing", TRACE_CMD_PATH, &["stop"]).await?;
     // stop tracing worked
     run_script(
         "extract traces",
-        "trace-cmd",
+        TRACE_CMD_PATH,
         &["extract", "-o", OUTPUT_FILE],
     )
     .await
@@ -163,7 +157,7 @@ async fn start_tracing(buffer_size: u32) -> Result<bool> {
     let size_str = format!("{}", buffer_size);
     run_script(
         "start tracing",
-        "trace-cmd",
+        TRACE_CMD_PATH,
         &["start", "-e", "ath11k_wmi_diag", "-b", &size_str],
     )
     .await
@@ -254,9 +248,13 @@ impl SMManager {
 
     async fn factory_reset(&self) -> bool {
         // Run steamos factory reset script and return true on success
-        run_script("factory reset", "steamos-factory-reset-config", &[""])
-            .await
-            .unwrap_or(false)
+        run_script(
+            "factory reset",
+            "/usr/bin/steamos-factory-reset-config",
+            &[""],
+        )
+        .await
+        .unwrap_or(false)
     }
 
     async fn disable_wifi_power_management(&self) -> bool {
@@ -275,7 +273,7 @@ impl SMManager {
         if enable {
             run_script(
                 "enable fan control",
-                "systemcltl",
+                SYSTEMCTL_PATH,
                 &["start", "jupiter-fan-control-service"],
             )
             .await
@@ -283,7 +281,7 @@ impl SMManager {
         } else {
             run_script(
                 "disable fan control",
-                "systemctl",
+                SYSTEMCTL_PATH,
                 &["stop", "jupiter-fan-control.service"],
             )
             .await
@@ -294,9 +292,13 @@ impl SMManager {
     async fn hardware_check_support(&self) -> bool {
         // Run jupiter-check-support note this script does exit 1 for "Support: No" case
         // so no need to parse output, etc.
-        run_script("check hardware support", "jupiter-check-support", &[""])
-            .await
-            .unwrap_or(false)
+        run_script(
+            "check hardware support",
+            "/usr/bin/jupiter-check-support",
+            &[""],
+        )
+        .await
+        .unwrap_or(false)
     }
 
     async fn read_als_calibration(&self) -> f32 {
