@@ -5,16 +5,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::Result;
+use anyhow::{Error, Result};
+use std::str::FromStr;
 use tokio::fs;
 
 use crate::path;
 
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
-const VALVE_VENDOR: &str = "Valve";
-const JUPITER_NAME: &str = "Jupiter";
-const GALILEO_NAME: &str = "Galileo";
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum HardwareVariant {
@@ -23,18 +21,25 @@ pub enum HardwareVariant {
     Galileo,
 }
 
+impl FromStr for HardwareVariant {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<HardwareVariant, Self::Err> {
+        Ok(match input {
+            "Jupiter" => HardwareVariant::Jupiter,
+            "Galileo" => HardwareVariant::Galileo,
+            _ => HardwareVariant::Unknown,
+        })
+    }
+}
+
 pub async fn variant() -> Result<HardwareVariant> {
     let board_vendor = fs::read_to_string(path(BOARD_VENDOR_PATH)).await?;
-    if board_vendor.trim_end() != VALVE_VENDOR {
+    if board_vendor.trim_end() != "Valve" {
         return Ok(HardwareVariant::Unknown);
     }
 
     let board_name = fs::read_to_string(path(BOARD_NAME_PATH)).await?;
-    Ok(match board_name.trim_end() {
-        JUPITER_NAME => HardwareVariant::Jupiter,
-        GALILEO_NAME => HardwareVariant::Galileo,
-        _ => HardwareVariant::Unknown,
-    })
+    HardwareVariant::from_str(board_name.trim_end())
 }
 
 #[cfg(test)]
@@ -52,25 +57,25 @@ mod test {
             .expect("create_dir_all");
         assert!(variant().await.is_err());
 
-        write(crate::path("/sys/class/dmi/id/board_vendor"), "LENOVO\n")
+        write(crate::path(BOARD_VENDOR_PATH), "LENOVO\n")
             .await
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Unknown);
 
-        write(crate::path("/sys/class/dmi/id/board_vendor"), "Valve\n")
+        write(crate::path(BOARD_VENDOR_PATH), "Valve\n")
             .await
             .expect("write");
-        write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n")
+        write(crate::path(BOARD_NAME_PATH), "Jupiter\n")
             .await
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Jupiter);
 
-        write(crate::path("/sys/class/dmi/id/board_name"), "Galileo\n")
+        write(crate::path(BOARD_NAME_PATH), "Galileo\n")
             .await
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Galileo);
 
-        write(crate::path("/sys/class/dmi/id/board_name"), "Neptune\n")
+        write(crate::path(BOARD_NAME_PATH), "Neptune\n")
             .await
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Unknown);
