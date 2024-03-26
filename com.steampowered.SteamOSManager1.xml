@@ -5,6 +5,8 @@
 
 <!--
   Copyright © 2023 Collabora Ltd.
+  Copyright © 2024 Igalia S.L.
+  Copyright © 2024 Valve Corporation.
   SPDX-License-Identifier: MIT
 -->
 
@@ -13,163 +15,274 @@
       com.steampowered.SteamOSManager1
       @short_description: Interface to control various aspects of SteamOS
   -->
-  <interface name="com.steampowered.SteamOSManager1">
+  <interface name="com.steampowered.SteamOSManager1.Manager">
 
     <!--
         Version:
 
         The version of this interface implemented by this object.
-        This file documents version 1 of the interface.
+
+        The manager may not support the latest version of the API.
+        Each method/property has an associated version number that
+        denotes in which interface version it first became available.
     -->
     <property name="Version" type="u" access="read"/>
 
     <!--
-        FactoryReset:
-        @success: True on success (should reboot next, to finish the reset.). False otherwise.
+        PrepareFactoryReset:
 
         Perform factory reset of device.
         runs steamos-factory-reset script for now.
 
-        Returns true on success, false on failure.
+        Valid statuses: 0 = Unknown, 1 = RebootRequired
+
+        Version available: 7
     -->
-    <method name="FactoryReset">
-      <arg type="b" name="success" direction="out"/>
+    <method name="PrepareFactoryReset">
+      <arg type="u" name="status" direction="out"/>
     </method>
 
     <!--
-        DisableWifiPowerManagement:
+        WifiPowerManagementState:
 
-        Disable wifi chip's powermanagement.
+        Controls the wifi chip's power management features.
+
+        Valid states: 0 = Unsupported Feature, 1 = Disabled, 2 = Enabled
+
+        Version available: 7
     -->
-    <method name="DisableWifiPowerManagement">
-      <arg type="b" name="success" direction="out"/>
-    </method>
+    <property name="WifiPowerManagementState" type="u" access="readwrite"/>
 
     <!--
-        EnableFanControl:
-        @enable: Whether fan control should be enabled.
+        FanControlState:
 
+        Controls whether the OS or the BIOS should manage fan speed
+
+        Valid states: 0 = Unsupported Feature, 1 = BIOS, 2 = OS
+
+        Version available: 7
     -->
-    <method name="EnableFanControl">
-      <arg type="b" name="enable" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
+    <property name="FanControlState" type="u" access="readwrite"/>
 
     <!--
-        HardwareCheckSupport:
-        @supported: True if all hardware is supported. False otherwise.
+        HardwareCurrentlySupported:
 
-        Checks for unsupported hardware.
+        Reports whether the current hardware is supported or not.
+
+        Valid states: 0 = Unsupported Feature, 1 = Unsupported, 2 = Supported
+
+        Version available: 7
     -->
-    <method name="HardwareCheckSupport">
-      <arg type="b" name="supported" direction="out"/>
-    </method>
+    <property name="HardwareCurrentlySupported" type="u" access="read"/>
 
     <!--
-        ReadALSCalibration:
-        @gain: The gain from the ALS calibration, in floating point.
+        ALSCalibrationGain:
 
-        Read ALS calibration value.
-        Note: Will give -1.0 on error running script.
+        Provides the ALS calibration value.
+
+        Note: Will be -1.0 if ALS calibration is unavailable.
+
+        Version available: 7
     -->
-    <method name="ReadALSCalibration">
-      <arg type="d" name="gain" direction="out"/>
-    </method>
+    <property name="ALSCalibrationGain" type="d" access="read"/>
 
     <!--
-        UpdateBIOS:
-        @success: True on bios update success. False otherwise.
+        GetAlsIntegrationTimeFileDescriptor:
 
-        Perform a bios update.
-    -->
-    <method name="UpdateBIOS">
-      <arg type="b" name="success" direction="out"/>
-    </method>
+        @descriptor: A unix file descriptor that can be written to to set ALS integration time.
+        Will be null if unable to open file or other error occurred.
 
-    <!--
-        UpdateDock:
-        @success: True on dock update script success. False otherwise.
+        Get the ALS integration time file descriptor.
 
-        Perform a dock firmware update.
-    -->
-    <method name="UpdateDock">
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-        TrimDevices:
-        @success: True on script success. False otherwise.
-
-        Perform fstrim on disk devices.
-    -->
-    <method name="TrimDevices">
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      FormatSDCard:
-      @success: True on script success. False otherwise.
-
-      Format the inserted sd card.
-    -->
-    <method name="FormatSDCard">
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetGpuPerformanceLevel:
-      @level: The level to use 0 - auto, 1 - low, 2 - high, 3 - manual, 4 - profile_peak
-      @success: True on success. False otherwise.
-
-      Set the GPU performance level to the given value.
-    -->
-    <method name="SetGpuPerformanceLevel">
-      <arg type="i" name="level" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetGpuClocks:
-      @clocks: The clocks to use Range is 200-1600 but only takes effect when GpuPerformanceLevel is manual.
-      @success: True on success. False otherwise.
-
-      Set the GPU clocks to the given value.
-    -->
-    <method name="SetGpuClocks">
-      <arg type="i" name="clocks" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      SetTdpLimit:
-      @limit: The upper limit to use (between 3 and 15).
-      @success: True on success. False otherwise.
-
-      Set the TDP limit to the given value.
-    -->
-    <method name="SetTDPLimit">
-      <arg type="i" name="limit" direction="in"/>
-      <arg type="b" name="success" direction="out"/>
-    </method>
-
-    <!--
-      GetAlsIntegrationTimeFileDescriptor:
-      @descriptor: A unix file descriptor that can be written to to set ALS integration time.
-      Will be null if unable to open file or other error occurred.
-
-      Get the ALS integration time file descriptor.
+        Version available: 7
     -->
     <method name="GetAlsIntegrationTimeFileDescriptor">
       <arg type="h" name="descriptor" direction="out"/>
     </method>
 
     <!--
-      SetWifiDebugMode:
-      @mode: 0 for off, 1 for on. Uses an integer for flexibility.
-      @buffer_size: The ring buffer size in kilobytes per cpu.
+        BIOSUpdateStatus:
 
-      In order to have the buffer written out to disk (at /var/log/wifitrace.dat)
-      set debug mode back to off after some time.
+        Reports whether a BIOS update is available.
+
+        Valid states: 0 = Unsupported Feature, 1 = Up to date, 2 = Update available
+
+        Version available: 7
+    -->
+    <property name="BIOSUpdateStatus" type="u" access="read"/>
+
+    <!--
+        UpdateBIOS:
+
+        Perform a BIOS update.
+
+        Version available: 7
+    -->
+    <method name="UpdateBIOS" />
+
+    <!--
+        UpdateBIOSProgressNotification:
+
+        @percent_completed: Progress percent completed in the range [0-100]
+
+        Emitted whenever significant progress is made.
+
+        Version available: 7
+    -->
+    <signal name="UpdateBIOSProgressNotification">
+      <arg name="percent_completed" type="u" />
+    </signal>
+
+    <!--
+        DockUpdateStatus:
+
+        Reports whether a Dock Firmware update is available.
+
+        Valid states: 0 = Unsupported Feature, 1 = Up to date, 2 = Update available
+
+        Version available: 7
+    -->
+    <property name="DockUpdateStatus" type="u" access="read"/>
+
+    <!--
+        UpdateDock:
+
+        Perform a Dock Firmware update.
+
+        Version available: 7
+    -->
+    <method name="UpdateDock" />
+
+    <!--
+        UpdateDockProgressNotification:
+
+        @percent_completed: Progress percent completed in the range [0-100]
+
+        Emitted whenever significant progress is made.
+
+        Version available: 7
+    -->
+    <signal name="UpdateDockProgressNotification">
+      <arg name="percent_completed" type="u" />
+    </signal>
+
+    <!--
+        TrimDevices:
+
+        Perform fstrim on relevant disk devices. Calling this over fstrim is
+        is important as some devices are not safe to trim unless some kernel
+        quirks are available.
+
+        Version available: 7
+    -->
+    <method name="TrimDevices" />
+
+    <!--
+        FormatDevice:
+
+        @device: Which device to format, e.g. /dev/mmcblk0
+        @label: Filesystem label to assign to the formatted device
+        @validate: When set runs common checks for conterfeit flash media before formatting, e.g. f3probe
+
+        Format and optionally validate a storage device to a steam compatible filesystem.
+
+        Version available: 7
+    -->
+    <method name="FormatDevice">
+      <arg type="s" name="device" direction="in"/>
+      <arg type="s" name="label" direction="in"/>
+      <arg type="b" name="validate" direction="in"/>
+    </method>
+
+    <!--
+        SetGpuPerformanceLevel:
+
+        The current GPU performance level.
+
+        Valid states: 0 = Feature Unsupported, 1 = Auto, 2 = Low, 3 = High, 4 = Manual, 5 = Profile Peak
+
+        Version available: 7
+    -->
+    <property name="GPUPerformanceLevel" type="u" access="readwrite"/>
+
+    <!--
+        ManualGPUClock:
+
+        Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set to Manual
+
+        Version available: 7
+    -->
+    <property name="ManualGPUClock" type="u" access="readwrite"/>
+
+    <!--
+        ManualGPUClockMin:
+
+        Minimum frequency allowed for GPU clocks.
+
+        Version available: 7
+    -->
+    <property name="ManualGPUClockMin" type="u" access="read"/>
+
+    <!--
+        ManualGPUClockMax:
+
+        Maximum frequency allowed for GPU clocks.
+
+        Version available: 7
+    -->
+    <property name="ManualGPUClockMax" type="u" access="read"/>
+
+
+    <!--
+        TDPLimit:
+
+        Controls the system TDP limit.
+
+        Valid states: 0 = Feature Unsupported, or in range of [ TDPLimitMin, TDPLimitMax ]
+
+        Version available: 7
+    -->
+    <property name="TDPLimit" type="u" access="readwrite"/>
+
+    <!--
+        TDPLimitMin:
+
+        Minimum allowed TDP Limit
+
+        Version available: 7
+    -->
+    <property name="TDPLimitMin" type="u" access="read"/>
+
+    <!--
+        TDPLimitMax:
+
+        Maximum allowed TDP Limit
+
+        Version available: 7
+    -->
+    <property name="TDPLimitMax" type="u" access="read"/>
+
+
+    <!--
+        WifiDebugModeState:
+
+        Whether wifi debug mode is currently enabled.
+
+        Valid states: 0 = Feature Unsupported, 1 = Disabled, 2 = Enabled
+
+        Version available: 7
+    -->
+    <property name="WifiDebugModeState" type="u" access="read"/>
+
+    <!--
+        SetWifiDebugMode:
+
+        @mode: 0 for off, 1 for on. Uses an integer for flexibility.
+        @buffer_size: The ring buffer size in kilobytes per cpu.
+
+        Enable/Disable wifi debug mode and configure the capture buffer size.
+
+        Version available: 7
     -->
     <method name="SetWifiDebugMode">
       <arg type="u" name="mode" direction="in"/>
@@ -177,14 +290,30 @@
     </method>
 
     <!--
-      GetWifiDebugMode:
-      @mode: 0 for off, 1 for on. Uses an integer for fleximility.
+        CaptureWifiDebugTrace:
 
-      Get method for SetWifiDebugMode.
+        @path: Output path to write the file
+
+        Captures the current contents of the wifi debug trace and dumps it
+        into @path. The buffers will be emptied and trace capture will resume
+        after this call returns.
+
+        Version available: 7
     -->
-    <method name="GetWifiDebugMode">
-      <arg type="u" name="mode" direction="out"/>
+    <method name="CaptureWifiDebugTrace">
+      <arg type="s" name="path" direction="in"/>
     </method>
+
+    <!--
+        WifiBackend:
+
+        Controls which Wifi backend is used by NetworkManager
+
+        Valid states: 0 = Feature Unsupported, 1 = iwd, 2 = wpa_supplicant
+
+        Version available: 7
+    -->
+    <property name="WifiBackend" type="u" access="readwrite"/>
 
   </interface>
 
