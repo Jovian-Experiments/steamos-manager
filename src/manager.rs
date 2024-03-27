@@ -6,12 +6,13 @@
  */
 
 use anyhow::{ensure, Result};
-use std::{ffi::OsStr, fmt};
-use tokio::{fs, fs::File, io::AsyncWriteExt, process::Command};
+use std::fmt;
+use tokio::{fs, fs::File, io::AsyncWriteExt};
 use tracing::{error, warn};
 use zbus::{interface, zvariant::Fd};
 
 use crate::hardware::{variant, HardwareVariant};
+use crate::process::{run_script, script_output};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -77,31 +78,6 @@ const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
 
 const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
 const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
-
-async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
-    // Run given script and return true on success
-    let mut child = Command::new(executable).args(args).spawn()?;
-    let status = child.wait().await?;
-    Ok(status.success())
-}
-
-async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
-    // Run given script to get exit code and return true on success.
-    // Return false on failure, but also print an error if needed
-    script_exit_code(executable, args)
-        .await
-        .inspect_err(|message| warn!("Error running {name} {message}"))
-}
-
-async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
-    // Run given command and return the output given
-    let output = Command::new(executable).args(args).output();
-
-    let output = output.await?;
-
-    let s = std::str::from_utf8(&output.stdout)?;
-    Ok(s.to_string())
-}
 
 async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     // Copy override.conf file into place or out of place depending

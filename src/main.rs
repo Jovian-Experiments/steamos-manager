@@ -23,6 +23,7 @@ use crate::sls::{LogLayer, LogReceiver};
 mod ds_inhibit;
 mod hardware;
 mod manager;
+mod process;
 mod sls;
 
 #[cfg(test)]
