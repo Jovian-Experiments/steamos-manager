@@ -25,6 +25,7 @@ mod hardware;
 mod manager;
 mod process;
 mod sls;
+mod wifi;
 
 #[cfg(test)]
 mod testing;

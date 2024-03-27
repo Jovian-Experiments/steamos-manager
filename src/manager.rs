@@ -6,40 +6,13 @@
  */
 
 use anyhow::{ensure, Result};
-use std::fmt;
-use tokio::{fs, fs::File, io::AsyncWriteExt};
+use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::{error, warn};
 use zbus::{interface, zvariant::Fd};
 
 use crate::hardware::{variant, HardwareVariant};
-use crate::process::{run_script, script_output};
-
-#[derive(PartialEq, Debug, Copy, Clone)]
-#[repr(u32)]
-enum WifiDebugMode {
-    Off,
-    On,
-}
-
-impl TryFrom<u32> for WifiDebugMode {
-    type Error = &'static str;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
-            x if x == WifiDebugMode::On as u32 => Ok(WifiDebugMode::On),
-            _ => Err("No enum match for value {v}"),
-        }
-    }
-}
-
-impl fmt::Display for WifiDebugMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WifiDebugMode::Off => write!(f, "Off"),
-            WifiDebugMode::On => write!(f, "On"),
-        }
-    }
-}
+use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
+use crate::wifi::{restart_iwd, setup_iwd_config, start_tracing, stop_tracing, WifiDebugMode};
 
 pub struct SMManager {
     wifi_debug_mode: WifiDebugMode,
@@ -57,15 +30,6 @@ impl SMManager {
     }
 }
 
-const OVERRIDE_CONTENTS: &str = "[Service]
-ExecStart=
-ExecStart=/usr/lib/iwd/iwd -d
-";
-const OVERRIDE_FOLDER: &str = "/etc/systemd/system/iwd.service.d";
-const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/override.conf";
-// Only use one path for output for now. If needed we can add a timestamp later
-// to have multiple files, etc.
-const OUTPUT_FILE: &str = "/var/log/wifitrace.dat";
 const MIN_BUFFER_SIZE: u32 = 100;
 
 const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
@@ -75,69 +39,6 @@ const POWER2_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power2_cap";
 const GPU_PERFORMANCE_LEVEL_PATH: &str =
     "/sys/class/drm/card0/device/power_dpm_force_performance_level";
 const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
-
-const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
-const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
-
-async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
-    // Copy override.conf file into place or out of place depending
-    // on install value
-
-    if want_override {
-        // Copy it in
-        // Make sure the folder exists
-        fs::create_dir_all(OVERRIDE_FOLDER).await?;
-        // Then write the contents into the file
-        fs::write(OVERRIDE_PATH, OVERRIDE_CONTENTS).await
-    } else {
-        // Delete it
-        fs::remove_file(OVERRIDE_PATH).await
-    }
-}
-
-async fn restart_iwd() -> Result<bool> {
-    // First reload systemd since we modified the config most likely
-    // otherwise we wouldn't be restarting iwd.
-    match run_script("reload systemd", SYSTEMCTL_PATH, &["daemon-reload"]).await {
-        Ok(value) => {
-            if value {
-                // worked, now restart iwd
-                run_script("restart iwd", SYSTEMCTL_PATH, &["restart", "iwd"]).await
-            } else {
-                // reload failed
-                error!("restart_iwd: reload systemd failed with non-zero exit code");
-                Ok(false)
-            }
-        }
-        Err(message) => {
-            error!("restart_iwd: reload systemd got an error: {message}");
-            Err(message)
-        }
-    }
-}
-
-async fn stop_tracing() -> Result<bool> {
-    // Stop tracing and extract ring buffer to disk for capture
-    run_script("stop tracing", TRACE_CMD_PATH, &["stop"]).await?;
-    // stop tracing worked
-    run_script(
-        "extract traces",
-        TRACE_CMD_PATH,
-        &["extract", "-o", OUTPUT_FILE],
-    )
-    .await
-}
-
-async fn start_tracing(buffer_size: u32) -> Result<bool> {
-    // Start tracing
-    let size_str = format!("{}", buffer_size);
-    run_script(
-        "start tracing",
-        TRACE_CMD_PATH,
-        &["start", "-e", "ath11k_wmi_diag", "-b", &size_str],
-    )
-    .await
-}
 
 async fn set_gpu_performance_level(level: i32) -> Result<()> {
     // Set given GPU performance level
