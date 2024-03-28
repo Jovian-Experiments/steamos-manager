@@ -252,16 +252,22 @@ impl SteamOSManager {
         }
     }
 
-    async fn format_sdcard(&self) -> bool {
-        // Run steamos-format-sdcard script
-        // return true on success, false otherwise
-        run_script(
-            "format sdcard",
-            "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard",
-            &[""],
+    async fn format_device(&self, device: &str, label: &str, validate: bool) -> Result<(), zbus::fdo::Error> {
+        let mut args = vec!["--label", label, "--device", device];
+        if !validate {
+            args.push("--skip-validation");
+        }
+        let res = run_script(
+            "format device",
+            "/usr/lib/hwsupport/format-device.sh",
+            args.as_ref()
         )
-        .await
-        .unwrap_or(false)
+        .await;
+
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
+        }
     }
 
     #[zbus(property)]
