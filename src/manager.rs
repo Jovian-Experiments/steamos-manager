@@ -102,7 +102,7 @@ impl SMManager {
         // Run script to get calibration value
         let result = script_output(
             "/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain",
-            &[""],
+            &[] as &[String; 0],
         )
         .await;
         match result {
