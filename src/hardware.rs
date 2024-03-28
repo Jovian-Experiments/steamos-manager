@@ -6,10 +6,12 @@
  */
 
 use anyhow::{Error, Result};
+use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
 
 use crate::path;
+use crate::process::run_script;
 
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
@@ -21,6 +23,14 @@ pub enum HardwareVariant {
     Galileo,
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+pub enum HardwareCurrentlySupported {
+    UnsupportedFeature = 0,
+    Unsupported = 1,
+    Supported = 2,
+}
+
 impl FromStr for HardwareVariant {
     type Err = Error;
     fn from_str(input: &str) -> Result<HardwareVariant, Self::Err> {
@@ -29,6 +39,34 @@ impl FromStr for HardwareVariant {
             "Galileo" => HardwareVariant::Galileo,
             _ => HardwareVariant::Unknown,
         })
+    }
+}
+
+impl TryFrom<u32> for HardwareCurrentlySupported {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == HardwareCurrentlySupported::UnsupportedFeature as u32 => {
+                Ok(HardwareCurrentlySupported::UnsupportedFeature)
+            }
+            x if x == HardwareCurrentlySupported::Unsupported as u32 => {
+                Ok(HardwareCurrentlySupported::Unsupported)
+            }
+            x if x == HardwareCurrentlySupported::Supported as u32 => {
+                Ok(HardwareCurrentlySupported::Supported)
+            }
+            _ => Err("No enum match for value {v}"),
+        }
+    }
+}
+
+impl fmt::Display for HardwareCurrentlySupported {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            HardwareCurrentlySupported::UnsupportedFeature => write!(f, "Unsupported feature"),
+            HardwareCurrentlySupported::Unsupported => write!(f, "Unsupported"),
+            HardwareCurrentlySupported::Supported => write!(f, "Supported"),
+        }
     }
 }
 
@@ -80,4 +118,20 @@ mod test {
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Unknown);
     }
+}
+
+pub async fn check_support() -> Result<HardwareCurrentlySupported> {
+    // Run jupiter-check-support note this script does exit 1 for "Support: No" case
+    // so no need to parse output, etc.
+    let res = run_script(
+        "check hardware support",
+        "/usr/bin/jupiter-check-support",
+        &[""],
+    )
+    .await?;
+
+    Ok(match res {
+        true => HardwareCurrentlySupported::Supported,
+        false => HardwareCurrentlySupported::Unsupported,
+    })
 }

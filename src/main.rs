@@ -124,10 +124,10 @@ async fn reload() -> Result<()> {
 }
 
 async fn create_connection() -> Result<Connection> {
-    let manager = manager::SMManager::new().await?;
+    let manager = manager::SteamOSManager::new().await?;
 
     ConnectionBuilder::system()?
-        .name("com.steampowered.SteamOSManager1")?
+        .name("com.steampowered.SteamOSManager1.Manager")?
         .serve_at("/com/steampowered/SteamOSManager1", manager)?
         .build()
         .await
