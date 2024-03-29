@@ -80,6 +80,17 @@ pub async fn variant() -> Result<HardwareVariant> {
     HardwareVariant::from_str(board_name.trim_end())
 }
 
+pub async fn check_support() -> Result<HardwareCurrentlySupported> {
+    // Run jupiter-check-support note this script does exit 1 for "Support: No" case
+    // so no need to parse output, etc.
+    let res = script_exit_code("/usr/bin/jupiter-check-support", &[] as &[String; 0]).await?;
+
+    Ok(match res {
+        0 => HardwareCurrentlySupported::Supported,
+        _ => HardwareCurrentlySupported::Unsupported,
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -118,15 +129,4 @@ mod test {
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Unknown);
     }
-}
-
-pub async fn check_support() -> Result<HardwareCurrentlySupported> {
-    // Run jupiter-check-support note this script does exit 1 for "Support: No" case
-    // so no need to parse output, etc.
-    let res = script_exit_code("/usr/bin/jupiter-check-support", &[] as &[String; 0]).await?;
-
-    Ok(match res {
-        0 => HardwareCurrentlySupported::Supported,
-        _ => HardwareCurrentlySupported::Unsupported,
-    })
 }
