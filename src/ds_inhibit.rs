@@ -310,7 +310,6 @@ mod test {
     #[tokio::test]
     async fn hid_nodes() {
         let h = testing::start();
-        let path = h.test.path();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
@@ -328,7 +327,6 @@ mod test {
     #[tokio::test]
     async fn hid_can_inhibit() {
         let h = testing::start();
-        let path = h.test.path();
 
         let hids = [
             HidNode::new(0),
@@ -366,7 +364,6 @@ mod test {
     #[tokio::test]
     async fn hid_inhibit() {
         let h = testing::start();
-        let path = h.test.path();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
@@ -391,7 +388,6 @@ mod test {
     #[tokio::test]
     async fn hid_inhibit_error_continue() {
         let h = testing::start();
-        let path = h.test.path();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
