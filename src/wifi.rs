@@ -5,12 +5,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Error, Result};
 use std::fmt;
+use std::str::FromStr;
 use tokio::fs;
 use tracing::error;
 
-use crate::process::{run_script, SYSTEMCTL_PATH};
+use crate::path;
+use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
 
 const OVERRIDE_CONTENTS: &str = "[Service]
 ExecStart=
@@ -26,6 +28,8 @@ const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
 
 const MIN_BUFFER_SIZE: u32 = 100;
 
+const WIFI_BACKEND_PATH: &str = "/etc/NetworkManager/conf.d/wifi_backend.conf";
+
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiDebugMode {
@@ -38,6 +42,13 @@ pub enum WifiDebugMode {
 pub enum WifiPowerManagement {
     Disabled = 1,
     Enabled = 2,
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+pub enum WifiBackend {
+    IWD = 1,
+    WPASupplicant = 2,
 }
 
 impl TryFrom<u32> for WifiDebugMode {
@@ -76,6 +87,37 @@ impl fmt::Display for WifiPowerManagement {
         match self {
             WifiPowerManagement::Disabled => write!(f, "Disabled"),
             WifiPowerManagement::Enabled => write!(f, "Enabled"),
+        }
+    }
+}
+
+impl TryFrom<u32> for WifiBackend {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == WifiBackend::IWD as u32 => Ok(WifiBackend::IWD),
+            x if x == WifiBackend::WPASupplicant as u32 => Ok(WifiBackend::WPASupplicant),
+            _ => Err("No enum match for WifiBackend value {v}"),
+        }
+    }
+}
+
+impl FromStr for WifiBackend {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<WifiBackend, Self::Err> {
+        Ok(match input {
+            "iwd" => WifiBackend::IWD,
+            "wpa_supplicant" => WifiBackend::WPASupplicant,
+            _ => bail!("Unknown backend"),
+        })
+    }
+}
+
+impl fmt::Display for WifiBackend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WifiBackend::IWD => write!(f, "iwd"),
+            WifiBackend::WPASupplicant => write!(f, "wpa_supplicant"),
         }
     }
 }
@@ -180,4 +222,33 @@ pub async fn set_wifi_debug_mode(
         }
     }
     Ok(())
+}
+
+pub async fn get_wifi_backend_from_conf() -> Result<WifiBackend> {
+    let wifi_backend_contents = fs::read_to_string(path(WIFI_BACKEND_PATH))
+        .await?
+        .trim()
+        .to_string();
+    for line in wifi_backend_contents.lines() {
+        if line.starts_with("wifi.backend=") {
+            let backend = line.trim_start_matches("wifi.backend=").trim();
+            return WifiBackend::from_str(backend);
+        }
+    }
+
+    bail!("WiFi backend not found in config");
+}
+
+pub async fn get_wifi_backend_from_script() -> Result<WifiBackend> {
+    let result = script_output("/usr/bin/steamos-wifi-set-backend", &["--check"]).await?;
+    WifiBackend::from_str(result.trim())
+}
+
+pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
+    run_script(
+        "set wifi backend",
+        "/usr/bin/steamos-wifi-set-backend",
+        &[backend.to_string()],
+    )
+    .await
 }

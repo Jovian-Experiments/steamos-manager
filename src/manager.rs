@@ -1,6 +1,7 @@
 /*
  * Copyright © 2023 Collabora Ltd.
  * Copyright © 2024 Valve Software
+ * Copyright © 2024 Igalia S.L.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -17,7 +18,10 @@ use crate::power::{
     GPUPerformanceLevel,
 };
 use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
-use crate::wifi::{set_wifi_debug_mode, WifiDebugMode, WifiPowerManagement};
+use crate::wifi::{
+    get_wifi_backend_from_conf, get_wifi_backend_from_script, set_wifi_backend,
+    set_wifi_debug_mode, WifiBackend, WifiDebugMode, WifiPowerManagement,
+};
 use crate::{anyhow_to_zbus, anyhow_to_zbus_fdo};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -55,6 +59,7 @@ impl fmt::Display for FanControl {
 }
 
 pub struct SteamOSManager {
+    wifi_backend: WifiBackend,
     wifi_debug_mode: WifiDebugMode,
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
@@ -64,6 +69,7 @@ pub struct SteamOSManager {
 impl SteamOSManager {
     pub async fn new() -> Result<Self> {
         Ok(SteamOSManager {
+            wifi_backend: get_wifi_backend_from_conf().await?,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
         })
@@ -263,6 +269,35 @@ impl SteamOSManager {
         self.wifi_debug_mode as u32
     }
 
+    /// WifiBackend property.
+    #[zbus(property)]
+    async fn wifi_backend(&self) -> u32 {
+        self.wifi_backend as u32
+    }
+
+    #[zbus(property)]
+    async fn set_wifi_backend(&mut self, backend: u32) -> zbus::fdo::Result<()> {
+        if self.wifi_debug_mode == WifiDebugMode::On {
+            return Err(zbus::fdo::Error::Failed(String::from(
+                "operation not supported when wifi_debug_mode=on",
+            )));
+        }
+        let backend = match WifiBackend::try_from(backend) {
+            Ok(backend) => backend,
+            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
+        };
+        match set_wifi_backend(backend).await {
+            Ok(()) => {
+                self.wifi_backend = backend;
+                Ok(())
+            }
+            Err(e) => {
+                error!("Setting wifi backend failed: {e}");
+                Err(anyhow_to_zbus_fdo(e))
+            }
+        }
+    }
+
     async fn set_wifi_debug_mode(
         &mut self,
         mode: u32,
@@ -271,6 +306,15 @@ impl SteamOSManager {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
+        match get_wifi_backend_from_script().await {
+            Ok(WifiBackend::IWD) => (),
+            Ok(backend) => {
+                return Err(zbus::fdo::Error::Failed(format!(
+                    "Setting wifi debug mode not supported when backend is {backend}",
+                )));
+            }
+            Err(e) => return Err(anyhow_to_zbus_fdo(e)),
+        }
 
         let wanted_mode = match WifiDebugMode::try_from(mode) {
             Ok(mode) => mode,
@@ -317,6 +361,12 @@ mod test {
             .await
             .expect("write");
         write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n")
+            .await
+            .expect("write");
+        create_dir_all(crate::path("/etc/NetworkManager/conf.d"))
+            .await
+            .expect("create_dir_all");
+        write(crate::path("/etc/NetworkManager/conf.d/wifi_backend.conf"), "wifi.backend=iwd\n")
             .await
             .expect("write");
 
