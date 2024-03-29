@@ -312,3 +312,60 @@ impl SteamOSManager {
         SteamOSManager::API_VERSION
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::testing;
+    use tokio::fs::{create_dir_all, write};
+    use zbus::connection::Connection;
+    use zbus::ConnectionBuilder;
+
+    struct TestHandle {
+        handle: testing::TestHandle,
+        connection: Connection,
+    }
+
+    async fn start() -> TestHandle {
+        let handle = testing::start();
+        create_dir_all(crate::path("/sys/class/dmi/id"))
+            .await
+            .expect("create_dir_all");
+        write(crate::path("/sys/class/dmi/id/board_vendor"), "Valve\n")
+            .await
+            .expect("write");
+        write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n")
+            .await
+            .expect("write");
+
+        let manager = SteamOSManager::new().await.unwrap();
+        let connection = ConnectionBuilder::session()
+            .unwrap()
+            .name("com.steampowered.SteamOSManager1.Test")
+            .unwrap()
+            .serve_at("/com/steampowered/SteamOSManager1", manager)
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+
+        TestHandle { handle, connection }
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.Manager",
+        default_service = "com.steampowered.SteamOSManager1.Test",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait Version {
+        #[zbus(property)]
+        fn version(&self) -> zbus::Result<u32>;
+    }
+
+    #[tokio::test]
+    async fn version() {
+        let test = start().await;
+        let proxy = VersionProxy::new(&test.connection).await.unwrap();
+        assert_eq!(proxy.version().await, Ok(SteamOSManager::API_VERSION));
+    }
+}
