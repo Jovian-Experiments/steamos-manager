@@ -11,7 +11,7 @@ use std::str::FromStr;
 use tokio::fs;
 
 use crate::path;
-use crate::process::run_script;
+use crate::process::script_exit_code;
 
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
@@ -123,15 +123,10 @@ mod test {
 pub async fn check_support() -> Result<HardwareCurrentlySupported> {
     // Run jupiter-check-support note this script does exit 1 for "Support: No" case
     // so no need to parse output, etc.
-    let res = run_script(
-        "check hardware support",
-        "/usr/bin/jupiter-check-support",
-        &[""],
-    )
-    .await?;
+    let res = script_exit_code("/usr/bin/jupiter-check-support", &[] as &[String; 0]).await?;
 
     Ok(match res {
-        true => HardwareCurrentlySupported::Supported,
-        false => HardwareCurrentlySupported::Unsupported,
+        0 => HardwareCurrentlySupported::Supported,
+        _ => HardwareCurrentlySupported::Unsupported,
     })
 }

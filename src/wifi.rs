@@ -106,19 +106,13 @@ pub async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     }
 }
 
-async fn restart_iwd() -> Result<bool> {
+async fn restart_iwd() -> Result<()> {
     // First reload systemd since we modified the config most likely
     // otherwise we wouldn't be restarting iwd.
     match run_script("reload systemd", SYSTEMCTL_PATH, &["daemon-reload"]).await {
-        Ok(value) => {
-            if value {
-                // worked, now restart iwd
-                run_script("restart iwd", SYSTEMCTL_PATH, &["restart", "iwd"]).await
-            } else {
-                // reload failed
-                error!("restart_iwd: reload systemd failed with non-zero exit code");
-                Ok(false)
-            }
+        Ok(_) => {
+            // worked, now restart iwd
+            run_script("restart iwd", SYSTEMCTL_PATH, &["restart", "iwd"]).await
         }
         Err(message) => {
             error!("restart_iwd: reload systemd got an error: {message}");
@@ -127,7 +121,7 @@ async fn restart_iwd() -> Result<bool> {
     }
 }
 
-async fn stop_tracing() -> Result<bool> {
+async fn stop_tracing() -> Result<()> {
     // Stop tracing and extract ring buffer to disk for capture
     run_script("stop tracing", TRACE_CMD_PATH, &["stop"]).await?;
     // stop tracing worked
@@ -139,7 +133,7 @@ async fn stop_tracing() -> Result<bool> {
     .await
 }
 
-async fn start_tracing(buffer_size: u32) -> Result<bool> {
+async fn start_tracing(buffer_size: u32) -> Result<()> {
     // Start tracing
     let size_str = format!("{}", buffer_size);
     run_script(
@@ -164,25 +158,18 @@ pub async fn set_wifi_debug_mode(
             // If mode is 0 disable wifi debug mode
             // Stop any existing trace and flush to disk.
             if should_trace {
-                let result = match stop_tracing().await {
-                    Ok(result) => result,
-                    Err(message) => bail!("stop_tracing command got an error: {message}"),
+                if let Err(message) = stop_tracing().await {
+                    bail!("stop_tracing command got an error: {message}");
                 };
-                ensure!(result, "stop_tracing command returned non-zero");
             }
             // Stop_tracing was successful
             if let Err(message) = setup_iwd_config(false).await {
                 bail!("setup_iwd_config false got an error: {message}");
-            }
-            // setup_iwd_config false worked
-            let value = match restart_iwd().await {
-                Ok(value) => value,
-                Err(message) => {
-                    bail!("restart_iwd got an error: {message}");
-                }
             };
-            // restart_iwd failed
-            ensure!(value, "restart_iwd failed, check log above");
+            // setup_iwd_config false worked
+            if let Err(message) = restart_iwd().await {
+                bail!("restart_iwd got an error: {message}");
+            };
         }
         WifiDebugMode::On => {
             ensure!(buffer_size > MIN_BUFFER_SIZE, "Buffer size too small");
@@ -191,18 +178,14 @@ pub async fn set_wifi_debug_mode(
                 bail!("setup_iwd_config true got an error: {message}");
             }
             // setup_iwd_config worked
-            let value = match restart_iwd().await {
-                Ok(value) => value,
-                Err(message) => bail!("restart_iwd got an error: {message}"),
+            if let Err(message) = restart_iwd().await {
+                bail!("restart_iwd got an error: {message}");
             };
-            ensure!(value, "restart_iwd failed");
             // restart_iwd worked
             if should_trace {
-                let value = match start_tracing(buffer_size).await {
-                    Ok(value) => value,
-                    Err(message) => bail!("start_tracing got an error: {message}"),
+                if let Err(message) = start_tracing(buffer_size).await {
+                    bail!("start_tracing got an error: {message}");
                 };
-                ensure!(value, "start_tracing failed");
             }
         }
         mode => {

@@ -18,6 +18,7 @@ use crate::power::{
 };
 use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
 use crate::wifi::{set_wifi_debug_mode, WifiDebugMode, WifiPowerManagement};
+use crate::{anyhow_to_zbus, anyhow_to_zbus_fdo};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -85,11 +86,10 @@ impl SteamOSManager {
             "/usr/bin/steamos-factory-reset-config",
             &[""],
         )
-        .await
-        .unwrap_or(false);
+        .await;
         match res {
-            true => PrepareFactoryReset::RebootRequired as u32,
-            false => PrepareFactoryReset::Unknown as u32,
+            Ok(_) => PrepareFactoryReset::RebootRequired as u32,
+            Err(_) => PrepareFactoryReset::Unknown as u32,
         }
     }
 
@@ -115,20 +115,13 @@ impl SteamOSManager {
             }
         };
 
-        let res = run_script(
+        run_script(
             "set wifi power management",
             "/usr/bin/iwconfig",
             &["wlan0", "power", state],
         )
-        .await;
-
-        match res {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(zbus::Error::Failure(String::from(
-                "iwconfig returned non-zero",
-            ))),
-            Err(e) => Err(zbus::Error::Failure(e.to_string())),
-        }
+        .await
+        .map_err(anyhow_to_zbus)
     }
 
     #[zbus(property)]
@@ -154,20 +147,13 @@ impl SteamOSManager {
         };
 
         // Run what steamos-polkit-helpers/jupiter-fan-control does
-        let res = run_script(
+        run_script(
             "enable fan control",
             SYSTEMCTL_PATH,
             &[state, "jupiter-fan-control-service"],
         )
-        .await;
-
-        match res {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(zbus::Error::Failure(String::from(
-                "systemctl returned non-zero",
-            ))),
-            Err(e) => Err(zbus::Error::Failure(format!("{e}"))),
-        }
+        .await
+        .map_err(anyhow_to_zbus)
     }
 
     #[zbus(property)]
@@ -209,65 +195,54 @@ impl SteamOSManager {
 
     async fn update_bios(&self) -> Result<(), zbus::fdo::Error> {
         // Update the bios as needed
-        let res = run_script(
+        run_script(
             "update bios",
             "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
-        .await;
-
-        match res {
-            Ok(_) => Ok(()),
-            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
-        }
+        .await
+        .map_err(anyhow_to_zbus_fdo)
     }
 
     async fn update_dock(&self) -> Result<(), zbus::fdo::Error> {
         // Update the dock firmware as needed
-        let res = run_script(
+        run_script(
             "update dock firmware",
             "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
             &[""],
         )
-        .await;
-
-        match res {
-            Ok(_) => Ok(()),
-            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
-        }
+        .await
+        .map_err(anyhow_to_zbus_fdo)
     }
 
     async fn trim_devices(&self) -> Result<(), zbus::fdo::Error> {
         // Run steamos-trim-devices script
-        let res = run_script(
+        run_script(
             "trim devices",
             "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
             &[""],
         )
-        .await;
-
-        match res {
-            Ok(_) => Ok(()),
-            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
-        }
+        .await
+        .map_err(anyhow_to_zbus_fdo)
     }
 
-    async fn format_device(&self, device: &str, label: &str, validate: bool) -> Result<(), zbus::fdo::Error> {
+    async fn format_device(
+        &self,
+        device: &str,
+        label: &str,
+        validate: bool,
+    ) -> Result<(), zbus::fdo::Error> {
         let mut args = vec!["--label", label, "--device", device];
         if !validate {
             args.push("--skip-validation");
         }
-        let res = run_script(
+        run_script(
             "format device",
             "/usr/lib/hwsupport/format-device.sh",
-            args.as_ref()
+            args.as_ref(),
         )
-        .await;
-
-        match res {
-            Ok(_) => Ok(()),
-            Err(e) => Err(zbus::fdo::Error::Failed(e.to_string())),
-        }
+        .await
+        .map_err(anyhow_to_zbus_fdo)
     }
 
     #[zbus(property)]
@@ -286,7 +261,7 @@ impl SteamOSManager {
         };
         set_gpu_performance_level(level)
             .await
-            .map_err(|e| zbus::Error::Failure(e.to_string()))
+            .map_err(anyhow_to_zbus)
     }
 
     async fn set_gpu_clocks(&self, clocks: i32) -> bool {
@@ -326,7 +301,7 @@ impl SteamOSManager {
             }
             Err(e) => {
                 error!("Setting wifi debug mode failed: {e}");
-                Err(zbus::fdo::Error::Failed(e.to_string()))
+                Err(anyhow_to_zbus_fdo(e))
             }
         }
     }

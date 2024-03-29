@@ -123,6 +123,14 @@ async fn reload() -> Result<()> {
     }
 }
 
+pub fn anyhow_to_zbus(error: Error) -> zbus::Error {
+    zbus::Error::Failure(error.to_string())
+}
+
+pub fn anyhow_to_zbus_fdo(error: Error) -> zbus::fdo::Error {
+    zbus::fdo::Error::Failed(error.to_string())
+}
+
 async fn create_connection() -> Result<Connection> {
     let manager = manager::SteamOSManager::new().await?;
 

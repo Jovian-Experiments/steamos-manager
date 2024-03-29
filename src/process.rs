@@ -5,26 +5,34 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 use tokio::process::Command;
 use tracing::warn;
 
 pub const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
 
-pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
-    // Run given script and return true on success
+pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
+    // Run given script and return the exit code
     let mut child = Command::new(executable).args(args).spawn()?;
     let status = child.wait().await?;
-    Ok(status.success())
+    status.code().ok_or(anyhow!("Killed by signal"))
 }
 
-pub async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
+pub async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<()> {
     // Run given script to get exit code and return true on success.
-    // Return false on failure, but also print an error if needed
-    script_exit_code(executable, args)
-        .await
-        .inspect_err(|message| warn!("Error running {name} {message}"))
+    // Return Err on failure, but also print an error if needed
+    match script_exit_code(executable, args).await {
+        Ok(0) => Ok(()),
+        Ok(code) => {
+            warn!("Error running {name}: exited {code}");
+            Err(anyhow!("Exited {code}"))
+        }
+        Err(message) => {
+            warn!("Error running {name}: {message}");
+            Err(message)
+        }
+    }
 }
 
 pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
