@@ -5,12 +5,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{ensure, Result};
-use tokio::{fs::File, io::AsyncWriteExt};
+use anyhow::{bail, ensure, Result};
+use tokio::fs::{self, File};
+use tokio::io::AsyncWriteExt;
 use tracing::error;
 
-const POWER1_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power1_cap";
-const POWER2_CAP_PATH: &str = "/sys/class/hwmon/hwmon5/power2_cap";
+use crate::path;
+
+const GPU_HWMON_PREFIX: &str = "/sys/class/drm/card0/device/hwmon";
 
 const GPU_PERFORMANCE_LEVEL_PATH: &str =
     "/sys/class/drm/card0/device/power_dpm_force_performance_level";
@@ -70,23 +72,102 @@ pub async fn set_tdp_limit(limit: i32) -> Result<()> {
     // Returns false on error or out of range
     ensure!((3..=15).contains(&limit), "Invalid limit");
 
-    let mut power1file = File::create(POWER1_CAP_PATH).await.inspect_err(|message| {
-        error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
-    })?;
+    let mut dir = fs::read_dir(path(GPU_HWMON_PREFIX)).await?;
+    let base = loop {
+        let base = match dir.next_entry().await? {
+            Some(entry) => entry.path(),
+            None => bail!("hwmon not found"),
+        };
+        if fs::try_exists(base.join("power1_cap")).await? {
+            break base;
+        }
+    };
 
-    let mut power2file = File::create(POWER2_CAP_PATH).await.inspect_err(|message| {
-        error!("Error opening sysfs power2_cap file for wtriting TDP limits {message}")
-    })?;
-
-    // Now write the value * 1,000,000
     let data = format!("{limit}000000");
+
+    let mut power1file = File::create(base.join("power1_cap"))
+        .await
+        .inspect_err(|message| {
+            error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
+        })?;
     power1file
         .write(data.as_bytes())
         .await
         .inspect_err(|message| error!("Error writing to power1_cap file: {message}"))?;
-    power2file
-        .write(data.as_bytes())
-        .await
-        .inspect_err(|message| error!("Error writing to power2_cap file: {message}"))?;
+
+    if let Ok(mut power2file) = File::create(base.join("power2_cap")).await {
+        power2file
+            .write(data.as_bytes())
+            .await
+            .inspect_err(|message| error!("Error writing to power2_cap file: {message}"))?;
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::testing;
+    use anyhow::anyhow;
+    use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
+
+    #[tokio::test]
+    async fn test_set_tdp_limit() {
+        let h = testing::start();
+
+        assert_eq!(
+            set_tdp_limit(2).await.unwrap_err().to_string(),
+            anyhow!("Invalid limit").to_string()
+        );
+        assert_eq!(
+            set_tdp_limit(20).await.unwrap_err().to_string(),
+            anyhow!("Invalid limit").to_string()
+        );
+        assert!(set_tdp_limit(10).await.is_err());
+
+        let hwmon = path(GPU_HWMON_PREFIX);
+        create_dir_all(hwmon.as_path())
+            .await
+            .expect("create_dir_all");
+        assert_eq!(
+            set_tdp_limit(10).await.unwrap_err().to_string(),
+            anyhow!("hwmon not found").to_string()
+        );
+
+        let hwmon = hwmon.join("hwmon5");
+        create_dir_all(hwmon.join("power1_cap"))
+            .await
+            .expect("create_dir_all");
+        create_dir_all(hwmon.join("power2_cap"))
+            .await
+            .expect("create_dir_all");
+        assert_eq!(
+            set_tdp_limit(10).await.unwrap_err().to_string(),
+            anyhow!("Is a directory (os error 21)").to_string()
+        );
+
+        remove_dir(hwmon.join("power1_cap"))
+            .await
+            .expect("remove_dir");
+        write(hwmon.join("power1_cap"), "0").await.expect("write");
+        assert!(set_tdp_limit(10).await.is_ok());
+        let power1_cap = read_to_string(hwmon.join("power1_cap"))
+            .await
+            .expect("power1_cap");
+        assert_eq!(power1_cap, "10000000");
+
+        remove_dir(hwmon.join("power2_cap"))
+            .await
+            .expect("remove_dir");
+        write(hwmon.join("power2_cap"), "0").await.expect("write");
+        assert!(set_tdp_limit(15).await.is_ok());
+        let power1_cap = read_to_string(hwmon.join("power1_cap"))
+            .await
+            .expect("power1_cap");
+        assert_eq!(power1_cap, "15000000");
+        let power2_cap = read_to_string(hwmon.join("power2_cap"))
+            .await
+            .expect("power2_cap");
+        assert_eq!(power2_cap, "15000000");
+    }
 }
