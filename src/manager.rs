@@ -176,7 +176,7 @@ impl SteamOSManager {
         }
     }
 
-    async fn get_als_integration_time_file_descriptor(&self) -> Result<Fd, zbus::fdo::Error> {
+    async fn get_als_integration_time_file_descriptor(&self) -> zbus::fdo::Result<Fd> {
         // Get the file descriptor for the als integration time sysfs path
         let result = File::create(ALS_INTEGRATION_PATH).await;
         match result {
@@ -188,7 +188,7 @@ impl SteamOSManager {
         }
     }
 
-    async fn update_bios(&self) -> Result<(), zbus::fdo::Error> {
+    async fn update_bios(&self) -> zbus::fdo::Result<()> {
         // Update the bios as needed
         run_script(
             "update bios",
@@ -199,7 +199,7 @@ impl SteamOSManager {
         .map_err(anyhow_to_zbus_fdo)
     }
 
-    async fn update_dock(&self) -> Result<(), zbus::fdo::Error> {
+    async fn update_dock(&self) -> zbus::fdo::Result<()> {
         // Update the dock firmware as needed
         run_script(
             "update dock firmware",
@@ -210,7 +210,7 @@ impl SteamOSManager {
         .map_err(anyhow_to_zbus_fdo)
     }
 
-    async fn trim_devices(&self) -> Result<(), zbus::fdo::Error> {
+    async fn trim_devices(&self) -> zbus::fdo::Result<()> {
         // Run steamos-trim-devices script
         run_script(
             "trim devices",
@@ -226,7 +226,7 @@ impl SteamOSManager {
         device: &str,
         label: &str,
         validate: bool,
-    ) -> Result<(), zbus::fdo::Error> {
+    ) -> zbus::fdo::Result<()> {
         let mut args = vec!["--label", label, "--device", device];
         if !validate {
             args.push("--skip-validation");
@@ -302,11 +302,7 @@ impl SteamOSManager {
         }
     }
 
-    async fn set_wifi_debug_mode(
-        &mut self,
-        mode: u32,
-        buffer_size: u32,
-    ) -> Result<(), zbus::fdo::Error> {
+    async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> zbus::fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
