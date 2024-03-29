@@ -98,7 +98,9 @@ impl SteamOSManager {
 
     #[zbus(property)]
     fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
-        Err(zbus::fdo::Error::UnknownProperty(String::from("This property can't currently be read")))
+        Err(zbus::fdo::Error::UnknownProperty(String::from(
+            "This property can't currently be read",
+        )))
     }
 
     #[zbus(property)]
@@ -123,7 +125,9 @@ impl SteamOSManager {
 
     #[zbus(property)]
     fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
-        Err(zbus::fdo::Error::UnknownProperty(String::from("This property can't currently be read")))
+        Err(zbus::fdo::Error::UnknownProperty(String::from(
+            "This property can't currently be read",
+        )))
     }
 
     #[zbus(property)]
@@ -366,9 +370,12 @@ mod test {
         create_dir_all(crate::path("/etc/NetworkManager/conf.d"))
             .await
             .expect("create_dir_all");
-        write(crate::path("/etc/NetworkManager/conf.d/wifi_backend.conf"), "wifi.backend=iwd\n")
-            .await
-            .expect("write");
+        write(
+            crate::path("/etc/NetworkManager/conf.d/wifi_backend.conf"),
+            "wifi.backend=iwd\n",
+        )
+        .await
+        .expect("write");
 
         let manager = SteamOSManager::new().await.unwrap();
         let connection = ConnectionBuilder::session()
