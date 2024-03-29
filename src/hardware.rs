@@ -26,7 +26,6 @@ pub enum HardwareVariant {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum HardwareCurrentlySupported {
-    UnsupportedFeature = 0,
     Unsupported = 1,
     Supported = 2,
 }
@@ -46,9 +45,6 @@ impl TryFrom<u32> for HardwareCurrentlySupported {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == HardwareCurrentlySupported::UnsupportedFeature as u32 => {
-                Ok(HardwareCurrentlySupported::UnsupportedFeature)
-            }
             x if x == HardwareCurrentlySupported::Unsupported as u32 => {
                 Ok(HardwareCurrentlySupported::Unsupported)
             }
@@ -63,7 +59,6 @@ impl TryFrom<u32> for HardwareCurrentlySupported {
 impl fmt::Display for HardwareCurrentlySupported {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            HardwareCurrentlySupported::UnsupportedFeature => write!(f, "Unsupported feature"),
             HardwareCurrentlySupported::Unsupported => write!(f, "Unsupported"),
             HardwareCurrentlySupported::Supported => write!(f, "Supported"),
         }

@@ -22,7 +22,6 @@ const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum GPUPerformanceLevel {
-    UnsupportedFeature = 0,
     Auto = 1,
     Low = 2,
     High = 3,
@@ -34,9 +33,6 @@ impl TryFrom<u32> for GPUPerformanceLevel {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == GPUPerformanceLevel::UnsupportedFeature as u32 => {
-                Ok(GPUPerformanceLevel::UnsupportedFeature)
-            }
             x if x == GPUPerformanceLevel::Auto as u32 => Ok(GPUPerformanceLevel::Auto),
             x if x == GPUPerformanceLevel::Low as u32 => Ok(GPUPerformanceLevel::Low),
             x if x == GPUPerformanceLevel::High as u32 => Ok(GPUPerformanceLevel::High),
@@ -63,17 +59,15 @@ impl FromStr for GPUPerformanceLevel {
     }
 }
 
-impl TryInto<String> for GPUPerformanceLevel {
-    type Error = Error;
-    fn try_into(self) -> Result<String, Self::Error> {
-        Ok(String::from(match self {
+impl ToString for GPUPerformanceLevel {
+    fn to_string(&self) -> String {
+        String::from(match self {
             GPUPerformanceLevel::Auto => "auto",
             GPUPerformanceLevel::Low => "low",
             GPUPerformanceLevel::High => "high",
             GPUPerformanceLevel::Manual => "manual",
             GPUPerformanceLevel::ProfilePeak => "peak_performance",
-            GPUPerformanceLevel::UnsupportedFeature => bail!("No valid string representation"),
-        }))
+        })
     }
 }
 
@@ -90,7 +84,7 @@ pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()>
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
-    let level: String = level.try_into()?;
+    let level: String = level.to_string();
 
     myfile
         .write_all(level.as_bytes())

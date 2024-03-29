@@ -11,7 +11,7 @@ use tokio::fs::File;
 use tracing::error;
 use zbus::{interface, zvariant::Fd};
 
-use crate::hardware::{check_support, variant, HardwareCurrentlySupported, HardwareVariant};
+use crate::hardware::{check_support, variant, HardwareVariant};
 use crate::power::{
     get_gpu_performance_level, set_gpu_clocks, set_gpu_performance_level, set_tdp_limit,
     GPUPerformanceLevel,
@@ -30,7 +30,6 @@ enum PrepareFactoryReset {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 enum FanControl {
-    UnsupportedFeature = 0,
     BIOS = 1,
     OS = 2,
 }
@@ -39,7 +38,6 @@ impl TryFrom<u32> for FanControl {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == FanControl::UnsupportedFeature as u32 => Ok(FanControl::UnsupportedFeature),
             x if x == FanControl::BIOS as u32 => Ok(FanControl::BIOS),
             x if x == FanControl::OS as u32 => Ok(FanControl::BIOS),
             _ => Err("No enum match for value {v}"),
@@ -50,7 +48,6 @@ impl TryFrom<u32> for FanControl {
 impl fmt::Display for FanControl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FanControl::UnsupportedFeature => write!(f, "Unsupported feature"),
             FanControl::BIOS => write!(f, "BIOS"),
             FanControl::OS => write!(f, "OS"),
         }
@@ -94,8 +91,8 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    fn wifi_power_management_state(&self) -> u32 {
-        WifiPowerManagement::UnsupportedFeature as u32 // TODO
+    fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
+        Err(zbus::fdo::Error::UnknownProperty(String::from("This property can't currently be read")))
     }
 
     #[zbus(property)]
@@ -107,12 +104,6 @@ impl SteamOSManager {
         let state = match state {
             WifiPowerManagement::Disabled => "off",
             WifiPowerManagement::Enabled => "on",
-            WifiPowerManagement::UnsupportedFeature => {
-                return Err(zbus::fdo::Error::InvalidArgs(String::from(
-                    "Can't set state to unsupported",
-                ))
-                .into())
-            }
         };
 
         run_script(
@@ -125,8 +116,8 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    fn fan_control_state(&self) -> u32 {
-        FanControl::UnsupportedFeature as u32 // TODO
+    fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
+        Err(zbus::fdo::Error::UnknownProperty(String::from("This property can't currently be read")))
     }
 
     #[zbus(property)]
@@ -138,12 +129,6 @@ impl SteamOSManager {
         let state = match state {
             FanControl::OS => "stop",
             FanControl::BIOS => "start",
-            FanControl::UnsupportedFeature => {
-                return Err(zbus::fdo::Error::InvalidArgs(String::from(
-                    "Can't set state to unsupported",
-                ))
-                .into())
-            }
         };
 
         // Run what steamos-polkit-helpers/jupiter-fan-control does
@@ -157,10 +142,10 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    async fn hardware_currently_supported(&self) -> u32 {
+    async fn hardware_currently_supported(&self) -> zbus::fdo::Result<u32> {
         match check_support().await {
-            Ok(res) => res as u32,
-            Err(_) => HardwareCurrentlySupported::UnsupportedFeature as u32,
+            Ok(res) => Ok(res as u32),
+            Err(e) => Err(anyhow_to_zbus_fdo(e)),
         }
     }
 
@@ -246,10 +231,10 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    async fn gpu_performance_level(&self) -> u32 {
+    async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
         match get_gpu_performance_level().await {
-            Ok(level) => level as u32,
-            Err(_) => GPUPerformanceLevel::UnsupportedFeature as u32,
+            Ok(level) => Ok(level as u32),
+            Err(e) => Err(anyhow_to_zbus_fdo(e)),
         }
     }
 
@@ -288,9 +273,6 @@ impl SteamOSManager {
         // Return false on error
 
         let wanted_mode = match WifiDebugMode::try_from(mode) {
-            Ok(WifiDebugMode::UnsupportedFeature) => {
-                return Err(zbus::fdo::Error::InvalidArgs(String::from("Invalid mode")))
-            }
             Ok(mode) => mode,
             Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
         };

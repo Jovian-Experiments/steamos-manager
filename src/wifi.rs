@@ -29,7 +29,6 @@ const MIN_BUFFER_SIZE: u32 = 100;
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiDebugMode {
-    UnsupportedFeature = 0,
     Off = 1,
     On = 2,
 }
@@ -37,7 +36,6 @@ pub enum WifiDebugMode {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiPowerManagement {
-    UnsupportedFeature = 0,
     Disabled = 1,
     Enabled = 2,
 }
@@ -46,9 +44,6 @@ impl TryFrom<u32> for WifiDebugMode {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == WifiDebugMode::UnsupportedFeature as u32 => {
-                Ok(WifiDebugMode::UnsupportedFeature)
-            }
             x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
             x if x == WifiDebugMode::On as u32 => Ok(WifiDebugMode::On),
             _ => Err("No enum match for value {v}"),
@@ -59,7 +54,6 @@ impl TryFrom<u32> for WifiDebugMode {
 impl fmt::Display for WifiDebugMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WifiDebugMode::UnsupportedFeature => write!(f, "Unsupported feature"),
             WifiDebugMode::Off => write!(f, "Off"),
             WifiDebugMode::On => write!(f, "On"),
         }
@@ -70,9 +64,6 @@ impl TryFrom<u32> for WifiPowerManagement {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == WifiPowerManagement::UnsupportedFeature as u32 => {
-                Ok(WifiPowerManagement::UnsupportedFeature)
-            }
             x if x == WifiPowerManagement::Disabled as u32 => Ok(WifiPowerManagement::Disabled),
             x if x == WifiPowerManagement::Enabled as u32 => Ok(WifiPowerManagement::Enabled),
             _ => Err("No enum match for value {v}"),
@@ -83,7 +74,6 @@ impl TryFrom<u32> for WifiPowerManagement {
 impl fmt::Display for WifiPowerManagement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WifiPowerManagement::UnsupportedFeature => write!(f, "Unsupported feature"),
             WifiPowerManagement::Disabled => write!(f, "Disabled"),
             WifiPowerManagement::Enabled => write!(f, "Enabled"),
         }
@@ -187,10 +177,6 @@ pub async fn set_wifi_debug_mode(
                     bail!("start_tracing got an error: {message}");
                 };
             }
-        }
-        mode => {
-            // Invalid mode requested, more coming later, but add this catch-all for now
-            bail!("Invalid wifi debug mode {mode} requested");
         }
     }
     Ok(())
