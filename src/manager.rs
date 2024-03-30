@@ -128,10 +128,17 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
-        Err(zbus::fdo::Error::UnknownProperty(String::from(
-            "This property can't currently be read",
-        )))
+    async fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
+        let jupiter_fan_control =
+            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
+                .await
+                .map_err(anyhow_to_zbus_fdo)?;
+        let active = jupiter_fan_control.active().await
+                .map_err(anyhow_to_zbus_fdo)?;
+        Ok(match active {
+            true => FanControl::OS as u32,
+            false => FanControl::BIOS as u32,
+        })
     }
 
     #[zbus(property)]

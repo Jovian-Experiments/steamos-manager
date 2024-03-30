@@ -69,4 +69,8 @@ impl<'dbus> SystemdUnit<'dbus> {
         self.proxy.stop("fail").await?;
         Ok(())
     }
+
+    pub async fn active(&self) -> Result<bool> {
+        Ok(self.proxy.active_state().await? == "active")
+    }
 }
