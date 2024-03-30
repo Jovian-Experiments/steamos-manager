@@ -10,8 +10,6 @@ use std::ffi::OsStr;
 use tokio::process::Command;
 use tracing::warn;
 
-pub const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
-
 pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
     // Run given script and return the exit code
     let mut child = Command::new(executable).args(args).spawn()?;

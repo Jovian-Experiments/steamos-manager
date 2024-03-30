@@ -10,9 +10,11 @@ use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
 use tracing::error;
+use zbus::Connection;
 
 use crate::path;
-use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
+use crate::process::{run_script, script_output};
+use crate::systemd::{daemon_reload, SystemdUnit};
 
 const OVERRIDE_CONTENTS: &str = "[Service]
 ExecStart=
@@ -138,19 +140,16 @@ pub async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     }
 }
 
-async fn restart_iwd() -> Result<()> {
+async fn restart_iwd(connection: Connection) -> Result<()> {
     // First reload systemd since we modified the config most likely
     // otherwise we wouldn't be restarting iwd.
-    match run_script("reload systemd", SYSTEMCTL_PATH, &["daemon-reload"]).await {
-        Ok(_) => {
-            // worked, now restart iwd
-            run_script("restart iwd", SYSTEMCTL_PATH, &["restart", "iwd"]).await
-        }
-        Err(message) => {
-            error!("restart_iwd: reload systemd got an error: {message}");
-            Err(message)
-        }
-    }
+    daemon_reload(&connection).await.inspect_err(|message|
+            error!("restart_iwd: reload systemd got an error: {message}"))?;
+
+    // worked, now restart iwd
+    let unit = SystemdUnit::new(connection, "iwd_2eservice").await?;
+    unit.restart().await.inspect_err(|message|
+            error!("restart_iwd: restart unit got an error: {message}"))
 }
 
 async fn stop_tracing() -> Result<()> {
@@ -180,6 +179,7 @@ pub async fn set_wifi_debug_mode(
     mode: WifiDebugMode,
     buffer_size: u32,
     should_trace: bool,
+    connection: Connection,
 ) -> Result<()> {
     // Set the wifi debug mode to mode, using an int for flexibility going forward but only
     // doing things on 0 or 1 for now
@@ -199,7 +199,7 @@ pub async fn set_wifi_debug_mode(
                 bail!("setup_iwd_config false got an error: {message}");
             };
             // setup_iwd_config false worked
-            if let Err(message) = restart_iwd().await {
+            if let Err(message) = restart_iwd(connection).await {
                 bail!("restart_iwd got an error: {message}");
             };
         }
@@ -210,7 +210,7 @@ pub async fn set_wifi_debug_mode(
                 bail!("setup_iwd_config true got an error: {message}");
             }
             // setup_iwd_config worked
-            if let Err(message) = restart_iwd().await {
+            if let Err(message) = restart_iwd(connection).await {
                 bail!("restart_iwd got an error: {message}");
             };
             // restart_iwd worked

@@ -26,6 +26,7 @@ mod manager;
 mod power;
 mod process;
 mod sls;
+mod systemd;
 mod wifi;
 
 #[cfg(test)]
@@ -132,14 +133,16 @@ pub fn anyhow_to_zbus_fdo(error: Error) -> zbus::fdo::Error {
 }
 
 async fn create_connection() -> Result<Connection> {
-    let manager = manager::SteamOSManager::new().await?;
-
-    ConnectionBuilder::system()?
+    let connection = ConnectionBuilder::system()?
         .name("com.steampowered.SteamOSManager1.Manager")?
-        .serve_at("/com/steampowered/SteamOSManager1", manager)?
         .build()
-        .await
-        .map_err(|e| e.into())
+        .await?;
+    let manager = manager::SteamOSManager::new(connection.clone()).await?;
+    connection
+        .object_server()
+        .at("/com/steampowered/SteamOSManager1", manager)
+        .await?;
+    Ok(connection)
 }
 
 #[tokio::main]

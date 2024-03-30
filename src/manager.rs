@@ -10,14 +10,16 @@ use anyhow::Result;
 use std::fmt;
 use tokio::fs::File;
 use tracing::error;
-use zbus::{interface, zvariant::Fd};
+use zbus::zvariant::Fd;
+use zbus::{interface, Connection};
 
 use crate::hardware::{check_support, variant, HardwareVariant};
 use crate::power::{
     get_gpu_performance_level, set_gpu_clocks, set_gpu_performance_level, set_tdp_limit,
     GPUPerformanceLevel,
 };
-use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
+use crate::process::{run_script, script_output};
+use crate::systemd::SystemdUnit;
 use crate::wifi::{
     get_wifi_backend_from_conf, get_wifi_backend_from_script, set_wifi_backend,
     set_wifi_debug_mode, WifiBackend, WifiDebugMode, WifiPowerManagement,
@@ -59,6 +61,7 @@ impl fmt::Display for FanControl {
 }
 
 pub struct SteamOSManager {
+    connection: Connection,
     wifi_backend: WifiBackend,
     wifi_debug_mode: WifiDebugMode,
     // Whether we should use trace-cmd or not.
@@ -67,8 +70,9 @@ pub struct SteamOSManager {
 }
 
 impl SteamOSManager {
-    pub async fn new() -> Result<Self> {
+    pub async fn new(connection: Connection) -> Result<Self> {
         Ok(SteamOSManager {
+            connection,
             wifi_backend: get_wifi_backend_from_conf().await?,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
@@ -136,18 +140,15 @@ impl SteamOSManager {
             Ok(state) => state,
             Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
         };
-        let state = match state {
-            FanControl::OS => "stop",
-            FanControl::BIOS => "start",
-        };
-
         // Run what steamos-polkit-helpers/jupiter-fan-control does
-        run_script(
-            "enable fan control",
-            SYSTEMCTL_PATH,
-            &[state, "jupiter-fan-control-service"],
-        )
-        .await
+        let jupiter_fan_control =
+            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
+                .await
+                .map_err(anyhow_to_zbus)?;
+        match state {
+            FanControl::OS => jupiter_fan_control.start().await,
+            FanControl::BIOS => jupiter_fan_control.stop().await,
+        }
         .map_err(anyhow_to_zbus)
     }
 
@@ -320,7 +321,14 @@ impl SteamOSManager {
             Ok(mode) => mode,
             Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
         };
-        match set_wifi_debug_mode(wanted_mode, buffer_size, self.should_trace).await {
+        match set_wifi_debug_mode(
+            wanted_mode,
+            buffer_size,
+            self.should_trace,
+            self.connection.clone(),
+        )
+        .await
+        {
             Ok(()) => {
                 self.wifi_debug_mode = wanted_mode;
                 Ok(())
@@ -373,16 +381,18 @@ mod test {
         .await
         .expect("write");
 
-        let manager = SteamOSManager::new().await.unwrap();
         let connection = ConnectionBuilder::session()
             .unwrap()
             .name("com.steampowered.SteamOSManager1.Test")
             .unwrap()
-            .serve_at("/com/steampowered/SteamOSManager1", manager)
-            .unwrap()
             .build()
             .await
             .unwrap();
+        let manager = SteamOSManager::new(connection.clone()).await.unwrap();
+        connection.object_server()
+            .at("/com/steampowered/SteamOSManager1", manager)
+            .await
+            .expect("object_server at");
 
         TestHandle { handle, connection }
     }
