@@ -15,8 +15,8 @@ use zbus::{interface, Connection, SignalContext};
 
 use crate::hardware::{check_support, variant, HardwareVariant};
 use crate::power::{
-    get_gpu_performance_level, set_gpu_clocks, set_gpu_performance_level, set_tdp_limit,
-    GPUPerformanceLevel,
+    get_gpu_clocks, get_gpu_performance_level, set_gpu_clocks, set_gpu_performance_level,
+    set_tdp_limit, GPUPerformanceLevel,
 };
 use crate::process::{run_script, script_output};
 use crate::systemd::SystemdUnit;
@@ -277,8 +277,14 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus)
     }
 
-    async fn set_gpu_clocks(&self, clocks: i32) -> bool {
-        set_gpu_clocks(clocks).await.is_ok()
+    #[zbus(property)]
+    async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
+        get_gpu_clocks().await.map_err(anyhow_to_zbus_fdo)
+    }
+
+    #[zbus(property)]
+    async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
+        set_gpu_clocks(clocks).await.map_err(anyhow_to_zbus)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]

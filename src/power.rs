@@ -8,7 +8,7 @@
 use anyhow::{anyhow, bail, ensure, Error, Result};
 use std::str::FromStr;
 use tokio::fs::{self, File};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::error;
 
 use crate::path;
@@ -93,7 +93,7 @@ pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()>
     Ok(())
 }
 
-pub async fn set_gpu_clocks(clocks: i32) -> Result<()> {
+pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
     // Set GPU clocks to given value valid between 200 - 1600
     // Only used when GPU Performance Level is manual, but write whenever called.
     ensure!((200..=1600).contains(&clocks), "Invalid clocks");
@@ -119,6 +119,35 @@ pub async fn set_gpu_clocks(clocks: i32) -> Result<()> {
         .await
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
     Ok(())
+}
+
+pub async fn get_gpu_clocks() -> Result<u32> {
+    let clocks_file = File::open(GPU_CLOCKS_PATH).await?;
+    let mut reader = BufReader::new(clocks_file);
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line).await? == 0 {
+            break;
+        }
+        if line != "OD_SCLK:\n" {
+            continue;
+        }
+
+        let mut line = String::new();
+        if reader.read_line(&mut line).await? == 0 {
+            break;
+        }
+        let mhz = match line.split_whitespace().nth(1) {
+            Some(mhz) if mhz.ends_with("Mhz") => mhz.trim_end_matches("Mhz"),
+            _ => break,
+        };
+
+        match mhz.parse() {
+            Ok(mhz) => return Ok(mhz),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(anyhow!("Couldn't find GPU clocks"))
 }
 
 pub async fn set_tdp_limit(limit: i32) -> Result<()> {
