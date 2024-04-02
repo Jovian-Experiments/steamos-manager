@@ -99,9 +99,19 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
-        Err(zbus::fdo::Error::UnknownProperty(String::from(
-            "This property can't currently be read",
+    async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
+        let output = script_output("/usr/bin/iwconfig", &["wlan0"])
+            .await
+            .map_err(anyhow_to_zbus_fdo)?;
+        for line in output.lines() {
+            return Ok(match line.trim() {
+                "Power Management:on" => WifiPowerManagement::Enabled as u32,
+                "Power Management:off" => WifiPowerManagement::Disabled as u32,
+                _ => continue,
+            });
+        }
+        Err(zbus::fdo::Error::Failed(String::from(
+            "Failed to query power management state",
         )))
     }
 
