@@ -26,8 +26,8 @@ pub enum HardwareVariant {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum HardwareCurrentlySupported {
-    Unsupported = 1,
-    Supported = 2,
+    Unsupported = 0,
+    Supported = 1,
 }
 
 impl FromStr for HardwareVariant {

@@ -22,11 +22,11 @@ const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum GPUPerformanceLevel {
-    Auto = 1,
-    Low = 2,
-    High = 3,
-    Manual = 4,
-    ProfilePeak = 5,
+    Auto = 0,
+    Low = 1,
+    High = 2,
+    Manual = 3,
+    ProfilePeak = 4,
 }
 
 impl TryFrom<u32> for GPUPerformanceLevel {

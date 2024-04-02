@@ -36,8 +36,8 @@ enum PrepareFactoryReset {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 enum FanControl {
-    BIOS = 1,
-    OS = 2,
+    BIOS = 0,
+    OS = 1,
 }
 
 impl TryFrom<u32> for FanControl {

@@ -35,22 +35,22 @@ const WIFI_BACKEND_PATH: &str = "/etc/NetworkManager/conf.d/wifi_backend.conf";
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiDebugMode {
-    Off = 1,
-    On = 2,
+    Off = 0,
+    On = 1,
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiPowerManagement {
-    Disabled = 1,
-    Enabled = 2,
+    Disabled = 0,
+    Enabled = 1,
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiBackend {
-    IWD = 1,
-    WPASupplicant = 2,
+    IWD = 0,
+    WPASupplicant = 1,
 }
 
 impl TryFrom<u32> for WifiDebugMode {
