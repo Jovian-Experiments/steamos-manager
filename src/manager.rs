@@ -271,8 +271,32 @@ impl SteamOSManager {
         set_gpu_clocks(clocks).await.is_ok()
     }
 
+    #[zbus(property)]
+    async fn manual_gpu_clock_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        200
+    }
+
+    #[zbus(property)]
+    async fn manual_gpu_clock_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        1600
+    }
+
     async fn set_tdp_limit(&self, limit: i32) -> bool {
         set_tdp_limit(limit).await.is_ok()
+    }
+
+    #[zbus(property)]
+    async fn tdp_limit_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        3
+    }
+
+    #[zbus(property)]
+    async fn tdp_limit_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        15
     }
 
     #[zbus(property)]
