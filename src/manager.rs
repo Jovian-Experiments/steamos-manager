@@ -11,7 +11,7 @@ use std::fmt;
 use tokio::fs::File;
 use tracing::error;
 use zbus::zvariant::Fd;
-use zbus::{interface, Connection};
+use zbus::{interface, Connection, SignalContext};
 
 use crate::hardware::{check_support, variant, HardwareVariant};
 use crate::power::{
@@ -98,7 +98,7 @@ impl SteamOSManager {
         }
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
         let output = script_output("/usr/bin/iwconfig", &["wlan0"])
             .await
@@ -135,7 +135,7 @@ impl SteamOSManager {
         .map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
         let jupiter_fan_control =
             SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
@@ -169,7 +169,7 @@ impl SteamOSManager {
         .map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn hardware_currently_supported(&self) -> zbus::fdo::Result<u32> {
         match check_support().await {
             Ok(res) => Ok(res as u32),
@@ -177,7 +177,7 @@ impl SteamOSManager {
         }
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn als_calibration_gain(&self) -> f64 {
         // Run script to get calibration value
         let result = script_output(
@@ -258,7 +258,7 @@ impl SteamOSManager {
         .map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
         match get_gpu_performance_level().await {
             Ok(level) => Ok(level as u32),
@@ -281,13 +281,13 @@ impl SteamOSManager {
         set_gpu_clocks(clocks).await.is_ok()
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn manual_gpu_clock_min(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         200
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn manual_gpu_clock_max(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         1600
@@ -297,13 +297,13 @@ impl SteamOSManager {
         set_tdp_limit(limit).await.is_ok()
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_min(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         3
     }
 
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_max(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         15
@@ -315,7 +315,12 @@ impl SteamOSManager {
         self.wifi_debug_mode as u32
     }
 
-    async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> zbus::fdo::Result<()> {
+    async fn set_wifi_debug_mode(
+        &mut self,
+        mode: u32,
+        buffer_size: u32,
+        #[zbus(signal_context)] ctx: SignalContext<'_>,
+    ) -> zbus::fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
@@ -343,6 +348,7 @@ impl SteamOSManager {
         {
             Ok(()) => {
                 self.wifi_debug_mode = wanted_mode;
+                self.wifi_debug_mode_state_changed(&ctx).await?;
                 Ok(())
             }
             Err(e) => {
@@ -353,7 +359,7 @@ impl SteamOSManager {
     }
 
     /// WifiBackend property.
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn wifi_backend(&self) -> zbus::fdo::Result<u32> {
         match get_wifi_backend().await {
             Ok(backend) => Ok(backend as u32),
@@ -376,7 +382,7 @@ impl SteamOSManager {
     }
 
     /// A version property.
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
         SteamOSManager::API_VERSION
     }
