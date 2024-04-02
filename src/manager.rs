@@ -21,8 +21,8 @@ use crate::power::{
 use crate::process::{run_script, script_output};
 use crate::systemd::SystemdUnit;
 use crate::wifi::{
-    get_wifi_backend_from_conf, get_wifi_backend_from_script, set_wifi_backend,
-    set_wifi_debug_mode, WifiBackend, WifiDebugMode, WifiPowerManagement,
+    get_wifi_backend, set_wifi_backend, set_wifi_debug_mode, WifiBackend, WifiDebugMode,
+    WifiPowerManagement,
 };
 use crate::{anyhow_to_zbus, anyhow_to_zbus_fdo};
 
@@ -62,7 +62,6 @@ impl fmt::Display for FanControl {
 
 pub struct SteamOSManager {
     connection: Connection,
-    wifi_backend: WifiBackend,
     wifi_debug_mode: WifiDebugMode,
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
@@ -73,7 +72,6 @@ impl SteamOSManager {
     pub async fn new(connection: Connection) -> Result<Self> {
         Ok(SteamOSManager {
             connection,
-            wifi_backend: get_wifi_backend_from_conf().await?,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
         })
@@ -309,7 +307,7 @@ impl SteamOSManager {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
-        match get_wifi_backend_from_script().await {
+        match get_wifi_backend().await {
             Ok(WifiBackend::IWD) => (),
             Ok(backend) => {
                 return Err(zbus::fdo::Error::Failed(format!(
@@ -344,8 +342,11 @@ impl SteamOSManager {
 
     /// WifiBackend property.
     #[zbus(property)]
-    async fn wifi_backend(&self) -> u32 {
-        self.wifi_backend as u32
+    async fn wifi_backend(&self) -> zbus::fdo::Result<u32> {
+        match get_wifi_backend().await {
+            Ok(backend) => Ok(backend as u32),
+            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+        }
     }
 
     #[zbus(property)]
@@ -359,16 +360,7 @@ impl SteamOSManager {
             Ok(backend) => backend,
             Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
         };
-        match set_wifi_backend(backend).await {
-            Ok(()) => {
-                self.wifi_backend = backend;
-                Ok(())
-            }
-            Err(e) => {
-                error!("Setting wifi backend failed: {e}");
-                Err(anyhow_to_zbus_fdo(e))
-            }
-        }
+        set_wifi_backend(backend).await.map_err(anyhow_to_zbus_fdo)
     }
 
     /// A version property.

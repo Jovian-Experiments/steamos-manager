@@ -13,7 +13,7 @@ use tracing::error;
 use zbus::Connection;
 
 use crate::path;
-use crate::process::{run_script, script_output};
+use crate::process::run_script;
 use crate::systemd::{daemon_reload, SystemdUnit};
 
 const OVERRIDE_CONTENTS: &str = "[Service]
@@ -224,7 +224,7 @@ pub async fn set_wifi_debug_mode(
     Ok(())
 }
 
-pub async fn get_wifi_backend_from_conf() -> Result<WifiBackend> {
+pub async fn get_wifi_backend() -> Result<WifiBackend> {
     let wifi_backend_contents = fs::read_to_string(path(WIFI_BACKEND_PATH))
         .await?
         .trim()
@@ -237,11 +237,6 @@ pub async fn get_wifi_backend_from_conf() -> Result<WifiBackend> {
     }
 
     bail!("WiFi backend not found in config");
-}
-
-pub async fn get_wifi_backend_from_script() -> Result<WifiBackend> {
-    let result = script_output("/usr/bin/steamos-wifi-set-backend", &["--check"]).await?;
-    WifiBackend::from_str(result.trim())
 }
 
 pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
