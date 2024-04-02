@@ -305,35 +305,6 @@ impl SteamOSManager {
         self.wifi_debug_mode as u32
     }
 
-    /// WifiBackend property.
-    #[zbus(property)]
-    async fn wifi_backend(&self) -> u32 {
-        self.wifi_backend as u32
-    }
-
-    #[zbus(property)]
-    async fn set_wifi_backend(&mut self, backend: u32) -> zbus::fdo::Result<()> {
-        if self.wifi_debug_mode == WifiDebugMode::On {
-            return Err(zbus::fdo::Error::Failed(String::from(
-                "operation not supported when wifi_debug_mode=on",
-            )));
-        }
-        let backend = match WifiBackend::try_from(backend) {
-            Ok(backend) => backend,
-            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
-        };
-        match set_wifi_backend(backend).await {
-            Ok(()) => {
-                self.wifi_backend = backend;
-                Ok(())
-            }
-            Err(e) => {
-                error!("Setting wifi backend failed: {e}");
-                Err(anyhow_to_zbus_fdo(e))
-            }
-        }
-    }
-
     async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> zbus::fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
@@ -366,6 +337,35 @@ impl SteamOSManager {
             }
             Err(e) => {
                 error!("Setting wifi debug mode failed: {e}");
+                Err(anyhow_to_zbus_fdo(e))
+            }
+        }
+    }
+
+    /// WifiBackend property.
+    #[zbus(property)]
+    async fn wifi_backend(&self) -> u32 {
+        self.wifi_backend as u32
+    }
+
+    #[zbus(property)]
+    async fn set_wifi_backend(&mut self, backend: u32) -> zbus::fdo::Result<()> {
+        if self.wifi_debug_mode == WifiDebugMode::On {
+            return Err(zbus::fdo::Error::Failed(String::from(
+                "operation not supported when wifi_debug_mode=on",
+            )));
+        }
+        let backend = match WifiBackend::try_from(backend) {
+            Ok(backend) => backend,
+            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
+        };
+        match set_wifi_backend(backend).await {
+            Ok(()) => {
+                self.wifi_backend = backend;
+                Ok(())
+            }
+            Err(e) => {
+                error!("Setting wifi backend failed: {e}");
                 Err(anyhow_to_zbus_fdo(e))
             }
         }
