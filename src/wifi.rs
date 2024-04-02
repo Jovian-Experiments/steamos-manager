@@ -143,13 +143,15 @@ pub async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
 async fn restart_iwd(connection: Connection) -> Result<()> {
     // First reload systemd since we modified the config most likely
     // otherwise we wouldn't be restarting iwd.
-    daemon_reload(&connection).await.inspect_err(|message|
-            error!("restart_iwd: reload systemd got an error: {message}"))?;
+    daemon_reload(&connection)
+        .await
+        .inspect_err(|message| error!("restart_iwd: reload systemd got an error: {message}"))?;
 
     // worked, now restart iwd
     let unit = SystemdUnit::new(connection, "iwd_2eservice").await?;
-    unit.restart().await.inspect_err(|message|
-            error!("restart_iwd: restart unit got an error: {message}"))
+    unit.restart()
+        .await
+        .inspect_err(|message| error!("restart_iwd: restart unit got an error: {message}"))
 }
 
 async fn stop_tracing() -> Result<()> {

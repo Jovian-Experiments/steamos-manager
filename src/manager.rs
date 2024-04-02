@@ -131,8 +131,10 @@ impl SteamOSManager {
             SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
                 .await
                 .map_err(anyhow_to_zbus_fdo)?;
-        let active = jupiter_fan_control.active().await
-                .map_err(anyhow_to_zbus_fdo)?;
+        let active = jupiter_fan_control
+            .active()
+            .await
+            .map_err(anyhow_to_zbus_fdo)?;
         Ok(match active {
             true => FanControl::OS as u32,
             false => FanControl::BIOS as u32,
@@ -412,7 +414,8 @@ mod test {
             .await
             .unwrap();
         let manager = SteamOSManager::new(connection.clone()).await.unwrap();
-        connection.object_server()
+        connection
+            .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)
             .await
             .expect("object_server at");
