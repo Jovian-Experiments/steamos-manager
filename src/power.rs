@@ -6,6 +6,7 @@
  */
 
 use anyhow::{anyhow, bail, ensure, Error, Result};
+use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -150,24 +151,33 @@ pub async fn get_gpu_clocks() -> Result<u32> {
     Err(anyhow!("Couldn't find GPU clocks"))
 }
 
-pub async fn set_tdp_limit(limit: i32) -> Result<()> {
-    // Set TDP limit given if within range (3-15)
-    // Returns false on error or out of range
-    ensure!((3..=15).contains(&limit), "Invalid limit");
-
+async fn find_hwmon() -> Result<PathBuf> {
     let mut dir = fs::read_dir(path(GPU_HWMON_PREFIX)).await?;
-    let base = loop {
+    loop {
         let base = match dir.next_entry().await? {
             Some(entry) => entry.path(),
             None => bail!("hwmon not found"),
         };
         if fs::try_exists(base.join("power1_cap")).await? {
-            break base;
+            return Ok(base);
         }
-    };
+    }
+}
 
+pub async fn get_tdp_limit() -> Result<u32> {
+    let base = find_hwmon().await?;
+    let power1cap = fs::read_to_string(base.join("power1_cap")).await?;
+    let power1cap: u32 = power1cap.parse()?;
+    Ok(power1cap / 1000000)
+}
+
+pub async fn set_tdp_limit(limit: u32) -> Result<()> {
+    // Set TDP limit given if within range (3-15)
+    // Returns false on error or out of range
+    ensure!((3..=15).contains(&limit), "Invalid limit");
     let data = format!("{limit}000000");
 
+    let base = find_hwmon().await?;
     let mut power1file = File::create(base.join("power1_cap"))
         .await
         .inspect_err(|message| {
