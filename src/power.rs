@@ -198,6 +198,14 @@ pub async fn set_tdp_limit(limit: u32) -> Result<()> {
 }
 
 #[cfg(test)]
+pub async fn setup_test() {
+    let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+    fs::create_dir_all(filename.parent().unwrap())
+        .await
+        .expect("create_dir_all");
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::testing;
@@ -209,9 +217,7 @@ mod test {
         let h = testing::start();
 
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
-        create_dir_all(filename.parent().unwrap())
-            .await
-            .expect("create_dir_all");
+        setup_test().await;
         assert!(get_gpu_performance_level().await.is_err());
 
         write(filename.as_path(), "auto\n").await.expect("write");
@@ -255,9 +261,7 @@ mod test {
         let h = testing::start();
 
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
-        create_dir_all(filename.parent().unwrap())
-            .await
-            .expect("create_dir_all");
+        setup_test().await;
 
         set_gpu_performance_level(GPUPerformanceLevel::Auto)
             .await

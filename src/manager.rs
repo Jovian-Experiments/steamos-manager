@@ -403,7 +403,7 @@ impl SteamOSManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::testing;
+    use crate::{power, testing};
     use tokio::fs::{create_dir_all, write};
     use zbus::connection::Connection;
     use zbus::ConnectionBuilder;
@@ -413,7 +413,7 @@ mod test {
         connection: Connection,
     }
 
-    async fn start() -> TestHandle {
+    async fn start(name: &str) -> TestHandle {
         let handle = testing::start();
         create_dir_all(crate::path("/sys/class/dmi/id"))
             .await
@@ -436,7 +436,7 @@ mod test {
 
         let connection = ConnectionBuilder::session()
             .unwrap()
-            .name("com.steampowered.SteamOSManager1.Test")
+            .name(format!("com.steampowered.SteamOSManager1.Test.{name}"))
             .unwrap()
             .build()
             .await
@@ -453,7 +453,46 @@ mod test {
 
     #[zbus::proxy(
         interface = "com.steampowered.SteamOSManager1.Manager",
-        default_service = "com.steampowered.SteamOSManager1.Test",
+        default_service = "com.steampowered.SteamOSManager1.Test.GPUPerformanceLevel",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait GPUPerformanceLevel {
+        #[zbus(property)]
+        fn gpu_performance_level(&self) -> zbus::Result<u32>;
+
+        #[zbus(property)]
+        fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()>;
+    }
+
+    #[tokio::test]
+    async fn gpu_performance_level() {
+        let test = start("GPUPerformanceLevel").await;
+        power::setup_test().await;
+
+        let proxy = GPUPerformanceLevelProxy::new(&test.connection)
+            .await
+            .unwrap();
+        set_gpu_performance_level(GPUPerformanceLevel::Auto)
+            .await
+            .expect("set");
+        assert_eq!(
+            proxy.gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Auto as u32
+        );
+
+        proxy
+            .set_gpu_performance_level(GPUPerformanceLevel::Low as u32)
+            .await
+            .expect("proxy_set");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Low
+        );
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.Manager",
+        default_service = "com.steampowered.SteamOSManager1.Test.Version",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait Version {
@@ -463,7 +502,7 @@ mod test {
 
     #[tokio::test]
     async fn version() {
-        let test = start().await;
+        let test = start("Version").await;
         let proxy = VersionProxy::new(&test.connection).await.unwrap();
         assert_eq!(proxy.version().await, Ok(SteamOSManager::API_VERSION));
     }
