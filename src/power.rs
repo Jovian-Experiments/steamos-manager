@@ -73,15 +73,15 @@ impl ToString for GPUPerformanceLevel {
 }
 
 pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
-    let level = fs::read_to_string(GPU_PERFORMANCE_LEVEL_PATH)
+    let level = fs::read_to_string(path(GPU_PERFORMANCE_LEVEL_PATH))
         .await
         .inspect_err(|message| error!("Error opening sysfs file for reading: {message}"))?;
 
-    GPUPerformanceLevel::from_str(level.as_ref())
+    GPUPerformanceLevel::from_str(level.trim().as_ref())
 }
 
 pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
-    let mut myfile = File::create(GPU_PERFORMANCE_LEVEL_PATH)
+    let mut myfile = File::create(path(GPU_PERFORMANCE_LEVEL_PATH))
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
@@ -99,7 +99,7 @@ pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
     // Only used when GPU Performance Level is manual, but write whenever called.
     ensure!((200..=1600).contains(&clocks), "Invalid clocks");
 
-    let mut myfile = File::create(GPU_CLOCKS_PATH)
+    let mut myfile = File::create(path(GPU_CLOCKS_PATH))
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
@@ -123,7 +123,7 @@ pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
 }
 
 pub async fn get_gpu_clocks() -> Result<u32> {
-    let clocks_file = File::open(GPU_CLOCKS_PATH).await?;
+    let clocks_file = File::open(path(GPU_CLOCKS_PATH)).await?;
     let mut reader = BufReader::new(clocks_file);
     loop {
         let mut line = String::new();
@@ -203,6 +203,98 @@ mod test {
     use crate::testing;
     use anyhow::anyhow;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
+
+    #[tokio::test]
+    async fn test_get_gpu_performance_level() {
+        let h = testing::start();
+
+        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+        assert!(get_gpu_performance_level().await.is_err());
+
+        write(filename.as_path(), "auto\n").await.expect("write");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Auto
+        );
+
+        write(filename.as_path(), "low\n").await.expect("write");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Low
+        );
+
+        write(filename.as_path(), "high\n").await.expect("write");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::High
+        );
+
+        write(filename.as_path(), "manual\n").await.expect("write");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Manual
+        );
+
+        write(filename.as_path(), "peak_performance\n")
+            .await
+            .expect("write");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::ProfilePeak
+        );
+
+        write(filename.as_path(), "nothing\n").await.expect("write");
+        assert!(get_gpu_performance_level().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_set_gpu_performance_level() {
+        let h = testing::start();
+
+        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        set_gpu_performance_level(GPUPerformanceLevel::Auto)
+            .await
+            .expect("set");
+        assert_eq!(
+            read_to_string(filename.as_path()).await.unwrap().trim(),
+            "auto"
+        );
+        set_gpu_performance_level(GPUPerformanceLevel::Low)
+            .await
+            .expect("set");
+        assert_eq!(
+            read_to_string(filename.as_path()).await.unwrap().trim(),
+            "low"
+        );
+        set_gpu_performance_level(GPUPerformanceLevel::High)
+            .await
+            .expect("set");
+        assert_eq!(
+            read_to_string(filename.as_path()).await.unwrap().trim(),
+            "high"
+        );
+        set_gpu_performance_level(GPUPerformanceLevel::Manual)
+            .await
+            .expect("set");
+        assert_eq!(
+            read_to_string(filename.as_path()).await.unwrap().trim(),
+            "manual"
+        );
+        set_gpu_performance_level(GPUPerformanceLevel::ProfilePeak)
+            .await
+            .expect("set");
+        assert_eq!(
+            read_to_string(filename.as_path()).await.unwrap().trim(),
+            "peak_performance"
+        );
+    }
 
     #[tokio::test]
     async fn test_set_tdp_limit() {
