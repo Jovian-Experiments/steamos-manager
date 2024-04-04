@@ -277,7 +277,7 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property, name = "ManualGPUClock")]
+    #[zbus(property(emits_changed_signal = "false"), name = "ManualGPUClock")]
     async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
         get_gpu_clocks().await.map_err(anyhow_to_zbus_fdo)
     }
@@ -467,7 +467,7 @@ mod test {
     #[tokio::test]
     async fn gpu_performance_level() {
         let test = start("GPUPerformanceLevel").await;
-        power::setup_test().await;
+        power::test::setup().await;
 
         let proxy = GPUPerformanceLevelProxy::new(&test.connection)
             .await
@@ -488,6 +488,37 @@ mod test {
             get_gpu_performance_level().await.unwrap(),
             GPUPerformanceLevel::Low
         );
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.Manager",
+        default_service = "com.steampowered.SteamOSManager1.Test.ManualGPUClock",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait ManualGPUClock {
+        #[zbus(property, name = "ManualGPUClock")]
+        fn manual_gpu_clock(&self) -> zbus::Result<u32>;
+
+        #[zbus(property, name = "ManualGPUClock")]
+        fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()>;
+    }
+
+    #[tokio::test]
+    async fn manual_gpu_clock() {
+        let test = start("ManualGPUClock").await;
+
+        let proxy = ManualGPUClockProxy::new(&test.connection).await.unwrap();
+
+        assert!(proxy.manual_gpu_clock().await.is_err());
+
+        power::test::write_clocks(1600).await;
+        assert_eq!(proxy.manual_gpu_clock().await.unwrap(), 1600);
+
+        proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
+        power::test::expect_clocks(200);
+
+        assert!(proxy.set_manual_gpu_clock(100).await.is_err());
+        power::test::expect_clocks(200);
     }
 
     #[zbus::proxy(

@@ -201,26 +201,51 @@ pub async fn set_tdp_limit(limit: u32) -> Result<()> {
 }
 
 #[cfg(test)]
-pub async fn setup_test() {
-    let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
-    fs::create_dir_all(filename.parent().unwrap())
-        .await
-        .expect("create_dir_all");
-}
-
-#[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use crate::testing;
     use anyhow::anyhow;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
+
+    pub async fn setup() {
+        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+    }
+
+    pub async fn write_clocks(mhz: u32) {
+        let filename = path(GPU_CLOCKS_PATH);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        let contents = format!(
+            "OD_SCLK:
+0:       {mhz}Mhz
+1:       {mhz}Mhz
+OD_RANGE:
+SCLK:     200Mhz       1600Mhz
+CCLK:    1400Mhz       3500Mhz
+CCLK_RANGE in Core0:
+0:       1400Mhz
+1:       3500Mhz\n"
+        );
+
+        write(filename.as_path(), contents).await.expect("write");
+    }
+
+    pub async fn expect_clocks(mhz: u32) {
+        let clocks = read_to_string(path(GPU_CLOCKS_PATH)).await.expect("read");
+        assert_eq!(clocks, format!("s 0 {mhz}\ns 1 {mhz}\nc\n"));
+    }
 
     #[tokio::test]
     async fn test_get_gpu_performance_level() {
         let h = testing::start();
 
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
-        setup_test().await;
+        setup().await;
         assert!(get_gpu_performance_level().await.is_err());
 
         write(filename.as_path(), "auto\n").await.expect("write");
@@ -264,7 +289,7 @@ mod test {
         let h = testing::start();
 
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
-        setup_test().await;
+        setup().await;
 
         set_gpu_performance_level(GPUPerformanceLevel::Auto)
             .await
@@ -314,7 +339,9 @@ mod test {
 
         assert!(get_tdp_limit().await.is_err());
 
-        write(hwmon.join("hwmon5").join(TDP_LIMIT1), "15000000").await.expect("write");
+        write(hwmon.join("hwmon5").join(TDP_LIMIT1), "15000000")
+            .await
+            .expect("write");
         assert_eq!(get_tdp_limit().await.unwrap(), 15);
     }
 
@@ -381,21 +408,11 @@ mod test {
     #[tokio::test]
     async fn test_get_gpu_clocks() {
         let h = testing::start();
-
-        const contents: &str = "OD_SCLK:
-0:       1600Mhz
-1:       1600Mhz
-OD_RANGE:
-SCLK:     200Mhz       1600Mhz
-CCLK:    1400Mhz       3500Mhz
-CCLK_RANGE in Core0:
-0:       1400Mhz
-1:       3500Mhz\n";
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
-        setup_test().await;
+        setup().await;
 
         assert!(get_gpu_clocks().await.is_err());
-        write(path(GPU_CLOCKS_PATH), contents).await.expect("write");
+        write_clocks(1600).await;
 
         assert_eq!(get_gpu_clocks().await.unwrap(), 1600);
     }
@@ -404,23 +421,16 @@ CCLK_RANGE in Core0:
     async fn test_set_gpu_clocks() {
         let h = testing::start();
 
-        let filename = path(GPU_CLOCKS_PATH);
         assert!(set_gpu_clocks(1600).await.is_err());
-        setup_test().await;
+        setup().await;
 
         assert!(set_gpu_clocks(100).await.is_err());
         assert!(set_gpu_clocks(2000).await.is_err());
 
         assert!(set_gpu_clocks(200).await.is_ok());
-        assert_eq!(
-            read_to_string(filename.as_path()).await.expect("string"),
-            "s 0 200\ns 1 200\nc\n"
-        );
+        expect_clocks(200).await;
 
         assert!(set_gpu_clocks(1600).await.is_ok());
-        assert_eq!(
-            read_to_string(filename.as_path()).await.expect("string"),
-            "s 0 1600\ns 1 1600\nc\n"
-        );
+        expect_clocks(1600).await;
     }
 }
