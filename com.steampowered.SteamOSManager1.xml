@@ -101,17 +101,6 @@
     </method>
 
     <!--
-        BIOSUpdateStatus:
-
-        Reports whether a BIOS update is available.
-
-        Valid states: 0 = Up to date, 1 = Update available
-
-        Version available: 7
-    -->
-    <property name="BIOSUpdateStatus" type="u" access="read"/>
-
-    <!--
         UpdateBIOS:
 
         Perform a BIOS update.
@@ -121,30 +110,6 @@
     <method name="UpdateBIOS" />
 
     <!--
-        UpdateBIOSProgressNotification:
-
-        @percent_completed: Progress percent completed in the range [0-100]
-
-        Emitted whenever significant progress is made.
-
-        Version available: 7
-    -->
-    <signal name="UpdateBIOSProgressNotification">
-      <arg name="percent_completed" type="u" />
-    </signal>
-
-    <!--
-        DockUpdateStatus:
-
-        Reports whether a Dock Firmware update is available.
-
-        Valid states: 0 = Up to date, 1 = Update available
-
-        Version available: 7
-    -->
-    <property name="DockUpdateStatus" type="u" access="read"/>
-
-    <!--
         UpdateDock:
 
         Perform a Dock Firmware update.
@@ -152,19 +117,6 @@
         Version available: 7
     -->
     <method name="UpdateDock" />
-
-    <!--
-        UpdateDockProgressNotification:
-
-        @percent_completed: Progress percent completed in the range [0-100]
-
-        Emitted whenever significant progress is made.
-
-        Version available: 7
-    -->
-    <signal name="UpdateDockProgressNotification">
-      <arg name="percent_completed" type="u" />
-    </signal>
 
     <!--
         TrimDevices:
@@ -287,21 +239,6 @@
     <method name="SetWifiDebugMode">
       <arg type="u" name="mode" direction="in"/>
       <arg type="u" name="buffer_size" direction="in"/>
-    </method>
-
-    <!--
-        CaptureWifiDebugTrace:
-
-        @path: Output path to write the file
-
-        Captures the current contents of the wifi debug trace and dumps it
-        into @path. The buffers will be emptied and trace capture will resume
-        after this call returns.
-
-        Version available: 7
-    -->
-    <method name="CaptureWifiDebugTrace">
-      <arg type="s" name="path" direction="in"/>
     </method>
 
     <!--
