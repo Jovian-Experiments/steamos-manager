@@ -21,8 +21,12 @@ use crate::sls::ftrace::Ftrace;
 use crate::sls::{LogLayer, LogReceiver};
 
 mod ds_inhibit;
+mod hardware;
 mod manager;
+mod power;
+mod process;
 mod sls;
+mod wifi;
 
 #[cfg(test)]
 mod testing;
@@ -117,7 +121,7 @@ async fn reload() -> Result<()> {
 }
 
 async fn create_connection() -> Result<Connection> {
-    let manager = manager::SMManager::new()?;
+    let manager = manager::SMManager::new().await?;
 
     ConnectionBuilder::system()?
         .name("com.steampowered.SteamOSManager1")?
