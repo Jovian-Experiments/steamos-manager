@@ -258,7 +258,7 @@ impl SteamOSManager {
         .map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property(emits_changed_signal = "false"))]
+    #[zbus(property(emits_changed_signal = "false"), name = "GPUPerformanceLevel")]
     async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
         match get_gpu_performance_level().await {
             Ok(level) => Ok(level as u32),
@@ -266,7 +266,7 @@ impl SteamOSManager {
         }
     }
 
-    #[zbus(property)]
+    #[zbus(property, name = "GPUPerformanceLevel")]
     async fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()> {
         let level = match GPUPerformanceLevel::try_from(level) {
             Ok(level) => level,
@@ -277,45 +277,45 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property)]
+    #[zbus(property, name = "ManualGPUClock")]
     async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
         get_gpu_clocks().await.map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property)]
+    #[zbus(property, name = "ManualGPUClock")]
     async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
         set_gpu_clocks(clocks).await.map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property(emits_changed_signal = "const"))]
+    #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMin")]
     async fn manual_gpu_clock_min(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         200
     }
 
-    #[zbus(property(emits_changed_signal = "const"))]
+    #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMax")]
     async fn manual_gpu_clock_max(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         1600
     }
 
-    #[zbus(property(emits_changed_signal = "false"))]
+    #[zbus(property(emits_changed_signal = "false"), name = "TDPLimit")]
     async fn tdp_limit(&self) -> zbus::fdo::Result<u32> {
         get_tdp_limit().await.map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property)]
+    #[zbus(property, name = "TDPLimit")]
     async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
         set_tdp_limit(limit).await.map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property(emits_changed_signal = "const"))]
+    #[zbus(property(emits_changed_signal = "const"), name = "TDPLimitMin")]
     async fn tdp_limit_min(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         3
     }
 
-    #[zbus(property(emits_changed_signal = "const"))]
+    #[zbus(property(emits_changed_signal = "const"), name = "TDPLimitMax")]
     async fn tdp_limit_max(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         15
@@ -457,10 +457,10 @@ mod test {
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait GPUPerformanceLevel {
-        #[zbus(property)]
+        #[zbus(property, name = "GPUPerformanceLevel")]
         fn gpu_performance_level(&self) -> zbus::Result<u32>;
 
-        #[zbus(property)]
+        #[zbus(property, name = "GPUPerformanceLevel")]
         fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()>;
     }
 
