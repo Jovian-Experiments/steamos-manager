@@ -20,6 +20,9 @@ const GPU_PERFORMANCE_LEVEL_PATH: &str =
     "/sys/class/drm/card0/device/power_dpm_force_performance_level";
 const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
 
+const TDP_LIMIT1: &str = "power1_cap";
+const TDP_LIMIT2: &str = "power2_cap";
+
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum GPUPerformanceLevel {
@@ -158,7 +161,7 @@ async fn find_hwmon() -> Result<PathBuf> {
             Some(entry) => entry.path(),
             None => bail!("hwmon not found"),
         };
-        if fs::try_exists(base.join("power1_cap")).await? {
+        if fs::try_exists(base.join(TDP_LIMIT1)).await? {
             return Ok(base);
         }
     }
@@ -166,7 +169,7 @@ async fn find_hwmon() -> Result<PathBuf> {
 
 pub async fn get_tdp_limit() -> Result<u32> {
     let base = find_hwmon().await?;
-    let power1cap = fs::read_to_string(base.join("power1_cap")).await?;
+    let power1cap = fs::read_to_string(base.join(TDP_LIMIT1)).await?;
     let power1cap: u32 = power1cap.parse()?;
     Ok(power1cap / 1000000)
 }
@@ -178,7 +181,7 @@ pub async fn set_tdp_limit(limit: u32) -> Result<()> {
     let data = format!("{limit}000000");
 
     let base = find_hwmon().await?;
-    let mut power1file = File::create(base.join("power1_cap"))
+    let mut power1file = File::create(base.join(TDP_LIMIT1))
         .await
         .inspect_err(|message| {
             error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
@@ -188,7 +191,7 @@ pub async fn set_tdp_limit(limit: u32) -> Result<()> {
         .await
         .inspect_err(|message| error!("Error writing to power1_cap file: {message}"))?;
 
-    if let Ok(mut power2file) = File::create(base.join("power2_cap")).await {
+    if let Ok(mut power2file) = File::create(base.join(TDP_LIMIT2)).await {
         power2file
             .write(data.as_bytes())
             .await
@@ -301,6 +304,21 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_get_tdp_limit() {
+        let h = testing::start();
+
+        let hwmon = path(GPU_HWMON_PREFIX);
+        create_dir_all(hwmon.join("hwmon5").as_path())
+            .await
+            .expect("create_dir_all");
+
+        assert!(get_tdp_limit().await.is_err());
+
+        write(hwmon.join("hwmon5").join(TDP_LIMIT1), "15000000").await.expect("write");
+        assert_eq!(get_tdp_limit().await.unwrap(), 15);
+    }
+
+    #[tokio::test]
     async fn test_set_tdp_limit() {
         let h = testing::start();
 
@@ -324,10 +342,10 @@ mod test {
         );
 
         let hwmon = hwmon.join("hwmon5");
-        create_dir_all(hwmon.join("power1_cap"))
+        create_dir_all(hwmon.join(TDP_LIMIT1))
             .await
             .expect("create_dir_all");
-        create_dir_all(hwmon.join("power2_cap"))
+        create_dir_all(hwmon.join(TDP_LIMIT2))
             .await
             .expect("create_dir_all");
         assert_eq!(
@@ -335,28 +353,74 @@ mod test {
             anyhow!("Is a directory (os error 21)").to_string()
         );
 
-        remove_dir(hwmon.join("power1_cap"))
+        remove_dir(hwmon.join(TDP_LIMIT1))
             .await
             .expect("remove_dir");
-        write(hwmon.join("power1_cap"), "0").await.expect("write");
+        write(hwmon.join(TDP_LIMIT1), "0").await.expect("write");
         assert!(set_tdp_limit(10).await.is_ok());
-        let power1_cap = read_to_string(hwmon.join("power1_cap"))
+        let power1_cap = read_to_string(hwmon.join(TDP_LIMIT1))
             .await
             .expect("power1_cap");
         assert_eq!(power1_cap, "10000000");
 
-        remove_dir(hwmon.join("power2_cap"))
+        remove_dir(hwmon.join(TDP_LIMIT2))
             .await
             .expect("remove_dir");
-        write(hwmon.join("power2_cap"), "0").await.expect("write");
+        write(hwmon.join(TDP_LIMIT2), "0").await.expect("write");
         assert!(set_tdp_limit(15).await.is_ok());
-        let power1_cap = read_to_string(hwmon.join("power1_cap"))
+        let power1_cap = read_to_string(hwmon.join(TDP_LIMIT1))
             .await
             .expect("power1_cap");
         assert_eq!(power1_cap, "15000000");
-        let power2_cap = read_to_string(hwmon.join("power2_cap"))
+        let power2_cap = read_to_string(hwmon.join(TDP_LIMIT2))
             .await
             .expect("power2_cap");
         assert_eq!(power2_cap, "15000000");
+    }
+
+    #[tokio::test]
+    async fn test_get_gpu_clocks() {
+        let h = testing::start();
+
+        const contents: &str = "OD_SCLK:
+0:       1600Mhz
+1:       1600Mhz
+OD_RANGE:
+SCLK:     200Mhz       1600Mhz
+CCLK:    1400Mhz       3500Mhz
+CCLK_RANGE in Core0:
+0:       1400Mhz
+1:       3500Mhz\n";
+        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+        setup_test().await;
+
+        assert!(get_gpu_clocks().await.is_err());
+        write(path(GPU_CLOCKS_PATH), contents).await.expect("write");
+
+        assert_eq!(get_gpu_clocks().await.unwrap(), 1600);
+    }
+
+    #[tokio::test]
+    async fn test_set_gpu_clocks() {
+        let h = testing::start();
+
+        let filename = path(GPU_CLOCKS_PATH);
+        assert!(set_gpu_clocks(1600).await.is_err());
+        setup_test().await;
+
+        assert!(set_gpu_clocks(100).await.is_err());
+        assert!(set_gpu_clocks(2000).await.is_err());
+
+        assert!(set_gpu_clocks(200).await.is_ok());
+        assert_eq!(
+            read_to_string(filename.as_path()).await.expect("string"),
+            "s 0 200\ns 1 200\nc\n"
+        );
+
+        assert!(set_gpu_clocks(1600).await.is_ok());
+        assert_eq!(
+            read_to_string(filename.as_path()).await.expect("string"),
+            "s 0 1600\ns 1 1600\nc\n"
+        );
     }
 }
