@@ -411,7 +411,7 @@ mod test {
     use zbus::ConnectionBuilder;
 
     struct TestHandle {
-        handle: testing::TestHandle,
+        _handle: testing::TestHandle,
         connection: Connection,
     }
 
@@ -450,7 +450,10 @@ mod test {
             .await
             .expect("object_server at");
 
-        TestHandle { handle, connection }
+        TestHandle {
+            _handle: handle,
+            connection,
+        }
     }
 
     #[zbus::proxy(
@@ -517,10 +520,10 @@ mod test {
         assert_eq!(proxy.manual_gpu_clock().await.unwrap(), 1600);
 
         proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
-        power::test::expect_clocks(200);
+        power::test::expect_clocks(200).await;
 
         assert!(proxy.set_manual_gpu_clock(100).await.is_err());
-        power::test::expect_clocks(200);
+        power::test::expect_clocks(200).await;
     }
 
     #[zbus::proxy(

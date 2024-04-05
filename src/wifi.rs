@@ -253,7 +253,7 @@ mod test {
 
     #[tokio::test]
     async fn test_get_wifi_backend() {
-        let h = testing::start();
+        let _h = testing::start();
 
         create_dir_all(path(WIFI_BACKEND_PATH).parent().unwrap())
             .await

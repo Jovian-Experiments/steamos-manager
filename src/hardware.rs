@@ -94,7 +94,7 @@ mod test {
 
     #[tokio::test]
     async fn board_lookup() {
-        let h = testing::start();
+        let _h = testing::start();
 
         create_dir_all(crate::path("/sys/class/dmi/id"))
             .await

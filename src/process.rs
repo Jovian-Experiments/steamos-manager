@@ -7,6 +7,7 @@
 
 use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
+#[cfg(not(test))]
 use tokio::process::Command;
 
 #[cfg(not(test))]

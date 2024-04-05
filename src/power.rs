@@ -242,7 +242,7 @@ CCLK_RANGE in Core0:
 
     #[tokio::test]
     async fn test_get_gpu_performance_level() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
         setup().await;
@@ -286,7 +286,7 @@ CCLK_RANGE in Core0:
 
     #[tokio::test]
     async fn test_set_gpu_performance_level() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
         setup().await;
@@ -330,7 +330,7 @@ CCLK_RANGE in Core0:
 
     #[tokio::test]
     async fn test_get_tdp_limit() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let hwmon = path(GPU_HWMON_PREFIX);
         create_dir_all(hwmon.join("hwmon5").as_path())
@@ -347,7 +347,7 @@ CCLK_RANGE in Core0:
 
     #[tokio::test]
     async fn test_set_tdp_limit() {
-        let h = testing::start();
+        let _h = testing::start();
 
         assert_eq!(
             set_tdp_limit(2).await.unwrap_err().to_string(),
@@ -407,8 +407,7 @@ CCLK_RANGE in Core0:
 
     #[tokio::test]
     async fn test_get_gpu_clocks() {
-        let h = testing::start();
-        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+        let _h = testing::start();
         setup().await;
 
         assert!(get_gpu_clocks().await.is_err());
@@ -419,7 +418,7 @@ CCLK_RANGE in Core0:
 
     #[tokio::test]
     async fn test_set_gpu_clocks() {
-        let h = testing::start();
+        let _h = testing::start();
 
         assert!(set_gpu_clocks(1600).await.is_err());
         setup().await;
