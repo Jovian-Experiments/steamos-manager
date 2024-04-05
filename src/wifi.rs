@@ -156,21 +156,15 @@ async fn restart_iwd(connection: Connection) -> Result<()> {
 
 async fn stop_tracing() -> Result<()> {
     // Stop tracing and extract ring buffer to disk for capture
-    run_script("stop tracing", TRACE_CMD_PATH, &["stop"]).await?;
+    run_script(TRACE_CMD_PATH, &["stop"]).await?;
     // stop tracing worked
-    run_script(
-        "extract traces",
-        TRACE_CMD_PATH,
-        &["extract", "-o", OUTPUT_FILE],
-    )
-    .await
+    run_script(TRACE_CMD_PATH, &["extract", "-o", OUTPUT_FILE]).await
 }
 
 async fn start_tracing(buffer_size: u32) -> Result<()> {
     // Start tracing
     let size_str = buffer_size.to_string();
     run_script(
-        "start tracing",
         TRACE_CMD_PATH,
         &["start", "-e", "ath11k_wmi_diag", "-b", &size_str],
     )
@@ -242,12 +236,7 @@ pub async fn get_wifi_backend() -> Result<WifiBackend> {
 }
 
 pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
-    run_script(
-        "set wifi backend",
-        "/usr/bin/steamos-wifi-set-backend",
-        &[backend.to_string()],
-    )
-    .await
+    run_script("/usr/bin/steamos-wifi-set-backend", &[backend.to_string()]).await
 }
 
 #[cfg(test)]
@@ -287,9 +276,15 @@ mod test {
             .expect("write");
         assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::IWD);
 
-        write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=wpa_supplicant\n")
-            .await
-            .expect("write");
-        assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::WPASupplicant);
+        write(
+            path(WIFI_BACKEND_PATH),
+            "[device]\nwifi.backend=wpa_supplicant\n",
+        )
+        .await
+        .expect("write");
+        assert_eq!(
+            get_wifi_backend().await.unwrap(),
+            WifiBackend::WPASupplicant
+        );
     }
 }

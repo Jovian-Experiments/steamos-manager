@@ -86,12 +86,7 @@ impl SteamOSManager {
 
     async fn prepare_factory_reset(&self) -> u32 {
         // Run steamos factory reset script and return true on success
-        let res = run_script(
-            "factory reset",
-            "/usr/bin/steamos-factory-reset-config",
-            &[""],
-        )
-        .await;
+        let res = run_script("/usr/bin/steamos-factory-reset-config", &[""]).await;
         match res {
             Ok(_) => PrepareFactoryReset::RebootRequired as u32,
             Err(_) => PrepareFactoryReset::Unknown as u32,
@@ -126,13 +121,10 @@ impl SteamOSManager {
             WifiPowerManagement::Enabled => "on",
         };
 
-        run_script(
-            "set wifi power management",
-            "/usr/bin/iwconfig",
-            &["wlan0", "power", state],
-        )
-        .await
-        .map_err(anyhow_to_zbus)
+        run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
+            .await
+            .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
+            .map_err(anyhow_to_zbus)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -209,33 +201,33 @@ impl SteamOSManager {
     async fn update_bios(&self) -> zbus::fdo::Result<()> {
         // Update the bios as needed
         run_script(
-            "update bios",
             "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
         .await
+        .inspect_err(|message| error!("Error updating BIOS: {message}"))
         .map_err(anyhow_to_zbus_fdo)
     }
 
     async fn update_dock(&self) -> zbus::fdo::Result<()> {
         // Update the dock firmware as needed
         run_script(
-            "update dock firmware",
             "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
             &[""],
         )
         .await
+        .inspect_err(|message| error!("Error updating dock: {message}"))
         .map_err(anyhow_to_zbus_fdo)
     }
 
     async fn trim_devices(&self) -> zbus::fdo::Result<()> {
         // Run steamos-trim-devices script
         run_script(
-            "trim devices",
             "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
             &[""],
         )
         .await
+        .inspect_err(|message| error!("Error updating trimming devices: {message}"))
         .map_err(anyhow_to_zbus_fdo)
     }
 
@@ -249,20 +241,20 @@ impl SteamOSManager {
         if !validate {
             args.push("--skip-validation");
         }
-        run_script(
-            "format device",
-            "/usr/lib/hwsupport/format-device.sh",
-            args.as_ref(),
-        )
-        .await
-        .map_err(anyhow_to_zbus_fdo)
+        run_script("/usr/lib/hwsupport/format-device.sh", args.as_ref())
+            .await
+            .inspect_err(|message| error!("Error formatting {device}: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
     }
 
     #[zbus(property(emits_changed_signal = "false"), name = "GPUPerformanceLevel")]
     async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
         match get_gpu_performance_level().await {
             Ok(level) => Ok(level as u32),
-            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+            Err(e) => {
+                error!("Error getting GPU performance level: {e}");
+                Err(anyhow_to_zbus_fdo(e))
+            }
         }
     }
 
@@ -274,17 +266,24 @@ impl SteamOSManager {
         };
         set_gpu_performance_level(level)
             .await
+            .inspect_err(|message| error!("Error setting GPU performance level: {message}"))
             .map_err(anyhow_to_zbus)
     }
 
     #[zbus(property(emits_changed_signal = "false"), name = "ManualGPUClock")]
     async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
-        get_gpu_clocks().await.map_err(anyhow_to_zbus_fdo)
+        get_gpu_clocks()
+            .await
+            .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
     }
 
     #[zbus(property, name = "ManualGPUClock")]
     async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
-        set_gpu_clocks(clocks).await.map_err(anyhow_to_zbus)
+        set_gpu_clocks(clocks)
+            .await
+            .inspect_err(|message| error!("Error setting manual GPU clock: {message}"))
+            .map_err(anyhow_to_zbus)
     }
 
     #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMin")]
@@ -364,7 +363,7 @@ impl SteamOSManager {
                 Ok(())
             }
             Err(e) => {
-                error!("Setting wifi debug mode failed: {e}");
+                error!("Error setting wifi debug mode: {e}");
                 Err(anyhow_to_zbus_fdo(e))
             }
         }
@@ -390,7 +389,10 @@ impl SteamOSManager {
             Ok(backend) => backend,
             Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
         };
-        set_wifi_backend(backend).await.map_err(anyhow_to_zbus_fdo)
+        set_wifi_backend(backend)
+            .await
+            .inspect_err(|message| error!("Error setting wifi backend: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
     }
 
     /// A version property.

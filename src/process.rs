@@ -8,7 +8,6 @@
 use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 use tokio::process::Command;
-use tracing::warn;
 
 #[cfg(not(test))]
 pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
@@ -26,19 +25,13 @@ pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> R
     cb(executable, args.as_ref()).map(|(res, _)| res)
 }
 
-pub async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<()> {
+pub async fn run_script(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<()> {
     // Run given script to get exit code and return true on success.
     // Return Err on failure, but also print an error if needed
     match script_exit_code(executable, args).await {
         Ok(0) => Ok(()),
-        Ok(code) => {
-            warn!("Error running {name}: exited {code}");
-            Err(anyhow!("Exited {code}"))
-        }
-        Err(message) => {
-            warn!("Error running {name}: {message}");
-            Err(message)
-        }
+        Ok(code) => Err(anyhow!("Exited {code}")),
+        Err(message) => Err(message),
     }
 }
 
