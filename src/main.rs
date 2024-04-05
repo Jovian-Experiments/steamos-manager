@@ -134,7 +134,7 @@ pub fn anyhow_to_zbus_fdo(error: Error) -> zbus::fdo::Error {
 
 async fn create_connection() -> Result<Connection> {
     let connection = ConnectionBuilder::system()?
-        .name("com.steampowered.SteamOSManager1.Manager")?
+        .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;
     let manager = manager::SteamOSManager::new(connection.clone()).await?;
@@ -148,7 +148,7 @@ async fn create_connection() -> Result<Connection> {
 #[tokio::main]
 async fn main() -> Result<()> {
     // This daemon is responsible for creating a dbus api that steam client can use to do various OS
-    // level things. It implements com.steampowered.SteamOSManager1 interface
+    // level things. It implements com.steampowered.SteamOSManager1.Manager interface
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);

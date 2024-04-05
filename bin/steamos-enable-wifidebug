@@ -4,5 +4,5 @@
 # mode: 1 for on, 0 for off
 # buffer_size: the size in kilobytes to use for the trace (if on galileo device).
 
-busctl call com.steampowered.SteamOSManager1.Manager /com/steampowered/SteamOSManager1 com.steampowered.SteamOSManager1.Manager SetWifiDebugMode uu 1 20000
+busctl call com.steampowered.SteamOSManager1 /com/steampowered/SteamOSManager1 com.steampowered.SteamOSManager1.Manager SetWifiDebugMode uu 1 20000
 
