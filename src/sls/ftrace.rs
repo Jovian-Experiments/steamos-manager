@@ -44,7 +44,7 @@ impl Ftrace {
     pub async fn init(connection: Connection) -> Result<Ftrace> {
         let path = Self::base();
         fs::create_dir_all(&path).await?;
-        setup_traces(&path.as_path()).await?;
+        setup_traces(path.as_path()).await?;
         let file = pipe::OpenOptions::new()
             .unchecked(true) // Thanks tracefs for making trace_pipe a "regular" file
             .open_receiver(path.join("trace_pipe"))?;

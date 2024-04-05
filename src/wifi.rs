@@ -49,7 +49,7 @@ pub enum WifiPowerManagement {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum WifiBackend {
-    IWD = 0,
+    Iwd = 0,
     WPASupplicant = 1,
 }
 
@@ -97,7 +97,7 @@ impl TryFrom<u32> for WifiBackend {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == WifiBackend::IWD as u32 => Ok(WifiBackend::IWD),
+            x if x == WifiBackend::Iwd as u32 => Ok(WifiBackend::Iwd),
             x if x == WifiBackend::WPASupplicant as u32 => Ok(WifiBackend::WPASupplicant),
             _ => Err("No enum match for WifiBackend value {v}"),
         }
@@ -108,7 +108,7 @@ impl FromStr for WifiBackend {
     type Err = Error;
     fn from_str(input: &str) -> Result<WifiBackend, Self::Err> {
         Ok(match input {
-            "iwd" => WifiBackend::IWD,
+            "iwd" => WifiBackend::Iwd,
             "wpa_supplicant" => WifiBackend::WPASupplicant,
             _ => bail!("Unknown backend"),
         })
@@ -118,7 +118,7 @@ impl FromStr for WifiBackend {
 impl fmt::Display for WifiBackend {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            WifiBackend::IWD => write!(f, "iwd"),
+            WifiBackend::Iwd => write!(f, "iwd"),
             WifiBackend::WPASupplicant => write!(f, "wpa_supplicant"),
         }
     }
@@ -247,7 +247,7 @@ mod test {
 
     #[tokio::test]
     async fn test_wifi_backend_to_string() {
-        assert_eq!(WifiBackend::IWD.to_string(), "iwd");
+        assert_eq!(WifiBackend::Iwd.to_string(), "iwd");
         assert_eq!(WifiBackend::WPASupplicant.to_string(), "wpa_supplicant");
     }
 
@@ -274,7 +274,7 @@ mod test {
         write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=iwd\n")
             .await
             .expect("write");
-        assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::IWD);
+        assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::Iwd);
 
         write(
             path(WIFI_BACKEND_PATH),

@@ -36,16 +36,16 @@ enum PrepareFactoryReset {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 enum FanControl {
-    BIOS = 0,
-    OS = 1,
+    Bios = 0,
+    Os = 1,
 }
 
 impl TryFrom<u32> for FanControl {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == FanControl::BIOS as u32 => Ok(FanControl::BIOS),
-            x if x == FanControl::OS as u32 => Ok(FanControl::BIOS),
+            x if x == FanControl::Bios as u32 => Ok(FanControl::Bios),
+            x if x == FanControl::Os as u32 => Ok(FanControl::Os),
             _ => Err("No enum match for value {v}"),
         }
     }
@@ -54,8 +54,8 @@ impl TryFrom<u32> for FanControl {
 impl fmt::Display for FanControl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FanControl::BIOS => write!(f, "BIOS"),
-            FanControl::OS => write!(f, "OS"),
+            FanControl::Bios => write!(f, "BIOS"),
+            FanControl::Os => write!(f, "OS"),
         }
     }
 }
@@ -138,8 +138,8 @@ impl SteamOSManager {
             .await
             .map_err(anyhow_to_zbus_fdo)?;
         Ok(match active {
-            true => FanControl::OS as u32,
-            false => FanControl::BIOS as u32,
+            true => FanControl::Os as u32,
+            false => FanControl::Bios as u32,
         })
     }
 
@@ -155,8 +155,8 @@ impl SteamOSManager {
                 .await
                 .map_err(anyhow_to_zbus)?;
         match state {
-            FanControl::OS => jupiter_fan_control.start().await,
-            FanControl::BIOS => jupiter_fan_control.stop().await,
+            FanControl::Os => jupiter_fan_control.start().await,
+            FanControl::Bios => jupiter_fan_control.stop().await,
         }
         .map_err(anyhow_to_zbus)
     }
@@ -336,7 +336,7 @@ impl SteamOSManager {
         // doing things on 0 or 1 for now
         // Return false on error
         match get_wifi_backend().await {
-            Ok(WifiBackend::IWD) => (),
+            Ok(WifiBackend::Iwd) => (),
             Ok(backend) => {
                 return Err(zbus::fdo::Error::Failed(format!(
                     "Setting wifi debug mode not supported when backend is {backend}",

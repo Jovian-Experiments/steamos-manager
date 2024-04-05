@@ -168,7 +168,7 @@ async fn main() -> Result<()> {
     let mut log_receiver = LogReceiver::new(connection.clone()).await?;
     let remote_logger = LogLayer::new(&log_receiver).await;
     let subscriber = subscriber.with(remote_logger);
-    let _guard = tracing::subscriber::set_global_default(subscriber)?;
+    tracing::subscriber::set_global_default(subscriber)?;
 
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigquit = signal(SignalKind::quit())?;

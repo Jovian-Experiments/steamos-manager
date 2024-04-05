@@ -37,7 +37,7 @@ pub struct SystemdUnit<'dbus> {
 }
 
 pub async fn daemon_reload(connection: &Connection) -> Result<()> {
-    let proxy = SystemdManagerProxy::new(&connection).await?;
+    let proxy = SystemdManagerProxy::new(connection).await?;
     proxy.reload().await?;
     Ok(())
 }

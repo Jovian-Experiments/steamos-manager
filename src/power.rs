@@ -80,7 +80,7 @@ pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
         .await
         .inspect_err(|message| error!("Error opening sysfs file for reading: {message}"))?;
 
-    GPUPerformanceLevel::from_str(level.trim().as_ref())
+    GPUPerformanceLevel::from_str(level.trim())
 }
 
 pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
