@@ -22,7 +22,7 @@ pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> R
 pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
     let test = crate::testing::current();
     let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
-    let cb = &test.process_cb;
+    let cb = test.process_cb.get();
     cb(executable, args.as_ref()).map(|(res, _)| res)
 }
 
@@ -51,6 +51,50 @@ pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Resu
 pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
     let test = crate::testing::current();
     let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
-    let cb = &test.process_cb;
+    let cb = test.process_cb.get();
     cb(executable, args.as_ref()).map(|(_, res)| res)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::testing;
+
+    fn ok(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+        Ok((0, String::from("ok")))
+    }
+
+    fn code(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+        Ok((1, String::from("code")))
+    }
+
+    fn exit(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+        Err(anyhow!("oops!"))
+    }
+
+    #[tokio::test]
+    async fn test_run_script() {
+        let h = testing::start();
+
+        h.test.process_cb.set(ok);
+        assert!(run_script("", &[] as &[&OsStr]).await.is_ok());
+
+        h.test.process_cb.set(code);
+        assert_eq!(
+            run_script("", &[] as &[&OsStr])
+                .await
+                .unwrap_err()
+                .to_string(),
+            "Exited 1"
+        );
+
+        h.test.process_cb.set(exit);
+        assert_eq!(
+            run_script("", &[] as &[&OsStr])
+                .await
+                .unwrap_err()
+                .to_string(),
+            "oops!"
+        );
+    }
 }
