@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use std::path::PathBuf;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::task::JoinSet;
@@ -103,7 +103,7 @@ pub fn get_appid(pid: u32) -> Result<Option<u64>> {
     };
     let ppid = match stat.split(' ').nth(1) {
         Some(ppid) => ppid,
-        None => return Err(anyhow::Error::msg("stat data invalid")),
+        None => return Err(anyhow!("stat data invalid")),
     };
     let ppid: u32 = ppid.parse()?;
     if ppid > 1 {
@@ -116,7 +116,10 @@ pub fn get_appid(pid: u32) -> Result<Option<u64>> {
 async fn reload() -> Result<()> {
     loop {
         let mut sighup = signal(SignalKind::hangup())?;
-        sighup.recv().await.ok_or(Error::msg(""))?;
+        sighup
+            .recv()
+            .await
+            .ok_or(anyhow!("SIGHUP handler failed!"))?;
     }
 }
 
@@ -173,8 +176,8 @@ async fn main() -> Result<()> {
             Err(e) => Err(e.into())
         },
         _ = tokio::signal::ctrl_c() => Ok(()),
-        e = sigterm.recv() => e.ok_or(Error::msg("SIGTERM machine broke")),
-        _ = sigquit.recv() => Err(Error::msg("Got SIGQUIT")),
+        e = sigterm.recv() => e.ok_or(anyhow!("SIGTERM machine broke")),
+        _ = sigquit.recv() => Err(anyhow!("Got SIGQUIT")),
         e = reload() => e,
     }
     .inspect_err(|e| error!("Encountered error running: {e}"));

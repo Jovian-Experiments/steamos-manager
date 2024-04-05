@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
@@ -95,7 +95,7 @@ impl Service for Ftrace {
             let mut string = String::new();
             self.pipe
                 .as_mut()
-                .ok_or(Error::msg("BUG: trace_pipe missing"))?
+                .ok_or(anyhow!("BUG: trace_pipe missing"))?
                 .read_line(&mut string)
                 .await?;
             if let Err(e) = self.handle_event(string.trim_end()).await {

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Result};
 use inotify::{Event, EventMask, EventStream, Inotify, WatchDescriptor, WatchMask};
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -238,7 +238,7 @@ impl Inhibitor {
                 Some(fname) => PathBuf::from(fname),
                 None => {
                     error!("Got an event without an associated filename!");
-                    return Err(Error::msg("Got an event without an associated filename"));
+                    return Err(anyhow!("Got an event without an associated filename"));
                 }
             };
             debug!("New device {} found", path.display());
