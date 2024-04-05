@@ -60,15 +60,15 @@ mod test {
     use super::*;
     use crate::testing;
 
-    fn ok(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+    fn ok(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Ok((0, String::from("ok")))
     }
 
-    fn code(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+    fn code(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Ok((1, String::from("code")))
     }
 
-    fn exit(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+    fn exit(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Err(anyhow!("oops!"))
     }
 
