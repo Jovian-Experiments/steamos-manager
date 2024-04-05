@@ -170,7 +170,7 @@ async fn find_hwmon() -> Result<PathBuf> {
 pub async fn get_tdp_limit() -> Result<u32> {
     let base = find_hwmon().await?;
     let power1cap = fs::read_to_string(base.join(TDP_LIMIT1)).await?;
-    let power1cap: u32 = power1cap.parse()?;
+    let power1cap: u32 = power1cap.trim_end().parse()?;
     Ok(power1cap / 1000000)
 }
 
@@ -339,7 +339,7 @@ CCLK_RANGE in Core0:
 
         assert!(get_tdp_limit().await.is_err());
 
-        write(hwmon.join("hwmon5").join(TDP_LIMIT1), "15000000")
+        write(hwmon.join("hwmon5").join(TDP_LIMIT1), "15000000\n")
             .await
             .expect("write");
         assert_eq!(get_tdp_limit().await.unwrap(), 15);
