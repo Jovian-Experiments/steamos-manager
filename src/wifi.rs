@@ -131,12 +131,12 @@ pub async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     if want_override {
         // Copy it in
         // Make sure the folder exists
-        fs::create_dir_all(OVERRIDE_FOLDER).await?;
+        fs::create_dir_all(path(OVERRIDE_FOLDER)).await?;
         // Then write the contents into the file
-        fs::write(OVERRIDE_PATH, OVERRIDE_CONTENTS).await
+        fs::write(path(OVERRIDE_PATH), OVERRIDE_CONTENTS).await
     } else {
         // Delete it
-        fs::remove_file(OVERRIDE_PATH).await
+        fs::remove_file(path(OVERRIDE_PATH)).await
     }
 }
 
@@ -168,7 +168,7 @@ async fn stop_tracing() -> Result<()> {
 
 async fn start_tracing(buffer_size: u32) -> Result<()> {
     // Start tracing
-    let size_str = format!("{}", buffer_size);
+    let size_str = buffer_size.to_string();
     run_script(
         "start tracing",
         TRACE_CMD_PATH,
