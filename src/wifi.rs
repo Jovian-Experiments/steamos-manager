@@ -249,3 +249,47 @@ pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
     )
     .await
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::testing;
+    use tokio::fs::{create_dir_all, write};
+
+    #[tokio::test]
+    async fn test_wifi_backend_to_string() {
+        assert_eq!(WifiBackend::IWD.to_string(), "iwd");
+        assert_eq!(WifiBackend::WPASupplicant.to_string(), "wpa_supplicant");
+    }
+
+    #[tokio::test]
+    async fn test_get_wifi_backend() {
+        let h = testing::start();
+
+        create_dir_all(path(WIFI_BACKEND_PATH).parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        assert!(get_wifi_backend().await.is_err());
+
+        write(path(WIFI_BACKEND_PATH), "[device]")
+            .await
+            .expect("write");
+        assert!(get_wifi_backend().await.is_err());
+
+        write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=fake\n")
+            .await
+            .expect("write");
+        assert!(get_wifi_backend().await.is_err());
+
+        write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=iwd\n")
+            .await
+            .expect("write");
+        assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::IWD);
+
+        write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=wpa_supplicant\n")
+            .await
+            .expect("write");
+        assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::WPASupplicant);
+    }
+}
