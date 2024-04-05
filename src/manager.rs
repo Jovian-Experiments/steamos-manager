@@ -1,104 +1,176 @@
 /*
  * Copyright © 2023 Collabora Ltd.
  * Copyright © 2024 Valve Software
+ * Copyright © 2024 Igalia S.L.
  *
  * SPDX-License-Identifier: MIT
  */
 
 use anyhow::Result;
+use std::fmt;
 use tokio::fs::File;
-use tracing::{error, warn};
-use zbus::{interface, zvariant::Fd};
+use tracing::error;
+use zbus::zvariant::Fd;
+use zbus::{interface, Connection, SignalContext};
 
-use crate::hardware::{variant, HardwareVariant};
-use crate::power::{set_gpu_clocks, set_gpu_performance_level, set_tdp_limit};
-use crate::process::{run_script, script_output, SYSTEMCTL_PATH};
-use crate::wifi::{restart_iwd, setup_iwd_config, start_tracing, stop_tracing, WifiDebugMode};
+use crate::hardware::{check_support, variant, HardwareVariant};
+use crate::power::{
+    get_gpu_clocks, get_gpu_performance_level, get_tdp_limit, set_gpu_clocks,
+    set_gpu_performance_level, set_tdp_limit, GPUPerformanceLevel,
+};
+use crate::process::{run_script, script_output};
+use crate::systemd::SystemdUnit;
+use crate::wifi::{
+    get_wifi_backend, set_wifi_backend, set_wifi_debug_mode, WifiBackend, WifiDebugMode,
+    WifiPowerManagement,
+};
+use crate::{anyhow_to_zbus, anyhow_to_zbus_fdo};
 
-pub struct SMManager {
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+enum PrepareFactoryReset {
+    Unknown = 0,
+    RebootRequired = 1,
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+enum FanControl {
+    BIOS = 0,
+    OS = 1,
+}
+
+impl TryFrom<u32> for FanControl {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == FanControl::BIOS as u32 => Ok(FanControl::BIOS),
+            x if x == FanControl::OS as u32 => Ok(FanControl::BIOS),
+            _ => Err("No enum match for value {v}"),
+        }
+    }
+}
+
+impl fmt::Display for FanControl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FanControl::BIOS => write!(f, "BIOS"),
+            FanControl::OS => write!(f, "OS"),
+        }
+    }
+}
+
+pub struct SteamOSManager {
+    connection: Connection,
     wifi_debug_mode: WifiDebugMode,
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
     should_trace: bool,
 }
 
-impl SMManager {
-    pub async fn new() -> Result<Self> {
-        Ok(SMManager {
+impl SteamOSManager {
+    pub async fn new(connection: Connection) -> Result<Self> {
+        Ok(SteamOSManager {
+            connection,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
         })
     }
 }
 
-const MIN_BUFFER_SIZE: u32 = 100;
-
 const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
 
-#[interface(name = "com.steampowered.SteamOSManager1")]
-impl SMManager {
-    const API_VERSION: u32 = 1;
+#[interface(name = "com.steampowered.SteamOSManager1.Manager")]
+impl SteamOSManager {
+    const API_VERSION: u32 = 7;
 
-    async fn say_hello(&self, name: &str) -> String {
-        format!("Hello {}!", name)
-    }
-
-    async fn factory_reset(&self) -> bool {
+    async fn prepare_factory_reset(&self) -> u32 {
         // Run steamos factory reset script and return true on success
-        run_script(
-            "factory reset",
-            "/usr/bin/steamos-factory-reset-config",
-            &[""],
-        )
-        .await
-        .unwrap_or(false)
-    }
-
-    async fn disable_wifi_power_management(&self) -> bool {
-        // Run polkit helper script and return true on success
-        run_script(
-            "disable wifi power management",
-            "/usr/bin/steamos-polkit-helpers/steamos-disable-wireless-power-management",
-            &[""],
-        )
-        .await
-        .unwrap_or(false)
-    }
-
-    async fn enable_fan_control(&self, enable: bool) -> bool {
-        // Run what steamos-polkit-helpers/jupiter-fan-control does
-        if enable {
-            run_script(
-                "enable fan control",
-                SYSTEMCTL_PATH,
-                &["start", "jupiter-fan-control-service"],
-            )
-            .await
-            .unwrap_or(false)
-        } else {
-            run_script(
-                "disable fan control",
-                SYSTEMCTL_PATH,
-                &["stop", "jupiter-fan-control.service"],
-            )
-            .await
-            .unwrap_or(false)
+        let res = run_script("/usr/bin/steamos-factory-reset-config", &[""]).await;
+        match res {
+            Ok(_) => PrepareFactoryReset::RebootRequired as u32,
+            Err(_) => PrepareFactoryReset::Unknown as u32,
         }
     }
 
-    async fn hardware_check_support(&self) -> bool {
-        // Run jupiter-check-support note this script does exit 1 for "Support: No" case
-        // so no need to parse output, etc.
-        run_script(
-            "check hardware support",
-            "/usr/bin/jupiter-check-support",
-            &[""],
-        )
-        .await
-        .unwrap_or(false)
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
+        let output = script_output("/usr/bin/iwconfig", &["wlan0"])
+            .await
+            .map_err(anyhow_to_zbus_fdo)?;
+        for line in output.lines() {
+            return Ok(match line.trim() {
+                "Power Management:on" => WifiPowerManagement::Enabled as u32,
+                "Power Management:off" => WifiPowerManagement::Disabled as u32,
+                _ => continue,
+            });
+        }
+        Err(zbus::fdo::Error::Failed(String::from(
+            "Failed to query power management state",
+        )))
     }
 
-    async fn read_als_calibration(&self) -> f32 {
+    #[zbus(property)]
+    async fn set_wifi_power_management_state(&self, state: u32) -> zbus::Result<()> {
+        let state = match WifiPowerManagement::try_from(state) {
+            Ok(state) => state,
+            Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
+        };
+        let state = match state {
+            WifiPowerManagement::Disabled => "off",
+            WifiPowerManagement::Enabled => "on",
+        };
+
+        run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
+            .await
+            .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
+            .map_err(anyhow_to_zbus)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
+        let jupiter_fan_control =
+            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
+                .await
+                .map_err(anyhow_to_zbus_fdo)?;
+        let active = jupiter_fan_control
+            .active()
+            .await
+            .map_err(anyhow_to_zbus_fdo)?;
+        Ok(match active {
+            true => FanControl::OS as u32,
+            false => FanControl::BIOS as u32,
+        })
+    }
+
+    #[zbus(property)]
+    async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
+        let state = match FanControl::try_from(state) {
+            Ok(state) => state,
+            Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
+        };
+        // Run what steamos-polkit-helpers/jupiter-fan-control does
+        let jupiter_fan_control =
+            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
+                .await
+                .map_err(anyhow_to_zbus)?;
+        match state {
+            FanControl::OS => jupiter_fan_control.start().await,
+            FanControl::BIOS => jupiter_fan_control.stop().await,
+        }
+        .map_err(anyhow_to_zbus)
+    }
+
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn hardware_currently_supported(&self) -> zbus::fdo::Result<u32> {
+        match check_support().await {
+            Ok(res) => Ok(res as u32),
+            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+        }
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn als_calibration_gain(&self) -> f64 {
         // Run script to get calibration value
         let result = script_output(
             "/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain",
@@ -114,67 +186,7 @@ impl SMManager {
         }
     }
 
-    async fn update_bios(&self) -> bool {
-        // Update the bios as needed
-        // Return true if the script was successful (though that might mean no update was needed), false otherwise
-        run_script(
-            "update bios",
-            "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
-            &["--auto"],
-        )
-        .await
-        .unwrap_or(false)
-    }
-
-    async fn update_dock(&self) -> bool {
-        // Update the dock firmware as needed
-        // Retur true if successful, false otherwise
-        run_script(
-            "update dock firmware",
-            "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
-            &[""],
-        )
-        .await
-        .unwrap_or(false)
-    }
-
-    async fn trim_devices(&self) -> bool {
-        // Run steamos-trim-devices script
-        // return true on success, false otherwise
-        run_script(
-            "trim devices",
-            "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
-            &[""],
-        )
-        .await
-        .unwrap_or(false)
-    }
-
-    async fn format_sdcard(&self) -> bool {
-        // Run steamos-format-sdcard script
-        // return true on success, false otherwise
-        run_script(
-            "format sdcard",
-            "/usr/bin/steamos-polkit-helpers/steamos-format-sdcard",
-            &[""],
-        )
-        .await
-        .unwrap_or(false)
-    }
-
-    async fn set_gpu_performance_level(&self, level: i32) -> bool {
-        set_gpu_performance_level(level).await.is_ok()
-    }
-
-    async fn set_gpu_clocks(&self, clocks: i32) -> bool {
-        set_gpu_clocks(clocks).await.is_ok()
-    }
-
-    async fn set_tdp_limit(&self, limit: i32) -> bool {
-        set_tdp_limit(limit).await.is_ok()
-    }
-
-    async fn get_als_integration_time_file_descriptor(&self) -> Result<Fd, zbus::fdo::Error> {
+    async fn get_als_integration_time_file_descriptor(&self) -> zbus::fdo::Result<Fd> {
         // Get the file descriptor for the als integration time sysfs path
         let result = File::create(ALS_INTEGRATION_PATH).await;
         match result {
@@ -186,109 +198,348 @@ impl SMManager {
         }
     }
 
-    async fn get_wifi_debug_mode(&mut self) -> u32 {
+    async fn update_bios(&self) -> zbus::fdo::Result<()> {
+        // Update the bios as needed
+        run_script(
+            "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
+            &["--auto"],
+        )
+        .await
+        .inspect_err(|message| error!("Error updating BIOS: {message}"))
+        .map_err(anyhow_to_zbus_fdo)
+    }
+
+    async fn update_dock(&self) -> zbus::fdo::Result<()> {
+        // Update the dock firmware as needed
+        run_script(
+            "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
+            &[""],
+        )
+        .await
+        .inspect_err(|message| error!("Error updating dock: {message}"))
+        .map_err(anyhow_to_zbus_fdo)
+    }
+
+    async fn trim_devices(&self) -> zbus::fdo::Result<()> {
+        // Run steamos-trim-devices script
+        run_script(
+            "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
+            &[""],
+        )
+        .await
+        .inspect_err(|message| error!("Error updating trimming devices: {message}"))
+        .map_err(anyhow_to_zbus_fdo)
+    }
+
+    async fn format_device(
+        &self,
+        device: &str,
+        label: &str,
+        validate: bool,
+    ) -> zbus::fdo::Result<()> {
+        let mut args = vec!["--label", label, "--device", device];
+        if !validate {
+            args.push("--skip-validation");
+        }
+        run_script("/usr/lib/hwsupport/format-device.sh", args.as_ref())
+            .await
+            .inspect_err(|message| error!("Error formatting {device}: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"), name = "GPUPerformanceLevel")]
+    async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
+        match get_gpu_performance_level().await {
+            Ok(level) => Ok(level as u32),
+            Err(e) => {
+                error!("Error getting GPU performance level: {e}");
+                Err(anyhow_to_zbus_fdo(e))
+            }
+        }
+    }
+
+    #[zbus(property, name = "GPUPerformanceLevel")]
+    async fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()> {
+        let level = match GPUPerformanceLevel::try_from(level) {
+            Ok(level) => level,
+            Err(e) => return Err(zbus::Error::Failure(e.to_string())),
+        };
+        set_gpu_performance_level(level)
+            .await
+            .inspect_err(|message| error!("Error setting GPU performance level: {message}"))
+            .map_err(anyhow_to_zbus)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"), name = "ManualGPUClock")]
+    async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
+        get_gpu_clocks()
+            .await
+            .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
+    }
+
+    #[zbus(property, name = "ManualGPUClock")]
+    async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
+        set_gpu_clocks(clocks)
+            .await
+            .inspect_err(|message| error!("Error setting manual GPU clock: {message}"))
+            .map_err(anyhow_to_zbus)
+    }
+
+    #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMin")]
+    async fn manual_gpu_clock_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        200
+    }
+
+    #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMax")]
+    async fn manual_gpu_clock_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        1600
+    }
+
+    #[zbus(property(emits_changed_signal = "false"), name = "TDPLimit")]
+    async fn tdp_limit(&self) -> zbus::fdo::Result<u32> {
+        get_tdp_limit().await.map_err(anyhow_to_zbus_fdo)
+    }
+
+    #[zbus(property, name = "TDPLimit")]
+    async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
+        set_tdp_limit(limit).await.map_err(anyhow_to_zbus)
+    }
+
+    #[zbus(property(emits_changed_signal = "const"), name = "TDPLimitMin")]
+    async fn tdp_limit_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        3
+    }
+
+    #[zbus(property(emits_changed_signal = "const"), name = "TDPLimitMax")]
+    async fn tdp_limit_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        15
+    }
+
+    #[zbus(property)]
+    async fn wifi_debug_mode_state(&self) -> u32 {
         // Get the wifi debug mode
         self.wifi_debug_mode as u32
     }
 
-    async fn set_wifi_debug_mode(&mut self, mode: u32, buffer_size: u32) -> bool {
+    async fn set_wifi_debug_mode(
+        &mut self,
+        mode: u32,
+        buffer_size: u32,
+        #[zbus(signal_context)] ctx: SignalContext<'_>,
+    ) -> zbus::fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
-
-        let wanted_mode = WifiDebugMode::try_from(mode);
-        match wanted_mode {
-            Ok(WifiDebugMode::Off) => {
-                // If mode is 0 disable wifi debug mode
-                // Stop any existing trace and flush to disk.
-                if self.should_trace {
-                    let result = match stop_tracing().await {
-                        Ok(result) => result,
-                        Err(message) => {
-                            error!("stop_tracing command got an error: {message}");
-                            return false;
-                        }
-                    };
-                    if !result {
-                        error!("stop_tracing command returned non-zero");
-                        return false;
-                    }
-                }
-                // Stop_tracing was successful
-                if let Err(message) = setup_iwd_config(false).await {
-                    error!("setup_iwd_config false got an error: {message}");
-                    return false;
-                }
-                // setup_iwd_config false worked
-                let value = match restart_iwd().await {
-                    Ok(value) => value,
-                    Err(message) => {
-                        error!("restart_iwd got an error: {message}");
-                        return false;
-                    }
-                };
-                if value {
-                    // restart iwd worked
-                    self.wifi_debug_mode = WifiDebugMode::Off;
-                } else {
-                    // restart_iwd failed
-                    error!("restart_iwd failed, check log above");
-                    return false;
-                }
+        match get_wifi_backend().await {
+            Ok(WifiBackend::IWD) => (),
+            Ok(backend) => {
+                return Err(zbus::fdo::Error::Failed(format!(
+                    "Setting wifi debug mode not supported when backend is {backend}",
+                )));
             }
-            Ok(WifiDebugMode::On) => {
-                // If mode is 1 enable wifi debug mode
-                if buffer_size < MIN_BUFFER_SIZE {
-                    return false;
-                }
-
-                if let Err(message) = setup_iwd_config(true).await {
-                    error!("setup_iwd_config true got an error: {message}");
-                    return false;
-                }
-                // setup_iwd_config worked
-                let value = match restart_iwd().await {
-                    Ok(value) => value,
-                    Err(message) => {
-                        error!("restart_iwd got an error: {message}");
-                        return false;
-                    }
-                };
-                if !value {
-                    error!("restart_iwd failed");
-                    return false;
-                }
-                // restart_iwd worked
-                if self.should_trace {
-                    let value = match start_tracing(buffer_size).await {
-                        Ok(value) => value,
-                        Err(message) => {
-                            error!("start_tracing got an error: {message}");
-                            return false;
-                        }
-                    };
-                    if !value {
-                        // start_tracing failed
-                        error!("start_tracing failed");
-                        return false;
-                    }
-                }
-                // start_tracing worked
-                self.wifi_debug_mode = WifiDebugMode::On;
-            }
-            Err(_) => {
-                // Invalid mode requested, more coming later, but add this catch-all for now
-                warn!("Invalid wifi debug mode {mode} requested");
-                return false;
-            }
+            Err(e) => return Err(anyhow_to_zbus_fdo(e)),
         }
 
-        true
+        let wanted_mode = match WifiDebugMode::try_from(mode) {
+            Ok(mode) => mode,
+            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
+        };
+        match set_wifi_debug_mode(
+            wanted_mode,
+            buffer_size,
+            self.should_trace,
+            self.connection.clone(),
+        )
+        .await
+        {
+            Ok(()) => {
+                self.wifi_debug_mode = wanted_mode;
+                self.wifi_debug_mode_state_changed(&ctx).await?;
+                Ok(())
+            }
+            Err(e) => {
+                error!("Error setting wifi debug mode: {e}");
+                Err(anyhow_to_zbus_fdo(e))
+            }
+        }
+    }
+
+    /// WifiBackend property.
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn wifi_backend(&self) -> zbus::fdo::Result<u32> {
+        match get_wifi_backend().await {
+            Ok(backend) => Ok(backend as u32),
+            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_wifi_backend(&mut self, backend: u32) -> zbus::fdo::Result<()> {
+        if self.wifi_debug_mode == WifiDebugMode::On {
+            return Err(zbus::fdo::Error::Failed(String::from(
+                "operation not supported when wifi_debug_mode=on",
+            )));
+        }
+        let backend = match WifiBackend::try_from(backend) {
+            Ok(backend) => backend,
+            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
+        };
+        set_wifi_backend(backend)
+            .await
+            .inspect_err(|message| error!("Error setting wifi backend: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
     }
 
     /// A version property.
-    #[zbus(property)]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
-        SMManager::API_VERSION
+        SteamOSManager::API_VERSION
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{power, testing};
+    use tokio::fs::{create_dir_all, write};
+    use zbus::connection::Connection;
+    use zbus::ConnectionBuilder;
+
+    struct TestHandle {
+        _handle: testing::TestHandle,
+        connection: Connection,
+    }
+
+    async fn start(name: &str) -> TestHandle {
+        let handle = testing::start();
+        create_dir_all(crate::path("/sys/class/dmi/id"))
+            .await
+            .expect("create_dir_all");
+        write(crate::path("/sys/class/dmi/id/board_vendor"), "Valve\n")
+            .await
+            .expect("write");
+        write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n")
+            .await
+            .expect("write");
+        create_dir_all(crate::path("/etc/NetworkManager/conf.d"))
+            .await
+            .expect("create_dir_all");
+        write(
+            crate::path("/etc/NetworkManager/conf.d/wifi_backend.conf"),
+            "wifi.backend=iwd\n",
+        )
+        .await
+        .expect("write");
+
+        let connection = ConnectionBuilder::session()
+            .unwrap()
+            .name(format!("com.steampowered.SteamOSManager1.Test.{name}"))
+            .unwrap()
+            .build()
+            .await
+            .unwrap();
+        let manager = SteamOSManager::new(connection.clone()).await.unwrap();
+        connection
+            .object_server()
+            .at("/com/steampowered/SteamOSManager1", manager)
+            .await
+            .expect("object_server at");
+
+        TestHandle {
+            _handle: handle,
+            connection,
+        }
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.Manager",
+        default_service = "com.steampowered.SteamOSManager1.Test.GPUPerformanceLevel",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait GPUPerformanceLevel {
+        #[zbus(property, name = "GPUPerformanceLevel")]
+        fn gpu_performance_level(&self) -> zbus::Result<u32>;
+
+        #[zbus(property, name = "GPUPerformanceLevel")]
+        fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()>;
+    }
+
+    #[tokio::test]
+    async fn gpu_performance_level() {
+        let test = start("GPUPerformanceLevel").await;
+        power::test::setup().await;
+
+        let proxy = GPUPerformanceLevelProxy::new(&test.connection)
+            .await
+            .unwrap();
+        set_gpu_performance_level(GPUPerformanceLevel::Auto)
+            .await
+            .expect("set");
+        assert_eq!(
+            proxy.gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Auto as u32
+        );
+
+        proxy
+            .set_gpu_performance_level(GPUPerformanceLevel::Low as u32)
+            .await
+            .expect("proxy_set");
+        assert_eq!(
+            get_gpu_performance_level().await.unwrap(),
+            GPUPerformanceLevel::Low
+        );
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.Manager",
+        default_service = "com.steampowered.SteamOSManager1.Test.ManualGPUClock",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait ManualGPUClock {
+        #[zbus(property, name = "ManualGPUClock")]
+        fn manual_gpu_clock(&self) -> zbus::Result<u32>;
+
+        #[zbus(property, name = "ManualGPUClock")]
+        fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()>;
+    }
+
+    #[tokio::test]
+    async fn manual_gpu_clock() {
+        let test = start("ManualGPUClock").await;
+
+        let proxy = ManualGPUClockProxy::new(&test.connection).await.unwrap();
+
+        assert!(proxy.manual_gpu_clock().await.is_err());
+
+        power::test::write_clocks(1600).await;
+        assert_eq!(proxy.manual_gpu_clock().await.unwrap(), 1600);
+
+        proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
+        power::test::expect_clocks(200).await;
+
+        assert!(proxy.set_manual_gpu_clock(100).await.is_err());
+        power::test::expect_clocks(200).await;
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.Manager",
+        default_service = "com.steampowered.SteamOSManager1.Test.Version",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait Version {
+        #[zbus(property)]
+        fn version(&self) -> zbus::Result<u32>;
+    }
+
+    #[tokio::test]
+    async fn version() {
+        let test = start("Version").await;
+        let proxy = VersionProxy::new(&test.connection).await.unwrap();
+        assert_eq!(proxy.version().await, Ok(SteamOSManager::API_VERSION));
     }
 }

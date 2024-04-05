@@ -47,7 +47,7 @@
 
         Controls the wifi chip's power management features.
 
-        Valid states: 0 = Unsupported Feature, 1 = Disabled, 2 = Enabled
+        Valid states: 0 = Disabled, 1 = Enabled
 
         Version available: 7
     -->
@@ -58,7 +58,7 @@
 
         Controls whether the OS or the BIOS should manage fan speed
 
-        Valid states: 0 = Unsupported Feature, 1 = BIOS, 2 = OS
+        Valid states: 0 = BIOS, 1 = OS
 
         Version available: 7
     -->
@@ -69,7 +69,7 @@
 
         Reports whether the current hardware is supported or not.
 
-        Valid states: 0 = Unsupported Feature, 1 = Unsupported, 2 = Supported
+        Valid states: 0 = Unsupported, 1 = Supported
 
         Version available: 7
     -->
@@ -101,17 +101,6 @@
     </method>
 
     <!--
-        BIOSUpdateStatus:
-
-        Reports whether a BIOS update is available.
-
-        Valid states: 0 = Unsupported Feature, 1 = Up to date, 2 = Update available
-
-        Version available: 7
-    -->
-    <property name="BIOSUpdateStatus" type="u" access="read"/>
-
-    <!--
         UpdateBIOS:
 
         Perform a BIOS update.
@@ -121,30 +110,6 @@
     <method name="UpdateBIOS" />
 
     <!--
-        UpdateBIOSProgressNotification:
-
-        @percent_completed: Progress percent completed in the range [0-100]
-
-        Emitted whenever significant progress is made.
-
-        Version available: 7
-    -->
-    <signal name="UpdateBIOSProgressNotification">
-      <arg name="percent_completed" type="u" />
-    </signal>
-
-    <!--
-        DockUpdateStatus:
-
-        Reports whether a Dock Firmware update is available.
-
-        Valid states: 0 = Unsupported Feature, 1 = Up to date, 2 = Update available
-
-        Version available: 7
-    -->
-    <property name="DockUpdateStatus" type="u" access="read"/>
-
-    <!--
         UpdateDock:
 
         Perform a Dock Firmware update.
@@ -152,19 +117,6 @@
         Version available: 7
     -->
     <method name="UpdateDock" />
-
-    <!--
-        UpdateDockProgressNotification:
-
-        @percent_completed: Progress percent completed in the range [0-100]
-
-        Emitted whenever significant progress is made.
-
-        Version available: 7
-    -->
-    <signal name="UpdateDockProgressNotification">
-      <arg name="percent_completed" type="u" />
-    </signal>
 
     <!--
         TrimDevices:
@@ -199,7 +151,7 @@
 
         The current GPU performance level.
 
-        Valid states: 0 = Feature Unsupported, 1 = Auto, 2 = Low, 3 = High, 4 = Manual, 5 = Profile Peak
+        Valid states: 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
 
         Version available: 7
     -->
@@ -238,7 +190,7 @@
 
         Controls the system TDP limit.
 
-        Valid states: 0 = Feature Unsupported, or in range of [ TDPLimitMin, TDPLimitMax ]
+        Valid states: In range of [ TDPLimitMin, TDPLimitMax ]
 
         Version available: 7
     -->
@@ -268,7 +220,7 @@
 
         Whether wifi debug mode is currently enabled.
 
-        Valid states: 0 = Feature Unsupported, 1 = Disabled, 2 = Enabled
+        Valid states: 0 = Disabled, 1 = Enabled
 
         Version available: 7
     -->
@@ -290,26 +242,11 @@
     </method>
 
     <!--
-        CaptureWifiDebugTrace:
-
-        @path: Output path to write the file
-
-        Captures the current contents of the wifi debug trace and dumps it
-        into @path. The buffers will be emptied and trace capture will resume
-        after this call returns.
-
-        Version available: 7
-    -->
-    <method name="CaptureWifiDebugTrace">
-      <arg type="s" name="path" direction="in"/>
-    </method>
-
-    <!--
         WifiBackend:
 
         Controls which Wifi backend is used by NetworkManager
 
-        Valid states: 0 = Feature Unsupported, 1 = iwd, 2 = wpa_supplicant
+        Valid states: 0 = iwd, 1 = wpa_supplicant
 
         Version available: 7
     -->

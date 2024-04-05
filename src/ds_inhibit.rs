@@ -302,14 +302,14 @@ mod test {
     use tokio::time::sleep;
 
     async fn nyield(times: u32) {
-        for i in 0..times {
+        for _ in 0..times {
             sleep(Duration::from_millis(1)).await;
         }
     }
 
     #[tokio::test]
     async fn hid_nodes() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
@@ -326,7 +326,7 @@ mod test {
 
     #[tokio::test]
     async fn hid_can_inhibit() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let hids = [
             HidNode::new(0),
@@ -363,7 +363,7 @@ mod test {
 
     #[tokio::test]
     async fn hid_inhibit() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
@@ -373,12 +373,12 @@ mod test {
 
         assert!(hid.can_inhibit().await);
 
-        hid.inhibit().await;
+        hid.inhibit().await.expect("inhibit");
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "1\n"
         );
-        hid.uninhibit().await;
+        hid.uninhibit().await.expect("uninhibit");
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "0\n"
@@ -387,7 +387,7 @@ mod test {
 
     #[tokio::test]
     async fn hid_inhibit_error_continue() {
-        let h = testing::start();
+        let _h = testing::start();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
@@ -399,12 +399,12 @@ mod test {
 
         assert!(hid.can_inhibit().await);
 
-        hid.inhibit().await;
+        assert!(hid.inhibit().await.is_err());
         assert_eq!(
             read_to_string(sys_base.join("input/input1/inhibited")).expect("inhibited"),
             "1\n"
         );
-        hid.uninhibit().await;
+        assert!(hid.uninhibit().await.is_err());
         assert_eq!(
             read_to_string(sys_base.join("input/input1/inhibited")).expect("inhibited"),
             "0\n"
@@ -496,7 +496,7 @@ mod test {
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
         let task = tokio::spawn(async move {
-            inhibitor.run().await;
+            inhibitor.run().await.expect("run");
         });
 
         nyield(1).await;
@@ -540,7 +540,7 @@ mod test {
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
         let task = tokio::spawn(async move {
-            inhibitor.run().await;
+            inhibitor.run().await.expect("run");
         });
 
         nyield(1).await;
@@ -548,7 +548,7 @@ mod test {
 
         File::create(hid.hidraw()).expect("hidraw");
         symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
-        let f = File::open(hid.hidraw()).expect("hidraw");
+        let _f = File::open(hid.hidraw()).expect("hidraw");
         nyield(4).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
@@ -560,21 +560,20 @@ mod test {
 
     #[tokio::test]
     async fn inhibitor_create() {
-        let h = testing::start();
-        let path = h.test.path();
+        let _h = testing::start();
 
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(path.join("dev")).expect("dev");
+        create_dir_all(path("/dev")).expect("dev");
         create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
         symlink("sony", sys_base.join("driver")).expect("driver");
-        create_dir_all(path.join("proc/1/fd")).expect("fd");
-        write(path.join("proc/1/comm"), "steam\n").expect("comm");
+        create_dir_all(path("/proc/1/fd")).expect("fd");
+        write(path("/proc/1/comm"), "steam\n").expect("comm");
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
         let task = tokio::spawn(async move {
-            inhibitor.run().await;
+            inhibitor.run().await.expect("run");
         });
 
         nyield(3).await;
@@ -582,8 +581,8 @@ mod test {
 
         File::create(hid.hidraw()).expect("hidraw");
         nyield(3).await;
-        symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
-        let f = File::open(hid.hidraw()).expect("hidraw");
+        symlink(hid.hidraw(), path("/proc/1/fd/3")).expect("symlink");
+        let _f = File::open(hid.hidraw()).expect("hidraw");
         nyield(3).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),

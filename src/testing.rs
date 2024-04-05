@@ -1,4 +1,6 @@
-use std::cell::RefCell;
+use anyhow::{anyhow, Result};
+use std::cell::{Cell, RefCell};
+use std::ffi::OsStr;
 use std::path::Path;
 use std::rc::Rc;
 use tempfile::{tempdir, TempDir};
@@ -12,6 +14,7 @@ pub fn start() -> TestHandle {
         assert!(lock.borrow().as_ref().is_none());
         let test: Rc<Test> = Rc::new(Test {
             base: tempdir().expect("Couldn't create test directory"),
+            process_cb: Cell::new(|_, _| Err(anyhow!("No current process_cb"))),
         });
         *lock.borrow_mut() = Some(test.clone());
         TestHandle { test }
@@ -28,6 +31,7 @@ pub fn current() -> Rc<Test> {
 
 pub struct Test {
     base: TempDir,
+    pub process_cb: Cell<fn(&str, &[&OsStr]) -> Result<(i32, String)>>,
 }
 
 pub struct TestHandle {

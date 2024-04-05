@@ -117,10 +117,8 @@ mod test {
     use crate::testing;
     use nix::sys::stat::Mode;
     use nix::unistd;
-    use std::cell::Cell;
-    use std::fs;
-    use std::path::PathBuf;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+    use tokio::fs::{create_dir_all, read_to_string, write};
+    use tokio::sync::mpsc::{error, unbounded_channel, UnboundedSender};
 
     struct MockTrace {
         traces: UnboundedSender<(String, HashMap<String, zvariant::OwnedValue>)>,
@@ -133,7 +131,7 @@ mod test {
             trace: &str,
             data: HashMap<&str, zvariant::Value<'_>>,
         ) -> zbus::fdo::Result<()> {
-            self.traces.send((
+            let _ = self.traces.send((
                 String::from(trace),
                 HashMap::from_iter(
                     data.iter()
@@ -146,18 +144,31 @@ mod test {
 
     #[tokio::test]
     async fn handle_pid() {
-        let h = testing::start();
-        let path = h.test.path();
+        let _h = testing::start();
 
-        fs::create_dir_all(path.join("proc/1234")).expect("create_dir_all");
-        fs::write(path.join("proc/1234/comm"), "ftrace\n").expect("write comm");
-        fs::write(path.join("proc/1234/environ"), "SteamGameId=5678").expect("write environ");
+        create_dir_all(path("/proc/1234"))
+            .await
+            .expect("create_dir_all");
+        write(path("/proc/1234/comm"), "ftrace\n")
+            .await
+            .expect("write comm");
+        write(path("/proc/1234/environ"), "SteamGameId=5678")
+            .await
+            .expect("write environ");
 
-        fs::create_dir_all(path.join("proc/1235")).expect("create_dir_all");
-        fs::write(path.join("proc/1235/comm"), "ftrace\n").expect("write comm");
+        create_dir_all(path("/proc/1235"))
+            .await
+            .expect("create_dir_all");
+        write(path("/proc/1235/comm"), "ftrace\n")
+            .await
+            .expect("write comm");
 
-        fs::create_dir_all(path.join("proc/1236")).expect("create_dir_all");
-        fs::write(path.join("proc/1236/environ"), "SteamGameId=5678").expect("write environ");
+        create_dir_all(path("/proc/1236"))
+            .await
+            .expect("create_dir_all");
+        write(path("/proc/1236/environ"), "SteamGameId=5678")
+            .await
+            .expect("write environ");
 
         let mut map = HashMap::new();
         assert!(Ftrace::handle_pid(&mut map, 1234).await.is_ok());
@@ -189,43 +200,53 @@ mod test {
 
     #[tokio::test]
     async fn ftrace_init() {
-        let h = testing::start();
-        let path = h.test.path();
+        let _h = testing::start();
 
         let tracefs = Ftrace::base();
 
-        fs::create_dir_all(tracefs.join("events/oom/mark_victim")).expect("create_dir_all");
+        create_dir_all(tracefs.join("events/oom/mark_victim"))
+            .await
+            .expect("create_dir_all");
         unistd::mkfifo(
             tracefs.join("trace_pipe").as_path(),
             Mode::S_IRUSR | Mode::S_IWUSR,
         )
         .expect("trace_pipe");
         let dbus = Connection::session().await.expect("dbus");
-        let ftrace = Ftrace::init(dbus).await.expect("ftrace");
+        let _ftrace = Ftrace::init(dbus).await.expect("ftrace");
 
         assert_eq!(
-            fs::read_to_string(tracefs.join("events/oom/mark_victim/enable")).unwrap(),
+            read_to_string(tracefs.join("events/oom/mark_victim/enable"))
+                .await
+                .unwrap(),
             "1"
         );
     }
 
     #[tokio::test]
     async fn ftrace_relay() {
-        let h = testing::start();
-        let path = h.test.path();
+        let _h = testing::start();
 
         let tracefs = Ftrace::base();
 
-        fs::create_dir_all(tracefs.join("events/oom/mark_victim")).expect("create_dir_all");
+        create_dir_all(tracefs.join("events/oom/mark_victim"))
+            .await
+            .expect("create_dir_all");
         unistd::mkfifo(
             tracefs.join("trace_pipe").as_path(),
             Mode::S_IRUSR | Mode::S_IWUSR,
         )
         .expect("trace_pipe");
 
-        fs::create_dir_all(path.join("proc/14351")).expect("create_dir_all");
-        fs::write(path.join("proc/14351/comm"), "ftrace\n").expect("write comm");
-        fs::write(path.join("proc/14351/environ"), "SteamGameId=5678").expect("write environ");
+        create_dir_all(path("/proc/14351"))
+            .await
+            .expect("create_dir_all");
+        write(path("/proc/14351/comm"), "ftrace\n")
+            .await
+            .expect("write comm");
+        write(path("/proc/14351/environ"), "SteamGameId=5678")
+            .await
+            .expect("write environ");
 
         let (sender, mut receiver) = unbounded_channel();
         let trace = MockTrace { traces: sender };
@@ -241,7 +262,7 @@ mod test {
         let mut ftrace = Ftrace::init(dbus).await.expect("ftrace");
 
         assert!(match receiver.try_recv() {
-            Empty => true,
+            Err(error::TryRecvError::Empty) => true,
             _ => false,
         });
         ftrace

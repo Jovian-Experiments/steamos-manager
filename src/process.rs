@@ -5,28 +5,38 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
+#[cfg(not(test))]
 use tokio::process::Command;
-use tracing::warn;
 
-pub const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
-
-pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
-    // Run given script and return true on success
+#[cfg(not(test))]
+pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
+    // Run given script and return the exit code
     let mut child = Command::new(executable).args(args).spawn()?;
     let status = child.wait().await?;
-    Ok(status.success())
+    status.code().ok_or(anyhow!("Killed by signal"))
 }
 
-pub async fn run_script(name: &str, executable: &str, args: &[impl AsRef<OsStr>]) -> Result<bool> {
+#[cfg(test)]
+pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
+    let test = crate::testing::current();
+    let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
+    let cb = test.process_cb.get();
+    cb(executable, args.as_ref()).map(|(res, _)| res)
+}
+
+pub async fn run_script(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<()> {
     // Run given script to get exit code and return true on success.
-    // Return false on failure, but also print an error if needed
-    script_exit_code(executable, args)
-        .await
-        .inspect_err(|message| warn!("Error running {name} {message}"))
+    // Return Err on failure, but also print an error if needed
+    match script_exit_code(executable, args).await {
+        Ok(0) => Ok(()),
+        Ok(code) => Err(anyhow!("Exited {code}")),
+        Err(message) => Err(message),
+    }
 }
 
+#[cfg(not(test))]
 pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
     // Run given command and return the output given
     let output = Command::new(executable).args(args).output();
@@ -35,4 +45,56 @@ pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Resu
 
     let s = std::str::from_utf8(&output.stdout)?;
     Ok(s.to_string())
+}
+
+#[cfg(test)]
+pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<String> {
+    let test = crate::testing::current();
+    let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
+    let cb = test.process_cb.get();
+    cb(executable, args.as_ref()).map(|(_, res)| res)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::testing;
+
+    fn ok(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+        Ok((0, String::from("ok")))
+    }
+
+    fn code(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+        Ok((1, String::from("code")))
+    }
+
+    fn exit(_: &str, args: &[&OsStr]) -> Result<(i32, String)> {
+        Err(anyhow!("oops!"))
+    }
+
+    #[tokio::test]
+    async fn test_run_script() {
+        let h = testing::start();
+
+        h.test.process_cb.set(ok);
+        assert!(run_script("", &[] as &[&OsStr]).await.is_ok());
+
+        h.test.process_cb.set(code);
+        assert_eq!(
+            run_script("", &[] as &[&OsStr])
+                .await
+                .unwrap_err()
+                .to_string(),
+            "Exited 1"
+        );
+
+        h.test.process_cb.set(exit);
+        assert_eq!(
+            run_script("", &[] as &[&OsStr])
+                .await
+                .unwrap_err()
+                .to_string(),
+            "oops!"
+        );
+    }
 }

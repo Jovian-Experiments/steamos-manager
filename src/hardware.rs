@@ -6,10 +6,12 @@
  */
 
 use anyhow::{Error, Result};
+use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
 
 use crate::path;
+use crate::process::script_exit_code;
 
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
@@ -19,6 +21,13 @@ pub enum HardwareVariant {
     Unknown,
     Jupiter,
     Galileo,
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+pub enum HardwareCurrentlySupported {
+    Unsupported = 0,
+    Supported = 1,
 }
 
 impl FromStr for HardwareVariant {
@@ -32,6 +41,30 @@ impl FromStr for HardwareVariant {
     }
 }
 
+impl TryFrom<u32> for HardwareCurrentlySupported {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == HardwareCurrentlySupported::Unsupported as u32 => {
+                Ok(HardwareCurrentlySupported::Unsupported)
+            }
+            x if x == HardwareCurrentlySupported::Supported as u32 => {
+                Ok(HardwareCurrentlySupported::Supported)
+            }
+            _ => Err("No enum match for value {v}"),
+        }
+    }
+}
+
+impl fmt::Display for HardwareCurrentlySupported {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            HardwareCurrentlySupported::Unsupported => write!(f, "Unsupported"),
+            HardwareCurrentlySupported::Supported => write!(f, "Supported"),
+        }
+    }
+}
+
 pub async fn variant() -> Result<HardwareVariant> {
     let board_vendor = fs::read_to_string(path(BOARD_VENDOR_PATH)).await?;
     if board_vendor.trim_end() != "Valve" {
@@ -42,6 +75,17 @@ pub async fn variant() -> Result<HardwareVariant> {
     HardwareVariant::from_str(board_name.trim_end())
 }
 
+pub async fn check_support() -> Result<HardwareCurrentlySupported> {
+    // Run jupiter-check-support note this script does exit 1 for "Support: No" case
+    // so no need to parse output, etc.
+    let res = script_exit_code("/usr/bin/jupiter-check-support", &[] as &[String; 0]).await?;
+
+    Ok(match res {
+        0 => HardwareCurrentlySupported::Supported,
+        _ => HardwareCurrentlySupported::Unsupported,
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -50,7 +94,7 @@ mod test {
 
     #[tokio::test]
     async fn board_lookup() {
-        let h = testing::start();
+        let _h = testing::start();
 
         create_dir_all(crate::path("/sys/class/dmi/id"))
             .await
