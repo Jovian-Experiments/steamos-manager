@@ -17,7 +17,7 @@ use crate::power::{
     get_gpu_clocks, get_gpu_performance_level, get_tdp_limit, set_gpu_clocks,
     set_gpu_performance_level, set_tdp_limit, GPUPerformanceLevel,
 };
-use crate::process::{run_script, script_output};
+use crate::process::{run_script, script_output, ProcessManager};
 use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
@@ -38,6 +38,8 @@ pub struct SteamOSManager {
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
     should_trace: bool,
+    // Used by ProcessManager but need to only have one of these
+    next_process: u32,
 }
 
 impl SteamOSManager {
@@ -47,6 +49,7 @@ impl SteamOSManager {
             connection,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
+            next_process: 0,
         })
     }
 }
@@ -142,47 +145,60 @@ impl SteamOSManager {
         }
     }
 
-    async fn update_bios(&self) -> zbus::fdo::Result<()> {
+    async fn update_bios(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Update the bios as needed
-        run_script("/usr/bin/jupiter-biosupdate", &["--auto"])
-            .await
-            .inspect_err(|message| error!("Error updating BIOS: {message}"))
-            .map_err(to_zbus_fdo_error)
-    }
-
-    async fn update_dock(&self) -> zbus::fdo::Result<()> {
-        // Update the dock firmware as needed
-        run_script(
-            "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
-            &[] as &[String; 0],
+        ProcessManager::get_command_object_path(
+            "/usr/bin/jupiter-biosupdate",
+            &["--auto"],
+            &mut self.connection,
+            &mut self.next_process,
+            "updating BIOS",
         )
         .await
-        .inspect_err(|message| error!("Error updating dock: {message}"))
-        .map_err(to_zbus_fdo_error)
     }
 
-    async fn trim_devices(&self) -> zbus::fdo::Result<()> {
+    async fn update_dock(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+        // Update the dock firmware as needed
+        ProcessManager::get_command_object_path(
+            "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
+            &[] as &[String; 0],
+            &mut self.connection,
+            &mut self.next_process,
+            "updating dock",
+        )
+        .await
+    }
+
+    async fn trim_devices(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Run steamos-trim-devices script
-        run_script("/usr/lib/hwsupport/trim-devices.sh", &[] as &[String; 0])
-            .await
-            .inspect_err(|message| error!("Error updating trimming devices: {message}"))
-            .map_err(to_zbus_fdo_error)
+        ProcessManager::get_command_object_path(
+            "/usr/lib/hwsupport/trim-devices.sh",
+            &[] as &[String; 0],
+            &mut self.connection,
+            &mut self.next_process,
+            "trimming devices",
+        )
+        .await
     }
 
     async fn format_device(
-        &self,
+        &mut self,
         device: &str,
         label: &str,
         validate: bool,
-    ) -> zbus::fdo::Result<()> {
+    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         let mut args = vec!["--label", label, "--device", device];
         if !validate {
             args.push("--skip-validation");
         }
-        run_script("/usr/lib/hwsupport/format-device.sh", args.as_ref())
-            .await
-            .inspect_err(|message| error!("Error formatting {device}: {message}"))
-            .map_err(to_zbus_fdo_error)
+        ProcessManager::get_command_object_path(
+            "/usr/lib/hwsupport/format-device.sh",
+            args.as_ref(),
+            &mut self.connection,
+            &mut self.next_process,
+            format!("formatting {device}").as_str(),
+        )
+        .await
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
