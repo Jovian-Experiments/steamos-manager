@@ -200,20 +200,17 @@ impl SteamOSManager {
 
     async fn update_bios(&self) -> zbus::fdo::Result<()> {
         // Update the bios as needed
-        run_script(
-            "/usr/bin/steamos-polkit-helpers/jupiter-biosupdate",
-            &["--auto"],
-        )
-        .await
-        .inspect_err(|message| error!("Error updating BIOS: {message}"))
-        .map_err(anyhow_to_zbus_fdo)
+        run_script("/usr/bin/jupiter-biosupdate", &["--auto"])
+            .await
+            .inspect_err(|message| error!("Error updating BIOS: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
     }
 
     async fn update_dock(&self) -> zbus::fdo::Result<()> {
         // Update the dock firmware as needed
         run_script(
-            "/usr/bin/steamos-polkit-helpers/jupiter-dock-updater",
-            &[""],
+            "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
+            &[] as &[String; 0],
         )
         .await
         .inspect_err(|message| error!("Error updating dock: {message}"))
@@ -222,13 +219,10 @@ impl SteamOSManager {
 
     async fn trim_devices(&self) -> zbus::fdo::Result<()> {
         // Run steamos-trim-devices script
-        run_script(
-            "/usr/bin/steamos-polkit-helpers/steamos-trim-devices",
-            &[""],
-        )
-        .await
-        .inspect_err(|message| error!("Error updating trimming devices: {message}"))
-        .map_err(anyhow_to_zbus_fdo)
+        run_script("/usr/lib/hwsupport/trim-devices.sh", &[] as &[String; 0])
+            .await
+            .inspect_err(|message| error!("Error updating trimming devices: {message}"))
+            .map_err(anyhow_to_zbus_fdo)
     }
 
     async fn format_device(
