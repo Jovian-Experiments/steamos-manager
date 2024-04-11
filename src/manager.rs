@@ -201,7 +201,7 @@ impl SteamOSManager {
     async fn update_bios(&self) -> zbus::fdo::Result<()> {
         // Update the bios as needed
         run_script(
-            "/usr/bin/steamos-potlkit-helpers/jupiter-biosupdate",
+            "/usr/bin/steamos-polkit-helpers/jupiter-biosupdate",
             &["--auto"],
         )
         .await
