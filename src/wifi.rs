@@ -136,7 +136,10 @@ pub async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
         fs::write(path(OVERRIDE_PATH), OVERRIDE_CONTENTS).await
     } else {
         // Delete it
-        fs::remove_file(path(OVERRIDE_PATH)).await
+        match fs::remove_file(path(OVERRIDE_PATH)).await {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            res => res,
+        }
     }
 }
 
@@ -243,12 +246,53 @@ pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
 mod test {
     use super::*;
     use crate::testing;
-    use tokio::fs::{create_dir_all, write};
+    use tokio::fs::{create_dir_all, read_to_string, remove_dir, try_exists, write};
 
-    #[tokio::test]
-    async fn test_wifi_backend_to_string() {
+    fn test_wifi_backend_to_string() {
         assert_eq!(WifiBackend::Iwd.to_string(), "iwd");
         assert_eq!(WifiBackend::WPASupplicant.to_string(), "wpa_supplicant");
+    }
+
+    #[tokio::test]
+    async fn test_setup_iwd_config() {
+        let _h = testing::start();
+
+        // Remove with no dir
+        assert!(setup_iwd_config(false).await.is_ok());
+
+        create_dir_all(path(OVERRIDE_FOLDER))
+            .await
+            .expect("create_dir_all");
+
+        // Remove with dir but no file
+        assert!(setup_iwd_config(false).await.is_ok());
+
+        // Remove with dir and file
+        write(path(OVERRIDE_PATH), "").await.expect("write");
+        assert!(try_exists(path(OVERRIDE_PATH)).await.unwrap());
+
+        assert!(setup_iwd_config(false).await.is_ok());
+        assert!(!try_exists(path(OVERRIDE_PATH)).await.unwrap());
+
+        // Double remove
+        assert!(setup_iwd_config(false).await.is_ok());
+
+        // Create with no dir
+        remove_dir(path(OVERRIDE_FOLDER)).await.expect("remove_dir");
+
+        assert!(setup_iwd_config(true).await.is_ok());
+        assert_eq!(
+            read_to_string(path(OVERRIDE_PATH)).await.unwrap(),
+            OVERRIDE_CONTENTS
+        );
+
+        // Create with dir
+        assert!(setup_iwd_config(false).await.is_ok());
+        assert!(setup_iwd_config(true).await.is_ok());
+        assert_eq!(
+            read_to_string(path(OVERRIDE_PATH)).await.unwrap(),
+            OVERRIDE_CONTENTS
+        );
     }
 
     #[tokio::test]
