@@ -21,8 +21,8 @@ use crate::power::{
 use crate::process::{run_script, script_output};
 use crate::systemd::SystemdUnit;
 use crate::wifi::{
-    get_wifi_backend, set_wifi_backend, set_wifi_debug_mode, WifiBackend, WifiDebugMode,
-    WifiPowerManagement,
+    get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
+    set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
 use crate::{anyhow_to_zbus, anyhow_to_zbus_fdo};
 
@@ -95,19 +95,10 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
-        let output = script_output("/usr/bin/iwconfig", &["wlan0"])
-            .await
-            .map_err(anyhow_to_zbus_fdo)?;
-        for line in output.lines() {
-            return Ok(match line.trim() {
-                "Power Management:on" => WifiPowerManagement::Enabled as u32,
-                "Power Management:off" => WifiPowerManagement::Disabled as u32,
-                _ => continue,
-            });
+        match get_wifi_power_management_state().await {
+            Ok(state) => Ok(state as u32),
+            Err(e) => Err(anyhow_to_zbus_fdo(e)),
         }
-        Err(zbus::fdo::Error::Failed(String::from(
-            "Failed to query power management state",
-        )))
     }
 
     #[zbus(property)]
@@ -116,14 +107,8 @@ impl SteamOSManager {
             Ok(state) => state,
             Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
         };
-        let state = match state {
-            WifiPowerManagement::Disabled => "off",
-            WifiPowerManagement::Enabled => "on",
-        };
-
-        run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
+        set_wifi_power_management_state(state)
             .await
-            .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
             .map_err(anyhow_to_zbus)
     }
 
@@ -329,16 +314,6 @@ impl SteamOSManager {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         // Return false on error
-        match get_wifi_backend().await {
-            Ok(WifiBackend::Iwd) => (),
-            Ok(backend) => {
-                return Err(zbus::fdo::Error::Failed(format!(
-                    "Setting wifi debug mode not supported when backend is {backend}",
-                )));
-            }
-            Err(e) => return Err(anyhow_to_zbus_fdo(e)),
-        }
-
         let wanted_mode = match WifiDebugMode::try_from(mode) {
             Ok(mode) => mode,
             Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),

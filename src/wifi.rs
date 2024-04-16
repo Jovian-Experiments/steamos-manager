@@ -13,7 +13,7 @@ use tracing::error;
 use zbus::Connection;
 
 use crate::path;
-use crate::process::run_script;
+use crate::process::{run_script, script_output};
 use crate::systemd::{daemon_reload, SystemdUnit};
 
 const OVERRIDE_CONTENTS: &str = "[Service]
@@ -180,9 +180,11 @@ pub async fn set_wifi_debug_mode(
     should_trace: bool,
     connection: Connection,
 ) -> Result<()> {
-    // Set the wifi debug mode to mode, using an int for flexibility going forward but only
-    // doing things on 0 or 1 for now
-    // Return false on error
+    match get_wifi_backend().await {
+        Ok(WifiBackend::Iwd) => (),
+        Ok(backend) => bail!("Setting wifi debug mode not supported when backend is {backend}"),
+        Err(e) => return Err(e),
+    }
 
     match mode {
         WifiDebugMode::Off => {
@@ -240,6 +242,29 @@ pub async fn get_wifi_backend() -> Result<WifiBackend> {
 
 pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
     run_script("/usr/bin/steamos-wifi-set-backend", &[backend.to_string()]).await
+}
+
+pub async fn get_wifi_power_management_state() -> Result<WifiPowerManagement> {
+    let output = script_output("/usr/bin/iwconfig", &["wlan0"]).await?;
+    for line in output.lines() {
+        return Ok(match line.trim() {
+            "Power Management:on" => WifiPowerManagement::Enabled,
+            "Power Management:off" => WifiPowerManagement::Disabled,
+            _ => continue,
+        });
+    }
+    bail!("Failed to query power management state")
+}
+
+pub async fn set_wifi_power_management_state(state: WifiPowerManagement) -> Result<()> {
+    let state = match state {
+        WifiPowerManagement::Disabled => "off",
+        WifiPowerManagement::Enabled => "on",
+    };
+
+    run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
+        .await
+        .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
 }
 
 #[cfg(test)]
