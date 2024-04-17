@@ -143,10 +143,7 @@ pub async fn get_gpu_clocks() -> Result<u32> {
             _ => break,
         };
 
-        match mhz.parse() {
-            Ok(mhz) => return Ok(mhz),
-            Err(e) => return Err(e.into()),
-        }
+        return Ok(mhz.parse()?);
     }
     Err(anyhow!("Couldn't find GPU clocks"))
 }
