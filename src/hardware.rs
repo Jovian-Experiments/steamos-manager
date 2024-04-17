@@ -9,9 +9,11 @@ use anyhow::{Error, Result};
 use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
+use zbus::Connection;
 
 use crate::path;
 use crate::process::script_exit_code;
+use crate::systemd::SystemdUnit;
 
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
@@ -28,6 +30,13 @@ pub enum HardwareVariant {
 pub enum HardwareCurrentlySupported {
     Unsupported = 0,
     Supported = 1,
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+pub enum FanControlState {
+    Bios = 0,
+    Os = 1,
 }
 
 impl FromStr for HardwareVariant {
@@ -65,6 +74,26 @@ impl fmt::Display for HardwareCurrentlySupported {
     }
 }
 
+impl TryFrom<u32> for FanControlState {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == FanControlState::Bios as u32 => Ok(FanControlState::Bios),
+            x if x == FanControlState::Os as u32 => Ok(FanControlState::Os),
+            _ => Err("No enum match for value {v}"),
+        }
+    }
+}
+
+impl fmt::Display for FanControlState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FanControlState::Bios => write!(f, "BIOS"),
+            FanControlState::Os => write!(f, "OS"),
+        }
+    }
+}
+
 pub async fn variant() -> Result<HardwareVariant> {
     let board_vendor = fs::read_to_string(path(BOARD_VENDOR_PATH)).await?;
     if board_vendor.trim_end() != "Valve" {
@@ -84,6 +113,36 @@ pub async fn check_support() -> Result<HardwareCurrentlySupported> {
         0 => HardwareCurrentlySupported::Supported,
         _ => HardwareCurrentlySupported::Unsupported,
     })
+}
+
+pub struct FanControl {
+    connection: Connection,
+}
+
+impl FanControl {
+    pub fn new(connection: Connection) -> FanControl {
+        FanControl { connection }
+    }
+
+    pub async fn get_state(&self) -> Result<FanControlState> {
+        let jupiter_fan_control =
+            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice").await?;
+        let active = jupiter_fan_control.active().await?;
+        Ok(match active {
+            true => FanControlState::Os,
+            false => FanControlState::Bios,
+        })
+    }
+
+    pub async fn set_state(&self, state: FanControlState) -> Result<()> {
+        // Run what steamos-polkit-helpers/jupiter-fan-control does
+        let jupiter_fan_control =
+            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice").await?;
+        match state {
+            FanControlState::Os => jupiter_fan_control.start().await,
+            FanControlState::Bios => jupiter_fan_control.stop().await,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -7,19 +7,17 @@
  */
 
 use anyhow::Result;
-use std::fmt;
 use tokio::fs::File;
 use tracing::error;
 use zbus::zvariant::Fd;
 use zbus::{interface, Connection, SignalContext};
 
-use crate::hardware::{check_support, variant, HardwareVariant};
+use crate::hardware::{check_support, variant, FanControl, FanControlState, HardwareVariant};
 use crate::power::{
     get_gpu_clocks, get_gpu_performance_level, get_tdp_limit, set_gpu_clocks,
     set_gpu_performance_level, set_tdp_limit, GPUPerformanceLevel,
 };
 use crate::process::{run_script, script_output};
-use crate::systemd::SystemdUnit;
 use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
@@ -33,36 +31,10 @@ enum PrepareFactoryReset {
     RebootRequired = 1,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
-#[repr(u32)]
-enum FanControl {
-    Bios = 0,
-    Os = 1,
-}
-
-impl TryFrom<u32> for FanControl {
-    type Error = &'static str;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == FanControl::Bios as u32 => Ok(FanControl::Bios),
-            x if x == FanControl::Os as u32 => Ok(FanControl::Os),
-            _ => Err("No enum match for value {v}"),
-        }
-    }
-}
-
-impl fmt::Display for FanControl {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FanControl::Bios => write!(f, "BIOS"),
-            FanControl::Os => write!(f, "OS"),
-        }
-    }
-}
-
 pub struct SteamOSManager {
     connection: Connection,
     wifi_debug_mode: WifiDebugMode,
+    fan_control: FanControl,
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
     should_trace: bool,
@@ -71,6 +43,7 @@ pub struct SteamOSManager {
 impl SteamOSManager {
     pub async fn new(connection: Connection) -> Result<Self> {
         Ok(SteamOSManager {
+            fan_control: FanControl::new(connection.clone()),
             connection,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
@@ -114,36 +87,24 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
-        let jupiter_fan_control =
-            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
-                .await
-                .map_err(anyhow_to_zbus_fdo)?;
-        let active = jupiter_fan_control
-            .active()
+        Ok(self
+            .fan_control
+            .get_state()
             .await
-            .map_err(anyhow_to_zbus_fdo)?;
-        Ok(match active {
-            true => FanControl::Os as u32,
-            false => FanControl::Bios as u32,
-        })
+            .map_err(anyhow_to_zbus_fdo)? as u32)
     }
 
     #[zbus(property)]
     async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
-        let state = match FanControl::try_from(state) {
+        let state = match FanControlState::try_from(state) {
             Ok(state) => state,
             Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
         };
         // Run what steamos-polkit-helpers/jupiter-fan-control does
-        let jupiter_fan_control =
-            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice")
-                .await
-                .map_err(anyhow_to_zbus)?;
-        match state {
-            FanControl::Os => jupiter_fan_control.start().await,
-            FanControl::Bios => jupiter_fan_control.stop().await,
-        }
-        .map_err(anyhow_to_zbus)
+        self.fan_control
+            .set_state(state)
+            .await
+            .map_err(anyhow_to_zbus)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
