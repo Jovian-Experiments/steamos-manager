@@ -274,7 +274,6 @@ impl SteamOSManager {
     ) -> zbus::fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
-        // Return false on error
         let wanted_mode = match WifiDebugMode::try_from(mode) {
             Ok(mode) => mode,
             Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
