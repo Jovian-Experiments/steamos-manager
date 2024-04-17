@@ -507,7 +507,7 @@ mod test {
 
         symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
         let f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(2).await;
+        nyield(3).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "1\n"
