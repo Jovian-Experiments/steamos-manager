@@ -6,7 +6,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
-use tokio::fs;
+use tokio::fs::{self, read_dir, read_link};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
@@ -37,10 +37,10 @@ impl HidNode {
 
     async fn get_nodes(&self) -> Result<Vec<PathBuf>> {
         let mut entries = Vec::new();
-        let mut dir = fs::read_dir(self.sys_base().join("input")).await?;
+        let mut dir = read_dir(self.sys_base().join("input")).await?;
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
-            let mut dir = fs::read_dir(&path).await?;
+            let mut dir = read_dir(&path).await?;
             while let Some(entry) = dir.next_entry().await? {
                 if entry
                     .path()
@@ -58,7 +58,7 @@ impl HidNode {
 
     async fn can_inhibit(&self) -> bool {
         debug!("Checking if hidraw{} can be inhibited", self.id);
-        let driver = match fs::read_link(self.sys_base().join("driver")).await {
+        let driver = match read_link(self.sys_base().join("driver")).await {
             Ok(driver) => driver,
             Err(e) => {
                 warn!(
@@ -92,7 +92,7 @@ impl HidNode {
 
     async fn check(&self) -> Result<()> {
         let hidraw = self.hidraw();
-        let mut dir = fs::read_dir(path("/proc")).await?;
+        let mut dir = read_dir(path("/proc")).await?;
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
             let proc = match path.file_name().map(|p| p.to_str()) {
@@ -103,7 +103,7 @@ impl HidNode {
                 Ok(i) => i,
                 _ => continue,
             };
-            let mut fds = match fs::read_dir(path.join("fd")).await {
+            let mut fds = match read_dir(path.join("fd")).await {
                 Ok(fds) => fds,
                 Err(e) => {
                     debug!("Process {proc} disappeared while scanning: {e}");
@@ -111,7 +111,7 @@ impl HidNode {
                 }
             };
             while let Ok(Some(f)) = fds.next_entry().await {
-                let path = match fs::read_link(f.path()).await {
+                let path = match read_link(f.path()).await {
                     Ok(p) => p,
                     Err(e) => {
                         debug!("Process {proc} disappeared while scanning: {e}");
@@ -183,7 +183,7 @@ impl Inhibitor {
             }
         };
 
-        let mut dir = fs::read_dir(path("/dev")).await?;
+        let mut dir = read_dir(path("/dev")).await?;
         while let Some(entry) = dir.next_entry().await? {
             if let Err(e) = inhibitor.watch(entry.path().as_path()).await {
                 error!("Encountered error attempting to watch: {e}");
