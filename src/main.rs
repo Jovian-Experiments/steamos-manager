@@ -6,7 +6,9 @@
  */
 
 use anyhow::{anyhow, bail, Error, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -74,6 +76,12 @@ pub fn path<S: AsRef<str>>(path: S) -> PathBuf {
     let test_path = current_test.path();
     PathBuf::from(test_path.as_os_str().to_str().unwrap())
         .join(path.as_ref().trim_start_matches('/'))
+}
+
+pub async fn write_synced<P: AsRef<Path>>(path: P, bytes: &[u8]) -> Result<()> {
+    let mut file = File::create(path.as_ref()).await?;
+    file.write_all(bytes).await?;
+    Ok(file.sync_data().await?)
 }
 
 pub fn read_comm(pid: u32) -> Result<String> {

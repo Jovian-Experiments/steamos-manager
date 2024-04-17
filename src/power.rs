@@ -12,7 +12,7 @@ use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::error;
 
-use crate::path;
+use crate::{path, write_synced};
 
 const GPU_HWMON_PREFIX: &str = "/sys/class/drm/card0/device/hwmon";
 
@@ -84,17 +84,10 @@ pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
 }
 
 pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
-    let mut myfile = File::create(path(GPU_PERFORMANCE_LEVEL_PATH))
-        .await
-        .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
-
     let level: String = level.to_string();
-
-    myfile
-        .write_all(level.as_bytes())
+    write_synced(path(GPU_PERFORMANCE_LEVEL_PATH), level.as_bytes())
         .await
-        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
-    Ok(())
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
 
 pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
@@ -111,17 +104,21 @@ pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
         .write(data.as_bytes())
         .await
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+    myfile.flush().await?;
 
     let data = format!("s 1 {clocks}\n");
     myfile
         .write(data.as_bytes())
         .await
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+    myfile.flush().await?;
 
     myfile
         .write("c\n".as_bytes())
         .await
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
+    myfile.flush().await?;
+
     Ok(())
 }
 
@@ -181,21 +178,18 @@ pub async fn set_tdp_limit(limit: u32) -> Result<()> {
     let data = format!("{limit}000000");
 
     let base = find_hwmon().await?;
-    let mut power1file = File::create(base.join(TDP_LIMIT1))
+    write_synced(base.join(TDP_LIMIT1), data.as_bytes())
         .await
         .inspect_err(|message| {
             error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
         })?;
-    power1file
-        .write(data.as_bytes())
-        .await
-        .inspect_err(|message| error!("Error writing to power1_cap file: {message}"))?;
 
     if let Ok(mut power2file) = File::create(base.join(TDP_LIMIT2)).await {
         power2file
             .write(data.as_bytes())
             .await
             .inspect_err(|message| error!("Error writing to power2_cap file: {message}"))?;
+        power2file.flush().await?;
     }
     Ok(())
 }
