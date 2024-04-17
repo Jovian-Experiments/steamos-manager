@@ -273,6 +273,7 @@ mod test {
     use crate::testing;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, try_exists, write};
 
+    #[test]
     fn test_wifi_backend_to_string() {
         assert_eq!(WifiBackend::Iwd.to_string(), "iwd");
         assert_eq!(WifiBackend::WPASupplicant.to_string(), "wpa_supplicant");
