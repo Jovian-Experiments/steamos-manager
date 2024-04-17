@@ -10,7 +10,7 @@ use tokio::fs;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
-use crate::{path, Service};
+use crate::{path, write_synced, Service};
 
 struct HidNode {
     id: u32,
@@ -142,9 +142,9 @@ impl HidNode {
     async fn inhibit(&self) -> Result<()> {
         let mut res = Ok(());
         for node in self.get_nodes().await?.into_iter() {
-            if let Err(err) = fs::write(node, "1\n").await {
+            if let Err(err) = write_synced(node, b"1\n").await {
                 error!("Encountered error inhibiting: {err}");
-                res = Err(err.into());
+                res = Err(err);
             }
         }
         res
@@ -153,9 +153,9 @@ impl HidNode {
     async fn uninhibit(&self) -> Result<()> {
         let mut res = Ok(());
         for node in self.get_nodes().await?.into_iter() {
-            if let Err(err) = fs::write(node, "0\n").await {
+            if let Err(err) = write_synced(node, b"0\n").await {
                 error!("Encountered error inhibiting: {err}");
-                res = Err(err.into());
+                res = Err(err);
             }
         }
         res
