@@ -30,6 +30,8 @@ mod wifi;
 #[cfg(test)]
 mod testing;
 
+const API_VERSION: u32 = 7;
+
 trait Service
 where
     Self: Sized + Send,

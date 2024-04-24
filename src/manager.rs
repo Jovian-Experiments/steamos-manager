@@ -22,7 +22,7 @@ use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
-use crate::{to_zbus_error, to_zbus_fdo_error};
+use crate::{to_zbus_error, to_zbus_fdo_error, API_VERSION};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -55,8 +55,6 @@ const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-
 
 #[interface(name = "com.steampowered.SteamOSManager1.Manager")]
 impl SteamOSManager {
-    const API_VERSION: u32 = 7;
-
     async fn prepare_factory_reset(&self) -> u32 {
         // Run steamos factory reset script and return true on success
         let res = run_script("/usr/bin/steamos-factory-reset-config", &[""]).await;
@@ -327,7 +325,7 @@ impl SteamOSManager {
     /// A version property.
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
-        SteamOSManager::API_VERSION
+        API_VERSION
     }
 }
 
@@ -472,7 +470,7 @@ mod test {
     async fn version() {
         let test = start("Version").await;
         let proxy = VersionProxy::new(&test.connection).await.unwrap();
-        assert_eq!(proxy.version().await, Ok(SteamOSManager::API_VERSION));
+        assert_eq!(proxy.version().await, Ok(API_VERSION));
     }
 
     fn collect_methods<'a>(methods: &'a [Method<'a>]) -> HashMap<String, &'a Method<'a>> {
