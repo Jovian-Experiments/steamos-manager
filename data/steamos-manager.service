@@ -7,7 +7,7 @@ After=steamos-log-submitter.service
 Type=dbus
 BusName=com.steampowered.SteamOSManager1
 Environment=RUST_LOG='INFO'
-ExecStart=/usr/lib/steamos-manager
+ExecStart=/usr/lib/steamos-manager -r
 Restart=on-failure
 RestartSec=1
 
