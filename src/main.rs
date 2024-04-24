@@ -7,6 +7,7 @@
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -14,6 +15,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+mod daemon;
 mod ds_inhibit;
 mod hardware;
 mod manager;
@@ -29,32 +31,34 @@ mod testing;
 
 trait Service
 where
-    Self: Sized,
+    Self: Sized + Send,
 {
     const NAME: &'static str;
 
-    async fn run(&mut self) -> Result<()>;
+    fn run(&mut self) -> impl Future<Output = Result<()>> + Send;
 
-    async fn shutdown(&mut self) -> Result<()> {
-        Ok(())
+    fn shutdown(&mut self) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
     }
 
-    async fn start(mut self, token: CancellationToken) -> Result<()> {
-        info!("Starting {}", Self::NAME);
-        let res = tokio::select! {
-            r = self.run() => r,
-            _ = token.cancelled() => Ok(()),
-        };
-        if res.is_err() {
-            warn!(
-                "{} encountered an error: {}",
-                Self::NAME,
-                res.as_ref().unwrap_err()
-            );
-            token.cancel();
+    fn start(mut self, token: CancellationToken) -> impl Future<Output = Result<()>> + Send {
+        async move {
+            info!("Starting {}", Self::NAME);
+            let res = tokio::select! {
+                r = self.run() => r,
+                _ = token.cancelled() => Ok(()),
+            };
+            if res.is_err() {
+                warn!(
+                    "{} encountered an error: {}",
+                    Self::NAME,
+                    res.as_ref().unwrap_err()
+                );
+                token.cancel();
+            }
+            info!("Shutting down {}", Self::NAME);
+            self.shutdown().await.and(res)
         }
-        info!("Shutting down {}", Self::NAME);
-        self.shutdown().await.and(res)
     }
 }
 
@@ -62,7 +66,7 @@ where
 struct Args {
     /// Run the root manager daemon
     #[arg(short, long)]
-    root: bool
+    root: bool,
 }
 
 #[cfg(not(test))]
