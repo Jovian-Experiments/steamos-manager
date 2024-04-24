@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use tokio::signal::unix::{signal, Signal, SignalKind};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -58,6 +58,11 @@ impl Daemon {
     }
 
     pub async fn run(&mut self) -> Result<()> {
+        ensure!(
+            !self.services.is_empty(),
+            "Can't run a daemon with no services attached."
+        );
+
         let mut res = tokio::select! {
             e = self.services.join_next() => match e.unwrap() {
                 Ok(Ok(())) => Ok(()),

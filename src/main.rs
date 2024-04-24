@@ -24,6 +24,7 @@ mod process;
 mod root;
 mod sls;
 mod systemd;
+mod user;
 mod wifi;
 
 #[cfg(test)]
@@ -157,7 +158,7 @@ pub async fn main() -> Result<()> {
     if args.root {
         root::daemon().await
     } else {
-        todo!();
+        user::daemon().await
     }
 }
 
