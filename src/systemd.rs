@@ -4,6 +4,7 @@
  *
  * SPDX-License-Identifier: MIT
  */
+#![allow(dead_code)]
 
 use anyhow::{anyhow, Result};
 use std::path::PathBuf;
@@ -29,11 +30,38 @@ trait SystemdUnit {
     default_path = "/org/freedesktop/systemd1"
 )]
 trait SystemdManager {
+    async fn enable_unit_files(
+        &self,
+        files: &[&str],
+        runtime: bool,
+        force: bool,
+    ) -> Result<(bool, Vec<(String, String, String)>)>;
+
+    async fn disable_unit_files(
+        &self,
+        files: &[&str],
+        runtime: bool,
+    ) -> Result<Vec<(String, String, String)>>;
+
+    async fn mask_unit_files(
+        &self,
+        files: &[&str],
+        runtime: bool,
+    ) -> Result<Vec<(String, String, String)>>;
+
+    async fn unmask_unit_files(
+        &self,
+        files: &[&str],
+        runtime: bool,
+    ) -> Result<Vec<(String, String, String)>>;
+
     async fn reload(&self) -> Result<()>;
 }
 
 pub struct SystemdUnit<'dbus> {
+    connection: Connection,
     proxy: SystemdUnitProxy<'dbus>,
+    name: String,
 }
 
 pub async fn daemon_reload(connection: &Connection) -> Result<()> {
@@ -44,7 +72,7 @@ pub async fn daemon_reload(connection: &Connection) -> Result<()> {
 
 impl<'dbus> SystemdUnit<'dbus> {
     pub async fn new(connection: Connection, name: &str) -> Result<SystemdUnit<'dbus>> {
-        let path = PathBuf::from("/org/freedesktop/systemd1/unit").join(name);
+        let path = PathBuf::from("/org/freedesktop/systemd1/unit").join(escape(name));
         let path = String::from(path.to_str().ok_or(anyhow!("Unit name {name} invalid"))?);
         Ok(SystemdUnit {
             proxy: SystemdUnitProxy::builder(&connection)
@@ -52,6 +80,8 @@ impl<'dbus> SystemdUnit<'dbus> {
                 .path(path)?
                 .build()
                 .await?,
+            connection,
+            name: String::from(name),
         })
     }
 
@@ -70,7 +100,55 @@ impl<'dbus> SystemdUnit<'dbus> {
         Ok(())
     }
 
+    pub async fn enable(&self) -> Result<bool> {
+        let manager = SystemdManagerProxy::new(&self.connection).await?;
+        let (_, res) = manager.enable_unit_files(&[self.name.as_str()], false, false).await?;
+        Ok(res.len() > 0)
+    }
+
+    pub async fn disable(&self) -> Result<bool> {
+        let manager = SystemdManagerProxy::new(&self.connection).await?;
+        let res = manager.disable_unit_files(&[self.name.as_str()], false).await?;
+        Ok(res.len() > 0)
+    }
+
+    pub async fn mask(&self) -> Result<bool> {
+        let manager = SystemdManagerProxy::new(&self.connection).await?;
+        let res = manager.mask_unit_files(&[self.name.as_str()], false).await?;
+        Ok(res.len() > 0)
+    }
+
+    pub async fn unmask(&self) -> Result<bool> {
+        let manager = SystemdManagerProxy::new(&self.connection).await?;
+        let res = manager.unmask_unit_files(&[self.name.as_str()], false).await?;
+        Ok(res.len() > 0)
+    }
+
     pub async fn active(&self) -> Result<bool> {
         Ok(self.proxy.active_state().await? == "active")
+    }
+}
+
+pub fn escape(name: &str) -> String {
+    let mut parts = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            parts.push(c);
+        } else {
+            let escaped = format!("_{:02x}", u32::from(c));
+            parts.push_str(escaped.as_str());
+        }
+    }
+    parts
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_escape() {
+        assert_eq!(escape("systemd"), "systemd");
+        assert_eq!(escape("system d"), "system_20d");
     }
 }

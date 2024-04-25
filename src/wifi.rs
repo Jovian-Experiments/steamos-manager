@@ -151,7 +151,7 @@ async fn restart_iwd(connection: Connection) -> Result<()> {
         .inspect_err(|message| error!("restart_iwd: reload systemd got an error: {message}"))?;
 
     // worked, now restart iwd
-    let unit = SystemdUnit::new(connection, "iwd_2eservice").await?;
+    let unit = SystemdUnit::new(connection, "iwd.service").await?;
     unit.restart()
         .await
         .inspect_err(|message| error!("restart_iwd: restart unit got an error: {message}"))
