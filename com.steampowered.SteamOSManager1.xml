@@ -12,7 +12,7 @@
 
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
   <!--
-      com.steampowered.SteamOSManager1
+      com.steampowered.SteamOSManager1.Manager
       @short_description: Interface to control various aspects of SteamOS
   -->
   <interface name="com.steampowered.SteamOSManager1.Manager">
@@ -147,7 +147,7 @@
     </method>
 
     <!--
-        SetGpuPerformanceLevel:
+        GPUPerformanceLevel:
 
         The current GPU performance level.
 
