@@ -21,4 +21,5 @@ tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+# pinning to 4.1.2 until a fix for https://github.com/dbus2/zbus/issues/764 gets released
+zbus = { version = "4.1", default-features = false, features = ["tokio"] }
