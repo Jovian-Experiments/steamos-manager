@@ -13,11 +13,17 @@ use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
 use crate::daemon::Daemon;
+use crate::user_manager::SteamOSManagerUser;
 
 async fn create_connection() -> Result<Connection> {
     let connection = ConnectionBuilder::session()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
+        .await?;
+    let manager = SteamOSManagerUser::new(connection.clone()).await?;
+    connection
+        .object_server()
+        .at("/com/steampowered/SteamOSManager1/User", manager)
         .await?;
     Ok(connection)
 }

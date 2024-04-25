@@ -254,4 +254,25 @@
 
   </interface>
 
+  <!--
+      com.steampowered.SteamOSManager1.UserManager
+      @short_description: Interface to control various aspects of SteamOS running as a user.
+
+	  Version available: 8
+  -->
+  <interface name="com.steampowered.SteamOSManager1.UserManager">
+
+    <!--
+        Version:
+
+        The version of this interface implemented by this object.
+
+        The manager may not support the latest version of the API.
+        Each method/property has an associated version number that
+        denotes in which interface version it first became available.
+    -->
+    <property name="Version" type="u" access="read"/>
+
+  </interface>
+
 </node>

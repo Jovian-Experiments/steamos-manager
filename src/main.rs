@@ -25,12 +25,13 @@ mod root;
 mod sls;
 mod systemd;
 mod user;
+mod user_manager;
 mod wifi;
 
 #[cfg(test)]
 mod testing;
 
-const API_VERSION: u32 = 7;
+const API_VERSION: u32 = 8;
 
 trait Service
 where
