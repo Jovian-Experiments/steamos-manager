@@ -258,9 +258,20 @@
       com.steampowered.SteamOSManager1.UserManager
       @short_description: Interface to control various aspects of SteamOS running as a user.
 
-	  Version available: 8
+      Version available: 8
   -->
   <interface name="com.steampowered.SteamOSManager1.UserManager">
+
+    <!--
+        HdmiCecState:
+
+        The current state of HDMI-CEC features on the system
+
+        Valid states: 0 = Disabled, 1 = Control Only, 2 = Control And Wake
+
+        Version available: 8
+    -->
+    <property name="HdmiCecState" type="u" access="readwrite"/>
 
     <!--
         Version:
@@ -270,6 +281,8 @@
         The manager may not support the latest version of the API.
         Each method/property has an associated version number that
         denotes in which interface version it first became available.
+
+        Version available: 8
     -->
     <property name="Version" type="u" access="read"/>
 

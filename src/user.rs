@@ -43,7 +43,7 @@ pub async fn daemon() -> Result<()> {
             bail!(e);
         }
     };
-    let session = match create_connection().await {
+    let _session = match create_connection().await {
         Ok(c) => c,
         Err(e) => {
             let _guard = tracing::subscriber::set_default(subscriber);

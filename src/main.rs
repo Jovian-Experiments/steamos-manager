@@ -15,6 +15,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+mod cec;
 mod daemon;
 mod ds_inhibit;
 mod hardware;
