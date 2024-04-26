@@ -6,7 +6,7 @@
  */
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use std::path::PathBuf;
 use zbus::zvariant::OwnedObjectPath;
 use zbus::Connection;
@@ -18,6 +18,8 @@ use zbus::Connection;
 trait SystemdUnit {
     #[zbus(property)]
     fn active_state(&self) -> Result<String>;
+    #[zbus(property)]
+    fn unit_file_state(&self) -> Result<String>;
 
     async fn restart(&self, mode: &str) -> Result<OwnedObjectPath>;
     async fn start(&self, mode: &str) -> Result<OwnedObjectPath>;
@@ -56,6 +58,13 @@ trait SystemdManager {
     ) -> Result<Vec<(String, String, String)>>;
 
     async fn reload(&self) -> Result<()>;
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum EnableState {
+    Disbled,
+    Enabled,
+    Masked,
 }
 
 pub struct SystemdUnit<'dbus> {
@@ -102,30 +111,47 @@ impl<'dbus> SystemdUnit<'dbus> {
 
     pub async fn enable(&self) -> Result<bool> {
         let manager = SystemdManagerProxy::new(&self.connection).await?;
-        let (_, res) = manager.enable_unit_files(&[self.name.as_str()], false, false).await?;
+        let (_, res) = manager
+            .enable_unit_files(&[self.name.as_str()], false, false)
+            .await?;
         Ok(res.len() > 0)
     }
 
     pub async fn disable(&self) -> Result<bool> {
         let manager = SystemdManagerProxy::new(&self.connection).await?;
-        let res = manager.disable_unit_files(&[self.name.as_str()], false).await?;
+        let res = manager
+            .disable_unit_files(&[self.name.as_str()], false)
+            .await?;
         Ok(res.len() > 0)
     }
 
     pub async fn mask(&self) -> Result<bool> {
         let manager = SystemdManagerProxy::new(&self.connection).await?;
-        let res = manager.mask_unit_files(&[self.name.as_str()], false).await?;
+        let res = manager
+            .mask_unit_files(&[self.name.as_str()], false)
+            .await?;
         Ok(res.len() > 0)
     }
 
     pub async fn unmask(&self) -> Result<bool> {
         let manager = SystemdManagerProxy::new(&self.connection).await?;
-        let res = manager.unmask_unit_files(&[self.name.as_str()], false).await?;
+        let res = manager
+            .unmask_unit_files(&[self.name.as_str()], false)
+            .await?;
         Ok(res.len() > 0)
     }
 
     pub async fn active(&self) -> Result<bool> {
         Ok(self.proxy.active_state().await? == "active")
+    }
+
+    pub async fn enabled(&self) -> Result<EnableState> {
+        Ok(match self.proxy.unit_file_state().await?.as_str() {
+            "enabled" => EnableState::Enabled,
+            "disabled" => EnableState::Disbled,
+            "masked" => EnableState::Masked,
+            state => bail!("Unknown state {state}"),
+        })
     }
 }
 
