@@ -187,7 +187,7 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property(emits_changed_signal = "false"), name = "GPUPerformanceLevel")]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
         match get_gpu_performance_level().await {
             Ok(level) => Ok(level as u32),
@@ -198,7 +198,7 @@ impl SteamOSManager {
         }
     }
 
-    #[zbus(property, name = "GPUPerformanceLevel")]
+    #[zbus(property)]
     async fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()> {
         let level = match GPUPerformanceLevel::try_from(level) {
             Ok(level) => level,
@@ -210,7 +210,7 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property(emits_changed_signal = "false"), name = "ManualGPUClock")]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
         get_gpu_clocks()
             .await
@@ -218,7 +218,7 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property, name = "ManualGPUClock")]
+    #[zbus(property)]
     async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
         set_gpu_clocks(clocks)
             .await
@@ -226,35 +226,35 @@ impl SteamOSManager {
             .map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMin")]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn manual_gpu_clock_min(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         200
     }
 
-    #[zbus(property(emits_changed_signal = "const"), name = "ManualGPUClockMax")]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn manual_gpu_clock_max(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         1600
     }
 
-    #[zbus(property(emits_changed_signal = "false"), name = "TDPLimit")]
+    #[zbus(property(emits_changed_signal = "false"))]
     async fn tdp_limit(&self) -> zbus::fdo::Result<u32> {
         get_tdp_limit().await.map_err(anyhow_to_zbus_fdo)
     }
 
-    #[zbus(property, name = "TDPLimit")]
+    #[zbus(property)]
     async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
         set_tdp_limit(limit).await.map_err(anyhow_to_zbus)
     }
 
-    #[zbus(property(emits_changed_signal = "const"), name = "TDPLimitMin")]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_min(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         3
     }
 
-    #[zbus(property(emits_changed_signal = "const"), name = "TDPLimitMax")]
+    #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_max(&self) -> u32 {
         // TODO: Can this be queried from somewhere?
         15
@@ -387,23 +387,23 @@ mod test {
 
     #[zbus::proxy(
         interface = "com.steampowered.SteamOSManager1.Manager",
-        default_service = "com.steampowered.SteamOSManager1.Test.GPUPerformanceLevel",
+        default_service = "com.steampowered.SteamOSManager1.Test.GpuPerformanceLevel",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
-    trait GPUPerformanceLevel {
-        #[zbus(property, name = "GPUPerformanceLevel")]
+    trait GpuPerformanceLevel {
+        #[zbus(property)]
         fn gpu_performance_level(&self) -> zbus::Result<u32>;
 
-        #[zbus(property, name = "GPUPerformanceLevel")]
+        #[zbus(property)]
         fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()>;
     }
 
     #[tokio::test]
     async fn gpu_performance_level() {
-        let test = start("GPUPerformanceLevel").await;
+        let test = start("GpuPerformanceLevel").await;
         power::test::setup().await;
 
-        let proxy = GPUPerformanceLevelProxy::new(&test.connection)
+        let proxy = GpuPerformanceLevelProxy::new(&test.connection)
             .await
             .unwrap();
         set_gpu_performance_level(GPUPerformanceLevel::Auto)
@@ -426,22 +426,22 @@ mod test {
 
     #[zbus::proxy(
         interface = "com.steampowered.SteamOSManager1.Manager",
-        default_service = "com.steampowered.SteamOSManager1.Test.ManualGPUClock",
+        default_service = "com.steampowered.SteamOSManager1.Test.ManualGpuClock",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
-    trait ManualGPUClock {
-        #[zbus(property, name = "ManualGPUClock")]
+    trait ManualGpuClock {
+        #[zbus(property)]
         fn manual_gpu_clock(&self) -> zbus::Result<u32>;
 
-        #[zbus(property, name = "ManualGPUClock")]
+        #[zbus(property)]
         fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()>;
     }
 
     #[tokio::test]
     async fn manual_gpu_clock() {
-        let test = start("ManualGPUClock").await;
+        let test = start("ManualGpuClock").await;
 
-        let proxy = ManualGPUClockProxy::new(&test.connection).await.unwrap();
+        let proxy = ManualGpuClockProxy::new(&test.connection).await.unwrap();
 
         assert!(proxy.manual_gpu_clock().await.is_err());
 

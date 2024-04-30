@@ -76,7 +76,7 @@
     <property name="HardwareCurrentlySupported" type="u" access="read"/>
 
     <!--
-        ALSCalibrationGain:
+        AlsCalibrationGain:
 
         Provides the ALS calibration value.
 
@@ -84,7 +84,7 @@
 
         Version available: 7
     -->
-    <property name="ALSCalibrationGain" type="d" access="read"/>
+    <property name="AlsCalibrationGain" type="d" access="read"/>
 
     <!--
         GetAlsIntegrationTimeFileDescriptor:
@@ -101,13 +101,13 @@
     </method>
 
     <!--
-        UpdateBIOS:
+        UpdateBios:
 
         Perform a BIOS update.
 
         Version available: 7
     -->
-    <method name="UpdateBIOS" />
+    <method name="UpdateBios" />
 
     <!--
         UpdateDock:
@@ -147,7 +147,7 @@
     </method>
 
     <!--
-        GPUPerformanceLevel:
+        GpuPerformanceLevel:
 
         The current GPU performance level.
 
@@ -155,64 +155,64 @@
 
         Version available: 7
     -->
-    <property name="GPUPerformanceLevel" type="u" access="readwrite"/>
+    <property name="GpuPerformanceLevel" type="u" access="readwrite"/>
 
     <!--
-        ManualGPUClock:
+        ManualGpuClock:
 
         Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set to Manual
 
         Version available: 7
     -->
-    <property name="ManualGPUClock" type="u" access="readwrite"/>
+    <property name="ManualGpuClock" type="u" access="readwrite"/>
 
     <!--
-        ManualGPUClockMin:
+        ManualGpuClockMin:
 
         Minimum frequency allowed for GPU clocks.
 
         Version available: 7
     -->
-    <property name="ManualGPUClockMin" type="u" access="read"/>
+    <property name="ManualGpuClockMin" type="u" access="read"/>
 
     <!--
-        ManualGPUClockMax:
+        ManualGpuClockMax:
 
         Maximum frequency allowed for GPU clocks.
 
         Version available: 7
     -->
-    <property name="ManualGPUClockMax" type="u" access="read"/>
+    <property name="ManualGpuClockMax" type="u" access="read"/>
 
 
     <!--
-        TDPLimit:
+        TdpLimit:
 
         Controls the system TDP limit.
 
-        Valid states: In range of [ TDPLimitMin, TDPLimitMax ]
+        Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
 
         Version available: 7
     -->
-    <property name="TDPLimit" type="u" access="readwrite"/>
+    <property name="TdpLimit" type="u" access="readwrite"/>
 
     <!--
-        TDPLimitMin:
+        TdpLimitMin:
 
         Minimum allowed TDP Limit
 
         Version available: 7
     -->
-    <property name="TDPLimitMin" type="u" access="read"/>
+    <property name="TdpLimitMin" type="u" access="read"/>
 
     <!--
-        TDPLimitMax:
+        TdpLimitMax:
 
         Maximum allowed TDP Limit
 
         Version available: 7
     -->
-    <property name="TDPLimitMax" type="u" access="read"/>
+    <property name="TdpLimitMax" type="u" access="read"/>
 
 
     <!--
