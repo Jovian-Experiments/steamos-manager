@@ -445,6 +445,7 @@ mod test {
 
         let proxy = ManualGpuClockProxy::new(&test.connection).await.unwrap();
 
+        power::test::setup().await;
         assert!(proxy.manual_gpu_clock().await.is_err());
 
         power::test::write_clocks(1600).await;
