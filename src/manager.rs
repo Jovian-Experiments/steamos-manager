@@ -515,9 +515,7 @@ mod test {
         assert_eq!(remote_interface.len(), 1);
         let remote_interface = remote_interface[0];
         let remote_methods = collect_methods(remote_interface.methods());
-        let remote_method_names: HashSet<&String> = remote_methods.keys().collect();
         let remote_properties = collect_properties(remote_interface.properties());
-        let remote_property_names: HashSet<&String> = remote_properties.keys().collect();
 
         let local_interface_string = read("com.steampowered.SteamOSManager1.xml")
             .await
@@ -532,13 +530,11 @@ mod test {
         assert_eq!(local_interface.len(), 1);
         let local_interface = local_interface[0];
         let local_methods = collect_methods(local_interface.methods());
-        let local_method_names: HashSet<&String> = local_methods.keys().collect();
         let local_properties = collect_properties(local_interface.properties());
-        let local_property_names: HashSet<&String> = local_properties.keys().collect();
 
-        for key in local_method_names.union(&remote_method_names) {
-            let local_method = local_methods.get(*key).expect(key);
-            let remote_method = remote_methods.get(*key).expect(key);
+        for key in remote_methods.keys() {
+            let local_method = local_methods.get(key).expect(key);
+            let remote_method = remote_methods.get(key).expect(key);
 
             assert_eq!(local_method.name(), remote_method.name());
             assert_eq!(local_method.args().len(), remote_method.args().len());
@@ -550,9 +546,9 @@ mod test {
             }
         }
 
-        for key in local_property_names.union(&remote_property_names) {
-            let local_property = local_properties.get(*key).expect(key);
-            let remote_property = remote_properties.get(*key).expect(key);
+        for key in remote_properties.keys() {
+            let local_property = local_properties.get(key).expect(key);
+            let remote_property = remote_properties.get(key).expect(key);
 
             assert_eq!(local_property.name(), remote_property.name());
             assert_eq!(local_property.ty(), remote_property.ty());

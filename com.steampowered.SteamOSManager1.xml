@@ -252,16 +252,6 @@
     -->
     <property name="WifiBackend" type="u" access="readwrite"/>
 
-  </interface>
-
-  <!--
-      com.steampowered.SteamOSManager1.UserManager
-      @short_description: Interface to control various aspects of SteamOS running as a user.
-
-      Version available: 8
-  -->
-  <interface name="com.steampowered.SteamOSManager1.UserManager">
-
     <!--
         HdmiCecState:
 
@@ -272,19 +262,6 @@
         Version available: 8
     -->
     <property name="HdmiCecState" type="u" access="readwrite"/>
-
-    <!--
-        Version:
-
-        The version of this interface implemented by this object.
-
-        The manager may not support the latest version of the API.
-        Each method/property has an associated version number that
-        denotes in which interface version it first became available.
-
-        Version available: 8
-    -->
-    <property name="Version" type="u" access="read"/>
 
   </interface>
 
