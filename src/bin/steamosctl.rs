@@ -7,6 +7,7 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use itertools::Itertools;
 use std::ops::Deref;
 use std::str::FromStr;
 use steamos_manager::{ManagerProxy, WifiBackend};
@@ -63,7 +64,8 @@ async fn main() -> Result<()> {
         let properties = properties_proxy
             .get_all(zvariant::Optional::from(Some(name)))
             .await?;
-        for (key, value) in properties.iter() {
+        for key in properties.keys().sorted() {
+            let value = &properties[key];
             let val = value.deref();
             println!("{key}: {val}");
         }
