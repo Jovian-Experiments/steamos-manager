@@ -27,6 +27,33 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
+    SetFanControlState {
+        // Set the fan control state.
+        // 0 - BIOS, 1 - OS
+        #[arg(short, long)]
+        value: u32,
+    },
+
+    SetGPUPerformanceLevel {
+        // Set the gpu performance level
+        // 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
+        #[arg(short, long)]
+        value: u32,
+    },
+
+    SetManualGPUClock {
+        // Set the GPU clock value manually
+        // Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set to Manual
+        #[arg(short, long)]
+        value: u32,
+    },
+
+    SetTDPLimit {
+        // Set the TDP limit
+        #[arg(short, long)]
+        value: u32,
+    },
+
     SetWifiBackend {
         // Set the wifi backend to given string if possible
         // Supported values are iwd|wpa_supplicant
@@ -39,6 +66,13 @@ enum Commands {
         // 1 for on, 0 for off currently
         #[arg(short, long)]
         mode: u32,
+    },
+
+    SetWifiPowerManagementState {
+        // Set the wifi power management state
+        // 0 - disabled, 1 - enabled
+        #[arg(short, long)]
+        value: u32,
     },
 }
 
@@ -73,6 +107,18 @@ async fn main() -> Result<()> {
 
     // Then process arguments
     match &args.command {
+        Some(Commands::SetFanControlState { value }) => {
+            proxy.set_fan_control_state(*value).await?;
+        }
+        Some(Commands::SetGPUPerformanceLevel { value }) => {
+            proxy.set_gpu_performance_level(*value).await?;
+        }
+        Some(Commands::SetManualGPUClock { value }) => {
+            proxy.set_manual_gpu_clock(*value).await?;
+        }
+        Some(Commands::SetTDPLimit { value }) => {
+            proxy.set_tdp_limit(*value).await?;
+        }
         Some(Commands::SetWifiBackend { backend }) => match WifiBackend::from_str(backend) {
             Ok(b) => {
                 proxy.set_wifi_backend(b as u32).await?;
@@ -83,6 +129,9 @@ async fn main() -> Result<()> {
         },
         Some(Commands::SetWifiDebugMode { mode }) => {
             proxy.set_wifi_debug_mode(*mode, 20000).await?;
+        }
+        Some(Commands::SetWifiPowerManagementState { value }) => {
+            proxy.set_wifi_power_management_state(*value).await?;
         }
         None => {}
     }
