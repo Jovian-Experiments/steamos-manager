@@ -335,9 +335,11 @@ impl SteamOSManager {
 mod test {
     use super::*;
     use crate::{power, testing};
-    use tokio::fs::{create_dir_all, write};
-    use zbus::connection::Connection;
-    use zbus::ConnectionBuilder;
+    use std::collections::{HashMap, HashSet};
+    use std::iter::zip;
+    use tokio::fs::{create_dir_all, read, write};
+    use zbus::{Connection, ConnectionBuilder, Interface};
+    use zbus_xml::{Method, Node, Property};
 
     struct TestHandle {
         _handle: testing::TestHandle,
@@ -470,5 +472,92 @@ mod test {
         let test = start("Version").await;
         let proxy = VersionProxy::new(&test.connection).await.unwrap();
         assert_eq!(proxy.version().await, Ok(SteamOSManager::API_VERSION));
+    }
+
+    fn collect_methods<'a>(methods: &'a [Method<'a>]) -> HashMap<String, &'a Method<'a>> {
+        let mut map = HashMap::new();
+        for method in methods.iter() {
+            map.insert(method.name().to_string(), method);
+        }
+        map
+    }
+
+    fn collect_properties<'a>(props: &'a [Property<'a>]) -> HashMap<String, &'a Property<'a>> {
+        let mut map = HashMap::new();
+        for prop in props.iter() {
+            map.insert(prop.name().to_string(), prop);
+        }
+        map
+    }
+
+    #[tokio::test]
+    async fn interface_matches() {
+        let test = start("Interface").await;
+
+        let manager_ref = test
+            .connection
+            .object_server()
+            .interface::<_, SteamOSManager>("/com/steampowered/SteamOSManager1")
+            .await
+            .expect("interface");
+        let manager = manager_ref.get().await;
+        let mut remote_interface_string = String::from(
+            "<node name=\"/\" xmlns:doc=\"http://www.freedesktop.org/dbus/1.0/doc.dtd\">",
+        );
+        manager.introspect_to_writer(&mut remote_interface_string, 0);
+        remote_interface_string.push_str("</node>");
+        let remote_interfaces =
+            Node::from_reader::<&[u8]>(remote_interface_string.as_bytes()).expect("from_reader");
+        let remote_interface: Vec<_> = remote_interfaces
+            .interfaces()
+            .iter()
+            .filter(|iface| iface.name() == "com.steampowered.SteamOSManager1.Manager")
+            .collect();
+        assert_eq!(remote_interface.len(), 1);
+        let remote_interface = remote_interface[0];
+        let remote_methods = collect_methods(remote_interface.methods());
+        let remote_method_names: HashSet<&String> = remote_methods.keys().collect();
+        let remote_properties = collect_properties(remote_interface.properties());
+        let remote_property_names: HashSet<&String> = remote_properties.keys().collect();
+
+        let local_interface_string = read("com.steampowered.SteamOSManager1.xml")
+            .await
+            .expect("read");
+        let local_interfaces =
+            Node::from_reader::<&[u8]>(local_interface_string.as_ref()).expect("from_reader");
+        let local_interface: Vec<_> = local_interfaces
+            .interfaces()
+            .iter()
+            .filter(|iface| iface.name() == "com.steampowered.SteamOSManager1.Manager")
+            .collect();
+        assert_eq!(local_interface.len(), 1);
+        let local_interface = local_interface[0];
+        let local_methods = collect_methods(local_interface.methods());
+        let local_method_names: HashSet<&String> = local_methods.keys().collect();
+        let local_properties = collect_properties(local_interface.properties());
+        let local_property_names: HashSet<&String> = local_properties.keys().collect();
+
+        for key in local_method_names.union(&remote_method_names) {
+            let local_method = local_methods.get(*key).expect(key);
+            let remote_method = remote_methods.get(*key).expect(key);
+
+            assert_eq!(local_method.name(), remote_method.name());
+            assert_eq!(local_method.args().len(), remote_method.args().len());
+            for (local_arg, remote_arg) in
+                zip(local_method.args().iter(), remote_method.args().iter())
+            {
+                assert_eq!(local_arg.direction(), remote_arg.direction());
+                assert_eq!(local_arg.ty(), remote_arg.ty());
+            }
+        }
+
+        for key in local_property_names.union(&remote_property_names) {
+            let local_property = local_properties.get(*key).expect(key);
+            let remote_property = remote_properties.get(*key).expect(key);
+
+            assert_eq!(local_property.name(), remote_property.name());
+            assert_eq!(local_property.ty(), remote_property.ty());
+            assert_eq!(local_property.access(), remote_property.access());
+        }
     }
 }
