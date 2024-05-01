@@ -22,7 +22,7 @@ use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
-use crate::{anyhow_to_zbus, anyhow_to_zbus_fdo};
+use crate::{to_zbus_error, to_zbus_fdo_error};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -70,7 +70,7 @@ impl SteamOSManager {
     async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
         match get_wifi_power_management_state().await {
             Ok(state) => Ok(state as u32),
-            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+            Err(e) => Err(to_zbus_fdo_error(e)),
         }
     }
 
@@ -82,7 +82,7 @@ impl SteamOSManager {
         };
         set_wifi_power_management_state(state)
             .await
-            .map_err(anyhow_to_zbus)
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -91,7 +91,7 @@ impl SteamOSManager {
             .fan_control
             .get_state()
             .await
-            .map_err(anyhow_to_zbus_fdo)? as u32)
+            .map_err(to_zbus_fdo_error)? as u32)
     }
 
     #[zbus(property)]
@@ -104,14 +104,14 @@ impl SteamOSManager {
         self.fan_control
             .set_state(state)
             .await
-            .map_err(anyhow_to_zbus)
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
     async fn hardware_currently_supported(&self) -> zbus::fdo::Result<u32> {
         match check_support().await {
             Ok(res) => Ok(res as u32),
-            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+            Err(e) => Err(to_zbus_fdo_error(e)),
         }
     }
 
@@ -149,7 +149,7 @@ impl SteamOSManager {
         run_script("/usr/bin/jupiter-biosupdate", &["--auto"])
             .await
             .inspect_err(|message| error!("Error updating BIOS: {message}"))
-            .map_err(anyhow_to_zbus_fdo)
+            .map_err(to_zbus_fdo_error)
     }
 
     async fn update_dock(&self) -> zbus::fdo::Result<()> {
@@ -160,7 +160,7 @@ impl SteamOSManager {
         )
         .await
         .inspect_err(|message| error!("Error updating dock: {message}"))
-        .map_err(anyhow_to_zbus_fdo)
+        .map_err(to_zbus_fdo_error)
     }
 
     async fn trim_devices(&self) -> zbus::fdo::Result<()> {
@@ -168,7 +168,7 @@ impl SteamOSManager {
         run_script("/usr/lib/hwsupport/trim-devices.sh", &[] as &[String; 0])
             .await
             .inspect_err(|message| error!("Error updating trimming devices: {message}"))
-            .map_err(anyhow_to_zbus_fdo)
+            .map_err(to_zbus_fdo_error)
     }
 
     async fn format_device(
@@ -184,7 +184,7 @@ impl SteamOSManager {
         run_script("/usr/lib/hwsupport/format-device.sh", args.as_ref())
             .await
             .inspect_err(|message| error!("Error formatting {device}: {message}"))
-            .map_err(anyhow_to_zbus_fdo)
+            .map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -193,7 +193,7 @@ impl SteamOSManager {
             Ok(level) => Ok(level as u32),
             Err(e) => {
                 error!("Error getting GPU performance level: {e}");
-                Err(anyhow_to_zbus_fdo(e))
+                Err(to_zbus_fdo_error(e))
             }
         }
     }
@@ -207,7 +207,7 @@ impl SteamOSManager {
         set_gpu_performance_level(level)
             .await
             .inspect_err(|message| error!("Error setting GPU performance level: {message}"))
-            .map_err(anyhow_to_zbus)
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -215,7 +215,7 @@ impl SteamOSManager {
         get_gpu_clocks()
             .await
             .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
-            .map_err(anyhow_to_zbus_fdo)
+            .map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property)]
@@ -223,7 +223,7 @@ impl SteamOSManager {
         set_gpu_clocks(clocks)
             .await
             .inspect_err(|message| error!("Error setting manual GPU clock: {message}"))
-            .map_err(anyhow_to_zbus)
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
@@ -240,12 +240,12 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn tdp_limit(&self) -> zbus::fdo::Result<u32> {
-        get_tdp_limit().await.map_err(anyhow_to_zbus_fdo)
+        get_tdp_limit().await.map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property)]
     async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
-        set_tdp_limit(limit).await.map_err(anyhow_to_zbus)
+        set_tdp_limit(limit).await.map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
@@ -293,7 +293,7 @@ impl SteamOSManager {
             }
             Err(e) => {
                 error!("Error setting wifi debug mode: {e}");
-                Err(anyhow_to_zbus_fdo(e))
+                Err(to_zbus_fdo_error(e))
             }
         }
     }
@@ -303,7 +303,7 @@ impl SteamOSManager {
     async fn wifi_backend(&self) -> zbus::fdo::Result<u32> {
         match get_wifi_backend().await {
             Ok(backend) => Ok(backend as u32),
-            Err(e) => Err(anyhow_to_zbus_fdo(e)),
+            Err(e) => Err(to_zbus_fdo_error(e)),
         }
     }
 
@@ -321,7 +321,7 @@ impl SteamOSManager {
         set_wifi_backend(backend)
             .await
             .inspect_err(|message| error!("Error setting wifi backend: {message}"))
-            .map_err(anyhow_to_zbus_fdo)
+            .map_err(to_zbus_fdo_error)
     }
 
     /// A version property.

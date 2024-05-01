@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{anyhow, bail, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -132,12 +132,19 @@ async fn reload() -> Result<()> {
     }
 }
 
-pub fn anyhow_to_zbus(error: Error) -> zbus::Error {
+pub fn to_zbus_fdo_error<S: ToString>(error: S) -> zbus::fdo::Error {
+    zbus::fdo::Error::Failed(error.to_string())
+}
+
+pub fn to_zbus_error<S: ToString>(error: S) -> zbus::Error {
     zbus::Error::Failure(error.to_string())
 }
 
-pub fn anyhow_to_zbus_fdo(error: Error) -> zbus::fdo::Error {
-    zbus::fdo::Error::Failed(error.to_string())
+pub fn zbus_to_zbus_fdo(error: zbus::Error) -> zbus::fdo::Error {
+    match error {
+        zbus::Error::FDO(error) => *error,
+        error => zbus::fdo::Error::Failed(error.to_string()),
+    }
 }
 
 async fn create_connection() -> Result<Connection> {
