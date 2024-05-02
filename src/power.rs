@@ -14,11 +14,11 @@ use tracing::error;
 
 use crate::{path, write_synced};
 
-const GPU_HWMON_PREFIX: &str = "/sys/class/drm/card0/device/hwmon";
+const GPU_HWMON_PREFIX: &str = "/sys/class/hwmon";
+const GPU_HWMON_NAME: &str = "amdgpu";
 
-const GPU_PERFORMANCE_LEVEL_PATH: &str =
-    "/sys/class/drm/card0/device/power_dpm_force_performance_level";
-const GPU_CLOCKS_PATH: &str = "/sys/class/drm/card0/device/pp_od_clk_voltage";
+const GPU_PERFORMANCE_LEVEL_SUFFIX: &str = "device/power_dpm_force_performance_level";
+const GPU_CLOCKS_SUFFIX: &str = "device/pp_od_clk_voltage";
 
 const TDP_LIMIT1: &str = "power1_cap";
 const TDP_LIMIT2: &str = "power2_cap";
@@ -76,7 +76,8 @@ impl ToString for GPUPerformanceLevel {
 }
 
 pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
-    let level = fs::read_to_string(path(GPU_PERFORMANCE_LEVEL_PATH))
+    let base = find_hwmon().await?;
+    let level = fs::read_to_string(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX))
         .await
         .inspect_err(|message| error!("Error opening sysfs file for reading: {message}"))?;
 
@@ -85,7 +86,8 @@ pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
 
 pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
     let level: String = level.to_string();
-    write_synced(path(GPU_PERFORMANCE_LEVEL_PATH), level.as_bytes())
+    let base = find_hwmon().await?;
+    write_synced(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX), level.as_bytes())
         .await
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
@@ -95,7 +97,8 @@ pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
     // Only used when GPU Performance Level is manual, but write whenever called.
     ensure!((200..=1600).contains(&clocks), "Invalid clocks");
 
-    let mut myfile = File::create(path(GPU_CLOCKS_PATH))
+    let base = find_hwmon().await?;
+    let mut myfile = File::create(base.join(GPU_CLOCKS_SUFFIX))
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
 
@@ -123,7 +126,8 @@ pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
 }
 
 pub async fn get_gpu_clocks() -> Result<u32> {
-    let clocks_file = File::open(path(GPU_CLOCKS_PATH)).await?;
+    let base = find_hwmon().await?;
+    let clocks_file = File::open(base.join(GPU_CLOCKS_SUFFIX)).await?;
     let mut reader = BufReader::new(clocks_file);
     loop {
         let mut line = String::new();
@@ -155,7 +159,12 @@ async fn find_hwmon() -> Result<PathBuf> {
             Some(entry) => entry.path(),
             None => bail!("hwmon not found"),
         };
-        if fs::try_exists(base.join(TDP_LIMIT1)).await? {
+        let file_name = base.join("name");
+        let name = fs::read_to_string(file_name.as_path())
+            .await?
+            .trim()
+            .to_string();
+        if name == GPU_HWMON_NAME {
             return Ok(base);
         }
     }
@@ -199,14 +208,23 @@ pub mod test {
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
 
     pub async fn setup() {
-        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
+        // Use hwmon5 just as a test. We needed a subfolder of GPU_HWMON_PREFIX
+        // and this is as good as any.
+        let base = path(GPU_HWMON_PREFIX).join("hwmon5");
+        let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
+        // Creates hwmon path, including device subpath
         create_dir_all(filename.parent().unwrap())
             .await
             .expect("create_dir_all");
+        // Writes name file as addgpu so find_hwmon() will find it.
+        write_synced(base.join("name"), GPU_HWMON_NAME.as_bytes())
+            .await
+            .expect("write_synced");
     }
 
     pub async fn write_clocks(mhz: u32) {
-        let filename = path(GPU_CLOCKS_PATH);
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_CLOCKS_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
             .expect("create_dir_all");
@@ -227,7 +245,10 @@ CCLK_RANGE in Core0:
     }
 
     pub async fn expect_clocks(mhz: u32) {
-        let clocks = read_to_string(path(GPU_CLOCKS_PATH)).await.expect("read");
+        let base = find_hwmon().await.unwrap();
+        let clocks = read_to_string(base.join(GPU_CLOCKS_SUFFIX))
+            .await
+            .expect("read");
         assert_eq!(clocks, format!("s 0 {mhz}\ns 1 {mhz}\nc\n"));
     }
 
@@ -235,8 +256,9 @@ CCLK_RANGE in Core0:
     async fn test_get_gpu_performance_level() {
         let _h = testing::start();
 
-        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
         setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         assert!(get_gpu_performance_level().await.is_err());
 
         write(filename.as_path(), "auto\n").await.expect("write");
@@ -279,8 +301,9 @@ CCLK_RANGE in Core0:
     async fn test_set_gpu_performance_level() {
         let _h = testing::start();
 
-        let filename = path(GPU_PERFORMANCE_LEVEL_PATH);
         setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
 
         set_gpu_performance_level(GPUPerformanceLevel::Auto)
             .await
@@ -323,10 +346,8 @@ CCLK_RANGE in Core0:
     async fn test_get_tdp_limit() {
         let _h = testing::start();
 
+        setup().await;
         let hwmon = path(GPU_HWMON_PREFIX);
-        create_dir_all(hwmon.join("hwmon5").as_path())
-            .await
-            .expect("create_dir_all");
 
         assert!(get_tdp_limit().await.is_err());
 
@@ -351,14 +372,12 @@ CCLK_RANGE in Core0:
         assert!(set_tdp_limit(10).await.is_err());
 
         let hwmon = path(GPU_HWMON_PREFIX);
-        create_dir_all(hwmon.as_path())
-            .await
-            .expect("create_dir_all");
         assert_eq!(
             set_tdp_limit(10).await.unwrap_err().to_string(),
-            anyhow!("hwmon not found").to_string()
+            anyhow!("No such file or directory (os error 2)").to_string()
         );
 
+        setup().await;
         let hwmon = hwmon.join("hwmon5");
         create_dir_all(hwmon.join(TDP_LIMIT1))
             .await
@@ -403,7 +422,8 @@ CCLK_RANGE in Core0:
         assert!(get_gpu_clocks().await.is_err());
         setup().await;
 
-        let filename = path(GPU_CLOCKS_PATH);
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_CLOCKS_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
             .expect("create_dir_all");
