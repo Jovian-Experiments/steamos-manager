@@ -20,6 +20,7 @@ const PROCESS_PREFIX: &str = "/com/steampowered/SteamOSManager1/Process";
 
 pub struct ProcessManager {
     process: Child,
+    paused: bool,
 }
 
 impl ProcessManager {
@@ -78,21 +79,34 @@ impl ProcessManager {
         // Run the given executable with the given arguments
         // Return an id that can be used later to pause/cancel/resume as needed
         let child = Command::new(executable).args(args).spawn()?;
-        Ok(ProcessManager { process: child })
+        Ok(ProcessManager {
+            process: child,
+            paused: false,
+        })
     }
 }
 
 #[interface(name = "com.steampowered.SteamOSManager1.ProcessManager")]
 impl ProcessManager {
-    pub async fn pause(&self) -> zbus::fdo::Result<()> {
+    pub async fn pause(&mut self) -> zbus::fdo::Result<()> {
+        if self.paused {
+            return Err(zbus::fdo::Error::Failed("Already paused".to_string()));
+        }
         // Pause the given process if possible
         // Return true on success, false otherwise
-        self.send_signal(Signal::SIGSTOP).map_err(to_zbus_fdo_error)
+        let result = self.send_signal(Signal::SIGSTOP).map_err(to_zbus_fdo_error);
+        self.paused = true;
+        result
     }
 
-    pub async fn resume(&self) -> zbus::fdo::Result<()> {
+    pub async fn resume(&mut self) -> zbus::fdo::Result<()> {
         // Resume the given process if possible
-        self.send_signal(Signal::SIGCONT).map_err(to_zbus_fdo_error)
+        if !self.paused {
+            return Err(zbus::fdo::Error::Failed("Not paused".to_string()));
+        }
+        let result = self.send_signal(Signal::SIGCONT).map_err(to_zbus_fdo_error);
+        self.paused = false;
+        result
     }
 
     pub async fn cancel(&self) -> zbus::fdo::Result<()> {
@@ -104,6 +118,9 @@ impl ProcessManager {
     }
 
     pub async fn exit_code(&mut self) -> zbus::fdo::Result<i32> {
+        if self.paused {
+            return Err(zbus::fdo::Error::Failed("Process is paused".to_string()));
+        }
         self.exit_code_internal().await.map_err(to_zbus_fdo_error)
     }
 }
@@ -168,6 +185,46 @@ mod test {
 
     fn exit(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Err(anyhow!("oops!"))
+    }
+
+    #[tokio::test]
+    async fn test_process_manager() {
+        let _h = testing::start();
+
+        let mut false_process = ProcessManager::run_long_command("/bin/false", &[""])
+            .await
+            .unwrap();
+        let mut true_process = ProcessManager::run_long_command("/bin/true", &[""])
+            .await
+            .unwrap();
+
+        let mut pause_process = ProcessManager::run_long_command("/usr/bin/sleep", &["5"])
+            .await
+            .unwrap();
+        let _ = pause_process.pause().await;
+
+        assert_eq!(
+            pause_process.pause().await.unwrap_err(),
+            zbus::fdo::Error::Failed("Already paused".to_string())
+        );
+
+        assert_eq!(
+            pause_process.exit_code().await.unwrap_err(),
+            zbus::fdo::Error::Failed("Process is paused".to_string())
+        );
+
+        let _ = pause_process.resume().await;
+
+        assert_eq!(
+            pause_process.resume().await.unwrap_err(),
+            zbus::fdo::Error::Failed("Not paused".to_string())
+        );
+
+        // Sleep gives 0 exit code when done
+        assert_eq!(pause_process.exit_code().await.unwrap(), 0);
+
+        assert_eq!(false_process.exit_code().await.unwrap(), 1);
+        assert_eq!(true_process.exit_code().await.unwrap(), 0);
     }
 
     #[tokio::test]
