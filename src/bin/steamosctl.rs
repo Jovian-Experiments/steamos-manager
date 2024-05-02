@@ -97,6 +97,11 @@ enum Commands {
     },
 
     GetWifiPowerManagementState {},
+
+    UpdateBios {},
+    UpdateDock {},
+    TrimDevices {},
+    FactoryReset {},
 }
 
 #[tokio::main]
@@ -212,6 +217,18 @@ async fn main() -> Result<()> {
         Some(Commands::GetWifiPowerManagementState {}) => {
             let state = proxy.wifi_power_management_state().await?;
             println!("Wifi power management state: {state}");
+        }
+        Some(Commands::UpdateBios {}) => {
+            let _ = proxy.update_bios().await?;
+        }
+        Some(Commands::UpdateDock {}) => {
+            let _ = proxy.update_dock().await?;
+        }
+        Some(Commands::FactoryReset {}) => {
+            let _ = proxy.prepare_factory_reset().await?;
+        }
+        Some(Commands::TrimDevices {}) => {
+            let _ = proxy.trim_devices().await?;
         }
         None => {}
     }
