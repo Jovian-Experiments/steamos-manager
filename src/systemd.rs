@@ -32,6 +32,7 @@ trait SystemdUnit {
     default_path = "/org/freedesktop/systemd1"
 )]
 trait SystemdManager {
+    #[allow(clippy::type_complexity)]
     async fn enable_unit_files(
         &self,
         files: &[&str],
@@ -114,7 +115,7 @@ impl<'dbus> SystemdUnit<'dbus> {
         let (_, res) = manager
             .enable_unit_files(&[self.name.as_str()], false, false)
             .await?;
-        Ok(res.len() > 0)
+        Ok(!res.is_empty())
     }
 
     pub async fn disable(&self) -> Result<bool> {
@@ -122,7 +123,7 @@ impl<'dbus> SystemdUnit<'dbus> {
         let res = manager
             .disable_unit_files(&[self.name.as_str()], false)
             .await?;
-        Ok(res.len() > 0)
+        Ok(!res.is_empty())
     }
 
     pub async fn mask(&self) -> Result<bool> {
@@ -130,7 +131,7 @@ impl<'dbus> SystemdUnit<'dbus> {
         let res = manager
             .mask_unit_files(&[self.name.as_str()], false)
             .await?;
-        Ok(res.len() > 0)
+        Ok(!res.is_empty())
     }
 
     pub async fn unmask(&self) -> Result<bool> {
@@ -138,7 +139,7 @@ impl<'dbus> SystemdUnit<'dbus> {
         let res = manager
             .unmask_unit_files(&[self.name.as_str()], false)
             .await?;
-        Ok(res.len() > 0)
+        Ok(!res.is_empty())
     }
 
     pub async fn active(&self) -> Result<bool> {
