@@ -145,7 +145,7 @@ pub async fn get_gpu_clocks() -> Result<u32> {
 
         return Ok(mhz.parse()?);
     }
-    Err(anyhow!("Couldn't find GPU clocks"))
+    Ok(0)
 }
 
 async fn find_hwmon() -> Result<PathBuf> {
@@ -399,9 +399,17 @@ CCLK_RANGE in Core0:
     #[tokio::test]
     async fn test_get_gpu_clocks() {
         let _h = testing::start();
-        setup().await;
 
         assert!(get_gpu_clocks().await.is_err());
+        setup().await;
+
+        let filename = path(GPU_CLOCKS_PATH);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+        write(filename.as_path(), b"").await.expect("write");
+
+        assert_eq!(get_gpu_clocks().await.unwrap(), 0);
         write_clocks(1600).await;
 
         assert_eq!(get_gpu_clocks().await.unwrap(), 1600);
