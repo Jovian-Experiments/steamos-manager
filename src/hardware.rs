@@ -126,7 +126,7 @@ impl FanControl {
 
     pub async fn get_state(&self) -> Result<FanControlState> {
         let jupiter_fan_control =
-            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice").await?;
+            SystemdUnit::new(self.connection.clone(), "jupiter-fan-control.service").await?;
         let active = jupiter_fan_control.active().await?;
         Ok(match active {
             true => FanControlState::Os,
@@ -137,7 +137,7 @@ impl FanControl {
     pub async fn set_state(&self, state: FanControlState) -> Result<()> {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         let jupiter_fan_control =
-            SystemdUnit::new(self.connection.clone(), "jupiter_2dfan_2dcontrol_2eservice").await?;
+            SystemdUnit::new(self.connection.clone(), "jupiter-fan-control.service").await?;
         match state {
             FanControlState::Os => jupiter_fan_control.start().await,
             FanControlState::Bios => jupiter_fan_control.stop().await,
