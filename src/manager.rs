@@ -38,18 +38,17 @@ pub struct SteamOSManager {
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
     should_trace: bool,
-    // Used by ProcessManager but need to only have one of these
-    next_process: u32,
+    process_manager: ProcessManager,
 }
 
 impl SteamOSManager {
     pub async fn new(connection: Connection) -> Result<Self> {
         Ok(SteamOSManager {
             fan_control: FanControl::new(connection.clone()),
-            connection,
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
-            next_process: 0,
+            process_manager: ProcessManager::new(connection.clone()),
+            connection,
         })
     }
 }
@@ -147,38 +146,31 @@ impl SteamOSManager {
 
     async fn update_bios(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Update the bios as needed
-        ProcessManager::get_command_object_path(
-            "/usr/bin/jupiter-biosupdate",
-            &["--auto"],
-            &mut self.connection,
-            &mut self.next_process,
-            "updating BIOS",
-        )
-        .await
+        self.process_manager
+            .get_command_object_path("/usr/bin/jupiter-biosupdate", &["--auto"], "updating BIOS")
+            .await
     }
 
     async fn update_dock(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Update the dock firmware as needed
-        ProcessManager::get_command_object_path(
-            "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
-            &[] as &[String; 0],
-            &mut self.connection,
-            &mut self.next_process,
-            "updating dock",
-        )
-        .await
+        self.process_manager
+            .get_command_object_path(
+                "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
+                &[] as &[String; 0],
+                "updating dock",
+            )
+            .await
     }
 
     async fn trim_devices(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Run steamos-trim-devices script
-        ProcessManager::get_command_object_path(
-            "/usr/lib/hwsupport/trim-devices.sh",
-            &[] as &[String; 0],
-            &mut self.connection,
-            &mut self.next_process,
-            "trimming devices",
-        )
-        .await
+        self.process_manager
+            .get_command_object_path(
+                "/usr/lib/hwsupport/trim-devices.sh",
+                &[] as &[String; 0],
+                "trimming devices",
+            )
+            .await
     }
 
     async fn format_device(
@@ -191,14 +183,13 @@ impl SteamOSManager {
         if !validate {
             args.push("--skip-validation");
         }
-        ProcessManager::get_command_object_path(
-            "/usr/lib/hwsupport/format-device.sh",
-            args.as_ref(),
-            &mut self.connection,
-            &mut self.next_process,
-            format!("formatting {device}").as_str(),
-        )
-        .await
+        self.process_manager
+            .get_command_object_path(
+                "/usr/lib/hwsupport/format-device.sh",
+                args.as_ref(),
+                format!("formatting {device}").as_str(),
+            )
+            .await
     }
 
     #[zbus(property(emits_changed_signal = "false"))]

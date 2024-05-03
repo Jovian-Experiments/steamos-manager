@@ -280,12 +280,12 @@
   </interface>
 
   <!--
-      com.steampowered.SteamOSManager1.Process
+      com.steampowered.SteamOSManager1.SubProcess
       @short_description: Interface to control a subprocess
 
       Version available: 8
   -->
-  <interface name="com.steampowered.SteamOSManager1.Process">
+  <interface name="com.steampowered.SteamOSManager1.SubProcess">
       <!--
         Pause the operation
       -->
@@ -311,7 +311,16 @@
       <method name="Kill"/>
       
       <!--
-        Get the exit code of the process after waiting for it to finish if needed.
+        Wait for process to end and get exit code, resuming if paused
+
+        @exit_code The exit code
+      -->
+      <method name="Wait">
+        <arg type="i" name="exit_code" direction="out"/>
+      </method>
+
+      <!--
+        Get the exit code of the process if possible.
 
         @exit_code The exit code
         -->

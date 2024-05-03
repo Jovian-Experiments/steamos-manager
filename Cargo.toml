@@ -14,6 +14,7 @@ strip="symbols"
 anyhow = "1"
 clap = { version = "4.5", default-features = false, features = ["derive", "help", "std", "usage"] }
 inotify = { version = "0.10", default-features = false, features = ["stream"] }
+libc = "0.2"
 nix = { version = "0.28", default-features = false, features = ["fs", "signal"] }
 tokio = { version = "1", default-features = false, features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync"] }
 tokio-stream = { version = "0.1", default-features = false }
