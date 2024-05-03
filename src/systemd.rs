@@ -50,6 +50,7 @@ trait SystemdManager {
         &self,
         files: &[&str],
         runtime: bool,
+        force: bool,
     ) -> Result<Vec<(String, String, String)>>;
 
     async fn unmask_unit_files(
@@ -130,7 +131,7 @@ impl<'dbus> SystemdUnit<'dbus> {
     pub async fn mask(&self) -> Result<bool> {
         let manager = SystemdManagerProxy::new(&self.connection).await?;
         let res = manager
-            .mask_unit_files(&[self.name.as_str()], false)
+            .mask_unit_files(&[self.name.as_str()], false, false)
             .await?;
         Ok(!res.is_empty())
     }
