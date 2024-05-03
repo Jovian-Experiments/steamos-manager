@@ -66,6 +66,7 @@ pub enum EnableState {
     Disbled,
     Enabled,
     Masked,
+    Static,
 }
 
 pub struct SystemdUnit<'dbus> {
@@ -151,6 +152,7 @@ impl<'dbus> SystemdUnit<'dbus> {
             "enabled" => EnableState::Enabled,
             "disabled" => EnableState::Disbled,
             "masked" => EnableState::Masked,
+            "static" => EnableState::Static,
             state => bail!("Unknown state {state}"),
         })
     }
