@@ -333,7 +333,7 @@ impl SteamOSManager {
 mod test {
     use super::*;
     use crate::{power, testing};
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     use std::iter::zip;
     use tokio::fs::{create_dir_all, read, write};
     use zbus::{Connection, ConnectionBuilder, Interface};

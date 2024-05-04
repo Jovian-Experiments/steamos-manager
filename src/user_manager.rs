@@ -50,7 +50,6 @@ macro_rules! setter {
 }
 
 pub struct SteamOSManagerUser {
-    connection: Connection,
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
 }
@@ -59,7 +58,6 @@ impl SteamOSManagerUser {
     pub async fn new(connection: Connection, system_conn: &Connection) -> Result<Self> {
         Ok(SteamOSManagerUser {
             hdmi_cec: HdmiCecControl::new(&connection).await?,
-            connection,
             proxy: Proxy::new(
                 system_conn,
                 "com.steampowered.SteamOSManager1",
@@ -248,10 +246,10 @@ impl SteamOSManagerUser {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{power, testing};
+    use crate::testing;
     use std::collections::{HashMap, HashSet};
     use std::iter::zip;
-    use tokio::fs::{create_dir_all, read, write};
+    use tokio::fs::read;
     use zbus::{Connection, ConnectionBuilder, Interface};
     use zbus_xml::{Method, Node, Property};
 
