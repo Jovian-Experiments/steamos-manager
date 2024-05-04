@@ -8,6 +8,7 @@
 
 use anyhow::Result;
 use tracing::error;
+use zbus::proxy::Builder;
 use zbus::zvariant::Fd;
 use zbus::{interface, Connection, Proxy, SignalContext};
 
@@ -58,13 +59,13 @@ impl SteamOSManagerUser {
     pub async fn new(connection: Connection, system_conn: &Connection) -> Result<Self> {
         Ok(SteamOSManagerUser {
             hdmi_cec: HdmiCecControl::new(&connection).await?,
-            proxy: Proxy::new(
-                system_conn,
-                "com.steampowered.SteamOSManager1",
-                "/com/steampowered/SteamOSManager1",
-                "com.steampowered.SteamOSManager1.Manager",
-            )
-            .await?,
+            proxy: Builder::new(system_conn)
+                .destination("com.steampowered.SteamOSManager1")?
+                .path("/com/steampowered/SteamOSManager1")?
+                .interface("com.steampowered.SteamOSManager1.Manager")?
+                .cache_properties(zbus::CacheProperties::No)
+                .build()
+                .await?,
         })
     }
 }
