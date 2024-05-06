@@ -104,19 +104,27 @@
         UpdateBios:
 
         Perform a BIOS update.
+        
+        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
 
-        Version available: 7
+        Version available: 8
     -->
-    <method name="UpdateBios" />
+    <method name="UpdateBios">
+      <arg type="o" name="objectpath" direction="out"/>
+    </method>
 
     <!--
         UpdateDock:
 
         Perform a Dock Firmware update.
 
-        Version available: 7
+        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
+
+        Version available: 8
     -->
-    <method name="UpdateDock" />
+    <method name="UpdateDock">
+      <arg type="o" name="objectpath" direction="out"/>
+    </method>
 
     <!--
         TrimDevices:
@@ -125,9 +133,13 @@
         is important as some devices are not safe to trim unless some kernel
         quirks are available.
 
-        Version available: 7
+        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
+
+        Version available: 8
     -->
-    <method name="TrimDevices" />
+    <method name="TrimDevices">
+      <arg type="o" name="objectpath" direction="out"/>
+    </method>
 
     <!--
         FormatDevice:
@@ -135,15 +147,17 @@
         @device: Which device to format, e.g. /dev/mmcblk0
         @label: Filesystem label to assign to the formatted device
         @validate: When set runs common checks for conterfeit flash media before formatting, e.g. f3probe
+        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
 
         Format and optionally validate a storage device to a steam compatible filesystem.
 
-        Version available: 7
+        Version available: 8
     -->
     <method name="FormatDevice">
       <arg type="s" name="device" direction="in"/>
       <arg type="s" name="label" direction="in"/>
       <arg type="b" name="validate" direction="in"/>
+      <arg type="o" name="objectpath" direction="out"/>
     </method>
 
     <!--
@@ -263,6 +277,56 @@
     -->
     <property name="HdmiCecState" type="u" access="readwrite"/>
 
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.SubProcess
+      @short_description: Interface to control a subprocess
+
+      Version available: 8
+  -->
+  <interface name="com.steampowered.SteamOSManager1.SubProcess">
+      <!--
+        Pause the operation
+      -->
+      <method name="Pause"/>
+      
+      <!--
+        Resume the operation
+      -->
+      <method name="Resume"/>
+      
+      <!--
+        Cancel the operation
+          
+        Note this sends a SIGTERM to the subprocess, vs Kill which sends SIGKILL.
+      -->
+      <method name="Cancel"/>
+
+      <!--
+        Kill the operation
+        
+        Note this sends a SIGKILL, vs Cancel which sends SIGTERM.
+      -->
+      <method name="Kill"/>
+      
+      <!--
+        Wait for process to end and get exit code, resuming if paused
+
+        @exit_code The exit code
+      -->
+      <method name="Wait">
+        <arg type="i" name="exit_code" direction="out"/>
+      </method>
+
+      <!--
+        Get the exit code of the process if possible.
+
+        @exit_code The exit code
+        -->
+      <method name="ExitCode">
+        <arg type="i" name="exit_code" direction="out"/>
+      </method>
   </interface>
 
 </node>
