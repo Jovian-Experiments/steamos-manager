@@ -2,4 +2,4 @@
 Name=com.steampowered.SteamOSManager1
 Exec=/usr/lib/steamos-manager
 User=root
-SystemdService=steamosmanager.service
+SystemdService=steamos-manager.service
