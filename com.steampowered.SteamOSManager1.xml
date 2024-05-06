@@ -252,6 +252,17 @@
     -->
     <property name="WifiBackend" type="u" access="readwrite"/>
 
+    <!--
+        HdmiCecState:
+
+        The current state of HDMI-CEC features on the system
+
+        Valid states: 0 = Disabled, 1 = Control Only, 2 = Control And Wake
+
+        Version available: 8
+    -->
+    <property name="HdmiCecState" type="u" access="readwrite"/>
+
   </interface>
 
 </node>

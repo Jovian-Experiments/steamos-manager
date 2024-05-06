@@ -1,5 +1,5 @@
 [D-BUS Service]
 Name=com.steampowered.SteamOSManager1
-Exec=/usr/lib/steamos-manager
+Exec=/usr/lib/steamos-manager -r
 User=root
 SystemdService=steamos-manager.service

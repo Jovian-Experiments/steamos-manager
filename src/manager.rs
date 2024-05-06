@@ -22,7 +22,7 @@ use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
-use crate::{to_zbus_error, to_zbus_fdo_error};
+use crate::{to_zbus_error, to_zbus_fdo_error, API_VERSION};
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -55,8 +55,6 @@ const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-
 
 #[interface(name = "com.steampowered.SteamOSManager1.Manager")]
 impl SteamOSManager {
-    const API_VERSION: u32 = 7;
-
     async fn prepare_factory_reset(&self) -> u32 {
         // Run steamos factory reset script and return true on success
         let res = run_script("/usr/bin/steamos-factory-reset-config", &[""]).await;
@@ -327,7 +325,7 @@ impl SteamOSManager {
     /// A version property.
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
-        SteamOSManager::API_VERSION
+        API_VERSION
     }
 }
 
@@ -335,7 +333,7 @@ impl SteamOSManager {
 mod test {
     use super::*;
     use crate::{power, testing};
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     use std::iter::zip;
     use tokio::fs::{create_dir_all, read, write};
     use zbus::{Connection, ConnectionBuilder, Interface};
@@ -472,7 +470,7 @@ mod test {
     async fn version() {
         let test = start("Version").await;
         let proxy = VersionProxy::new(&test.connection).await.unwrap();
-        assert_eq!(proxy.version().await, Ok(SteamOSManager::API_VERSION));
+        assert_eq!(proxy.version().await, Ok(API_VERSION));
     }
 
     fn collect_methods<'a>(methods: &'a [Method<'a>]) -> HashMap<String, &'a Method<'a>> {
@@ -517,9 +515,7 @@ mod test {
         assert_eq!(remote_interface.len(), 1);
         let remote_interface = remote_interface[0];
         let remote_methods = collect_methods(remote_interface.methods());
-        let remote_method_names: HashSet<&String> = remote_methods.keys().collect();
         let remote_properties = collect_properties(remote_interface.properties());
-        let remote_property_names: HashSet<&String> = remote_properties.keys().collect();
 
         let local_interface_string = read("com.steampowered.SteamOSManager1.xml")
             .await
@@ -534,13 +530,11 @@ mod test {
         assert_eq!(local_interface.len(), 1);
         let local_interface = local_interface[0];
         let local_methods = collect_methods(local_interface.methods());
-        let local_method_names: HashSet<&String> = local_methods.keys().collect();
         let local_properties = collect_properties(local_interface.properties());
-        let local_property_names: HashSet<&String> = local_properties.keys().collect();
 
-        for key in local_method_names.union(&remote_method_names) {
-            let local_method = local_methods.get(*key).expect(key);
-            let remote_method = remote_methods.get(*key).expect(key);
+        for key in remote_methods.keys() {
+            let local_method = local_methods.get(key).expect(key);
+            let remote_method = remote_methods.get(key).expect(key);
 
             assert_eq!(local_method.name(), remote_method.name());
             assert_eq!(local_method.args().len(), remote_method.args().len());
@@ -552,9 +546,9 @@ mod test {
             }
         }
 
-        for key in local_property_names.union(&remote_property_names) {
-            let local_property = local_properties.get(*key).expect(key);
-            let remote_property = remote_properties.get(*key).expect(key);
+        for key in remote_properties.keys() {
+            let local_property = local_properties.get(key).expect(key);
+            let remote_property = remote_properties.get(key).expect(key);
 
             assert_eq!(local_property.name(), remote_property.name());
             assert_eq!(local_property.ty(), remote_property.ty());
