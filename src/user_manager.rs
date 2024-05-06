@@ -144,15 +144,15 @@ impl SteamOSManagerUser {
         }
     }
 
-    async fn update_bios(&self) -> zbus::fdo::Result<()> {
+    async fn update_bios(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "UpdateBios")
     }
 
-    async fn update_dock(&self) -> zbus::fdo::Result<()> {
+    async fn update_dock(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "UpdateDock")
     }
 
-    async fn trim_devices(&self) -> zbus::fdo::Result<()> {
+    async fn trim_devices(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "TrimDevices")
     }
 
@@ -161,7 +161,7 @@ impl SteamOSManagerUser {
         device: &str,
         label: &str,
         validate: bool,
-    ) -> zbus::fdo::Result<()> {
+    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "FormatDevice", device, label, validate)
     }
 
@@ -351,7 +351,13 @@ mod test {
             let remote_method = remote_methods.get(*key).expect(key);
 
             assert_eq!(local_method.name(), remote_method.name());
-            assert_eq!(local_method.args().len(), remote_method.args().len());
+            assert_eq!(
+                local_method.args().len(),
+                remote_method.args().len(),
+                "Testing {:?} against {:?}",
+                local_method,
+                remote_method
+            );
             for (local_arg, remote_arg) in
                 zip(local_method.args().iter(), remote_method.args().iter())
             {
