@@ -6,7 +6,6 @@
  */
 
 use anyhow::{anyhow, Result};
-use clap::Parser;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
@@ -22,6 +21,7 @@ mod hardware;
 mod manager;
 mod power;
 mod process;
+mod proxy;
 mod root;
 mod sls;
 mod systemd;
@@ -32,9 +32,14 @@ mod wifi;
 #[cfg(test)]
 mod testing;
 
+pub use proxy::ManagerProxy;
+pub use root::daemon as RootDaemon;
+pub use user::daemon as UserDaemon;
+pub use wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
+
 const API_VERSION: u32 = 8;
 
-trait Service
+pub trait Service
 where
     Self: Sized + Send,
 {
@@ -65,13 +70,6 @@ where
             self.shutdown().await.and(res)
         }
     }
-}
-
-#[derive(Parser)]
-struct Args {
-    /// Run the root manager daemon
-    #[arg(short, long)]
-    root: bool,
 }
 
 #[cfg(not(test))]
@@ -153,16 +151,6 @@ pub fn zbus_to_zbus_fdo(error: zbus::Error) -> zbus::fdo::Error {
     match error {
         zbus::Error::FDO(error) => *error,
         error => zbus::fdo::Error::Failed(error.to_string()),
-    }
-}
-
-#[tokio::main]
-pub async fn main() -> Result<()> {
-    let args = Args::parse();
-    if args.root {
-        root::daemon().await
-    } else {
-        user::daemon().await
     }
 }
 
