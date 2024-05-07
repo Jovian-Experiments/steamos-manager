@@ -112,7 +112,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Then get a connection to the service
-    let conn = Connection::system().await?;
+    let conn = Connection::session().await?;
     let proxy = ManagerProxy::builder(&conn).build().await?;
 
     if args.all_properties {
