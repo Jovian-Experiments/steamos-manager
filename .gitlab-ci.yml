@@ -8,6 +8,7 @@ test:
   tags:
     - docker
     - linux
+    - isolated
   script:
     - pacman -Sy --noconfirm --needed dbus rust
     - dbus-run-session cargo test
