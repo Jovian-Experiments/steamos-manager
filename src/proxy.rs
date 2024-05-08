@@ -116,6 +116,7 @@ trait Manager {
 }
 
 #[proxy(
+    default_service = "com.steampowered.SteamOSManager1",
     interface = "com.steampowered.SteamOSManager1.SubProcess",
     assume_defaults = true
 )]
