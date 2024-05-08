@@ -305,7 +305,7 @@ mod test {
         sleep_process.kill().await.expect("kill");
 
         assert_eq!(
-            sleep_process.exit_code().await.unwrap(),
+            sleep_process.wait().await.unwrap(),
             -(Signal::SIGKILL as i32)
         );
     }
@@ -323,7 +323,7 @@ mod test {
         // Canceling a process should unpause it
         pause_process.cancel().await.expect("pause");
         assert_eq!(
-            pause_process.exit_code().await.unwrap(),
+            pause_process.wait().await.unwrap(),
             -(Signal::SIGTERM as i32)
         );
     }
