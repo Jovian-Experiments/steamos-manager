@@ -17,7 +17,13 @@ use zbus::connection::Connection;
 use crate::sls::{LogLayer, LogReceiver};
 use crate::{reload, Service};
 
-pub struct Daemon {
+mod root;
+mod user;
+
+pub use root::daemon as root;
+pub use user::daemon as user;
+
+pub(crate) struct Daemon {
     services: JoinSet<Result<()>>,
     token: CancellationToken,
     sigterm: Signal,
@@ -25,7 +31,7 @@ pub struct Daemon {
 }
 
 impl Daemon {
-    pub async fn new<S: SubscriberExt + Send + Sync + for<'a> LookupSpan<'a>>(
+    pub(crate) async fn new<S: SubscriberExt + Send + Sync + for<'a> LookupSpan<'a>>(
         subscriber: S,
         connection: Connection,
     ) -> Result<Daemon> {
@@ -51,13 +57,13 @@ impl Daemon {
         Ok(daemon)
     }
 
-    pub fn add_service<S: Service + 'static>(&mut self, service: S) {
+    pub(crate) fn add_service<S: Service + 'static>(&mut self, service: S) {
         let token = self.token.clone();
         self.services
             .spawn(async move { service.start(token).await });
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub(crate) async fn run(&mut self) -> Result<()> {
         ensure!(
             !self.services.is_empty(),
             "Can't run a daemon with no services attached."

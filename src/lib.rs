@@ -15,7 +15,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 mod cec;
-mod daemon;
 mod ds_inhibit;
 mod error;
 mod hardware;
@@ -26,9 +25,8 @@ mod sls;
 mod systemd;
 mod user_manager;
 
+pub mod daemon;
 pub mod proxy;
-pub mod root;
-pub mod user;
 pub mod wifi;
 
 #[cfg(test)]
