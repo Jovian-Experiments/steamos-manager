@@ -313,7 +313,8 @@
       <!--
         Wait for process to end and get exit code, resuming if paused
 
-        @exit_code The exit code
+        @exit_code The exit code, or negative signal number if the process
+        exited via signal.
       -->
       <method name="Wait">
         <arg type="i" name="exit_code" direction="out"/>
@@ -322,7 +323,8 @@
       <!--
         Get the exit code of the process if possible.
 
-        @exit_code The exit code
+        @exit_code The exit code, or negative signal number if the process
+        exited via signal.
         -->
       <method name="ExitCode">
         <arg type="i" name="exit_code" direction="out"/>

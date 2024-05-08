@@ -11,6 +11,8 @@ use nix::sys::signal;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::ffi::OsStr;
+use std::os::unix::process::ExitStatusExt;
+use std::process::ExitStatus;
 use tokio::process::{Child, Command};
 use tracing::error;
 use zbus::interface;
@@ -80,35 +82,46 @@ impl SubProcess {
     fn send_signal(&self, signal: nix::sys::signal::Signal) -> Result<()> {
         let pid = match self.process.id() {
             Some(id) => id,
-            None => {
-                bail!("Unable to get pid from command, it likely finished running");
-            }
+            None => bail!("Unable to get pid from command, it likely finished running"),
         };
         let pid: pid_t = match pid.try_into() {
             Ok(pid) => pid,
-            Err(message) => {
-                bail!("Unable to get pid_t from command {message}");
-            }
+            Err(message) => bail!("Unable to get pid_t from command {message}"),
         };
         signal::kill(Pid::from_raw(pid), signal)?;
         Ok(())
     }
 
-    async fn exit_code_internal(&mut self) -> Result<i32> {
-        match self.exit_code {
-            // Just give the exit_code if we have it already.
-            Some(code) => Ok(code),
-            None => {
-                // Otherwise wait for the process
-                let status = self.process.wait().await?;
-                match status.code() {
-                    Some(code) => {
-                        self.exit_code = Some(code);
-                        Ok(code)
-                    }
-                    None => bail!("Process exited without giving a code."),
-                }
+    fn update_exit_code(&mut self, status: ExitStatus) -> Result<i32> {
+        if let Some(code) = status.code() {
+            self.exit_code = Some(code);
+            Ok(code)
+        } else if let Some(signal) = status.signal() {
+            self.exit_code = Some(-signal);
+            Ok(-signal)
+        } else {
+            bail!("Process exited without return code or signal");
+        }
+    }
+
+    fn try_wait(&mut self) -> Result<Option<i32>> {
+        if self.exit_code.is_none() {
+            // If we don't already have an exit code, try to wait for the process
+            if let Some(status) = self.process.try_wait()? {
+                self.update_exit_code(status)?;
             }
+        }
+        Ok(self.exit_code)
+    }
+
+    async fn exit_code_internal(&mut self) -> Result<i32> {
+        if let Some(code) = self.exit_code {
+            // Just give the exit_code if we have it already
+            Ok(code)
+        } else {
+            // Otherwise wait for the process
+            let status = self.process.wait().await?;
+            self.update_exit_code(status)
         }
     }
 }
@@ -136,12 +149,22 @@ impl SubProcess {
         result
     }
 
-    pub async fn cancel(&self) -> zbus::fdo::Result<()> {
-        self.send_signal(Signal::SIGTERM).map_err(to_zbus_fdo_error)
+    pub async fn cancel(&mut self) -> zbus::fdo::Result<()> {
+        if self.try_wait().map_err(to_zbus_fdo_error)?.is_none() {
+            self.send_signal(Signal::SIGTERM)
+                .map_err(to_zbus_fdo_error)?;
+            if self.paused {
+                self.resume().await?;
+            }
+        }
+        Ok(())
     }
 
-    pub async fn kill(&self) -> zbus::fdo::Result<()> {
-        self.send_signal(signal::SIGKILL).map_err(to_zbus_fdo_error)
+    pub async fn kill(&mut self) -> zbus::fdo::Result<()> {
+        match self.try_wait().map_err(to_zbus_fdo_error)? {
+            Some(_) => Ok(()),
+            None => self.send_signal(signal::SIGKILL).map_err(to_zbus_fdo_error),
+        }
     }
 
     pub async fn wait(&mut self) -> zbus::fdo::Result<i32> {
@@ -162,10 +185,10 @@ impl SubProcess {
     }
 
     pub async fn exit_code(&mut self) -> zbus::fdo::Result<i32> {
-        match self.exit_code_internal().await {
-            Ok(i) => Ok(i),
-            Err(_) => Err(zbus::fdo::Error::Failed(
-                "Unable to get exit code.".to_string(),
+        match self.try_wait() {
+            Ok(Some(i)) => Ok(i),
+            _ => Err(zbus::fdo::Error::Failed(
+                "Unable to get exit code. The process may still be running.".to_string(),
             )),
         }
     }
@@ -220,6 +243,7 @@ pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Resu
 mod test {
     use super::*;
     use crate::testing;
+    use nix::sys::signal::Signal;
 
     fn ok(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Ok((0, String::from("ok")))
@@ -244,17 +268,17 @@ mod test {
             .await
             .unwrap();
 
-        let mut pause_process = ProcessManager::run_long_command("/usr/bin/sleep", &["1"])
+        let mut pause_process = ProcessManager::run_long_command("/usr/bin/sleep", &["0.2"])
             .await
             .unwrap();
-        let _ = pause_process.pause().await;
+        pause_process.pause().await.expect("pause");
 
         assert_eq!(
             pause_process.pause().await.unwrap_err(),
             zbus::fdo::Error::Failed("Already paused".to_string())
         );
 
-        let _ = pause_process.resume().await;
+        pause_process.resume().await.expect("resume");
 
         assert_eq!(
             pause_process.resume().await.unwrap_err(),
@@ -266,6 +290,57 @@ mod test {
 
         assert_eq!(false_process.wait().await.unwrap(), 1);
         assert_eq!(true_process.wait().await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_multikill() {
+        let _h = testing::start();
+
+        let mut sleep_process = ProcessManager::run_long_command("/usr/bin/sleep", &["0.1"])
+            .await
+            .unwrap();
+        sleep_process.kill().await.expect("kill");
+
+        // Killing a process should be idempotent
+        sleep_process.kill().await.expect("kill");
+
+        assert_eq!(
+            sleep_process.exit_code().await.unwrap(),
+            -(Signal::SIGKILL as i32)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_terminate_unpause() {
+        let _h = testing::start();
+
+        let mut pause_process = ProcessManager::run_long_command("/usr/bin/sleep", &["0.2"])
+            .await
+            .unwrap();
+        pause_process.pause().await.expect("pause");
+        assert_eq!(pause_process.try_wait().expect("try_wait"), None);
+
+        // Canceling a process should unpause it
+        pause_process.cancel().await.expect("pause");
+        assert_eq!(
+            pause_process.exit_code().await.unwrap(),
+            -(Signal::SIGTERM as i32)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_exit_code_early() {
+        let _h = testing::start();
+
+        let mut sleep_process = ProcessManager::run_long_command("/usr/bin/sleep", &["0.1"])
+            .await
+            .unwrap();
+        assert_eq!(
+            sleep_process.exit_code().await.unwrap_err().to_string(),
+            "org.freedesktop.DBus.Error.Failed: Unable to get exit code. The process may still be running."
+        );
+
+        assert_eq!(sleep_process.wait().await.unwrap(), 0);
     }
 
     #[tokio::test]
