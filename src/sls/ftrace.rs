@@ -119,6 +119,7 @@ mod test {
     use nix::unistd;
     use tokio::fs::{create_dir_all, read_to_string, write};
     use tokio::sync::mpsc::{error, unbounded_channel, UnboundedSender};
+    use zbus::fdo;
 
     struct MockTrace {
         traces: UnboundedSender<(String, HashMap<String, zvariant::OwnedValue>)>,
@@ -130,7 +131,7 @@ mod test {
             &mut self,
             trace: &str,
             data: HashMap<&str, zvariant::Value<'_>>,
-        ) -> zbus::fdo::Result<()> {
+        ) -> fdo::Result<()> {
             let _ = self.traces.send((
                 String::from(trace),
                 HashMap::from_iter(
