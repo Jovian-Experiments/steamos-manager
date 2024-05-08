@@ -17,7 +17,7 @@ use tokio::process::{Child, Command};
 use tracing::error;
 use zbus::interface;
 
-use crate::to_zbus_fdo_error;
+use crate::error::to_zbus_fdo_error;
 
 const PROCESS_PREFIX: &str = "/com/steampowered/SteamOSManager1/Process";
 

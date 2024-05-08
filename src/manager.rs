@@ -12,6 +12,7 @@ use tracing::error;
 use zbus::zvariant::Fd;
 use zbus::{interface, Connection, SignalContext};
 
+use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{check_support, variant, FanControl, FanControlState, HardwareVariant};
 use crate::power::{
     get_gpu_clocks, get_gpu_performance_level, get_tdp_limit, set_gpu_clocks,
@@ -22,7 +23,7 @@ use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
-use crate::{to_zbus_error, to_zbus_fdo_error, API_VERSION};
+use crate::API_VERSION;
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]

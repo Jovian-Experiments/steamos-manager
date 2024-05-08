@@ -13,7 +13,8 @@ use zbus::zvariant::Fd;
 use zbus::{interface, Connection, Proxy, SignalContext};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
-use crate::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo, API_VERSION};
+use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
+use crate::API_VERSION;
 
 macro_rules! method {
     ($self:expr, $method:expr, $($args:expr),+) => {

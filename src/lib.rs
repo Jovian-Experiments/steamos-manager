@@ -17,6 +17,7 @@ use tracing::{info, warn};
 mod cec;
 mod daemon;
 mod ds_inhibit;
+mod error;
 mod hardware;
 mod manager;
 mod power;
@@ -132,21 +133,6 @@ async fn reload() -> Result<()> {
             .recv()
             .await
             .ok_or(anyhow!("SIGHUP handler failed!"))?;
-    }
-}
-
-pub fn to_zbus_fdo_error<S: ToString>(error: S) -> zbus::fdo::Error {
-    zbus::fdo::Error::Failed(error.to_string())
-}
-
-pub fn to_zbus_error<S: ToString>(error: S) -> zbus::Error {
-    zbus::Error::Failure(error.to_string())
-}
-
-pub fn zbus_to_zbus_fdo(error: zbus::Error) -> zbus::fdo::Error {
-    match error {
-        zbus::Error::FDO(error) => *error,
-        error => zbus::fdo::Error::Failed(error.to_string()),
     }
 }
 
