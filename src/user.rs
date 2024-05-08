@@ -15,17 +15,20 @@ use zbus::ConnectionBuilder;
 use crate::daemon::Daemon;
 use crate::user_manager::SteamOSManagerUser;
 
-async fn create_connection(system_conn: &Connection) -> Result<Connection> {
+async fn create_connections() -> Result<(Connection, Connection)> {
+    let system = Connection::system().await?;
     let connection = ConnectionBuilder::session()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;
-    let manager = SteamOSManagerUser::new(connection.clone(), system_conn).await?;
+
+    let manager = SteamOSManagerUser::new(connection.clone(), &system).await?;
     connection
         .object_server()
         .at("/com/steampowered/SteamOSManager1", manager)
         .await?;
-    Ok(connection)
+
+    Ok((connection, system))
 }
 
 pub async fn daemon() -> Result<()> {
@@ -35,15 +38,7 @@ pub async fn daemon() -> Result<()> {
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
 
-    let system = match Connection::system().await {
-        Ok(c) => c,
-        Err(e) => {
-            let _guard = tracing::subscriber::set_default(subscriber);
-            error!("Error connecting to DBus: {}", e);
-            bail!(e);
-        }
-    };
-    let _session = match create_connection(&system).await {
+    let (_session, system) = match create_connections().await {
         Ok(c) => c,
         Err(e) => {
             let _guard = tracing::subscriber::set_default(subscriber);
