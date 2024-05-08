@@ -14,7 +14,7 @@ use zbus::ConnectionBuilder;
 
 use crate::daemon::Daemon;
 use crate::ds_inhibit::Inhibitor;
-use crate::manager;
+use crate::manager::root::SteamOSManager;
 use crate::sls::ftrace::Ftrace;
 
 async fn create_connection() -> Result<Connection> {
@@ -22,7 +22,7 @@ async fn create_connection() -> Result<Connection> {
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;
-    let manager = manager::SteamOSManager::new(connection.clone()).await?;
+    let manager = SteamOSManager::new(connection.clone()).await?;
     connection
         .object_server()
         .at("/com/steampowered/SteamOSManager1", manager)

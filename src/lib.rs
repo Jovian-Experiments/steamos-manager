@@ -23,7 +23,6 @@ mod power;
 mod process;
 mod sls;
 mod systemd;
-mod user_manager;
 
 pub mod daemon;
 pub mod proxy;

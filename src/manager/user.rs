@@ -51,14 +51,14 @@ macro_rules! setter {
     };
 }
 
-pub struct SteamOSManagerUser {
+pub struct SteamOSManager {
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
 }
 
-impl SteamOSManagerUser {
+impl SteamOSManager {
     pub async fn new(connection: Connection, system_conn: &Connection) -> Result<Self> {
-        Ok(SteamOSManagerUser {
+        Ok(SteamOSManager {
             hdmi_cec: HdmiCecControl::new(&connection).await?,
             proxy: Builder::new(system_conn)
                 .destination("com.steampowered.SteamOSManager1")?
@@ -72,7 +72,7 @@ impl SteamOSManagerUser {
 }
 
 #[interface(name = "com.steampowered.SteamOSManager1.Manager")]
-impl SteamOSManagerUser {
+impl SteamOSManager {
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
         API_VERSION
@@ -269,7 +269,7 @@ mod test {
             .build()
             .await
             .unwrap();
-        let manager = SteamOSManagerUser::new(connection.clone(), &connection)
+        let manager = SteamOSManager::new(connection.clone(), &connection)
             .await
             .unwrap();
         connection
@@ -307,7 +307,7 @@ mod test {
         let manager_ref = test
             .connection
             .object_server()
-            .interface::<_, SteamOSManagerUser>("/com/steampowered/SteamOSManager1")
+            .interface::<_, SteamOSManager>("/com/steampowered/SteamOSManager1")
             .await
             .expect("interface");
         let manager = manager_ref.get().await;
