@@ -10,8 +10,9 @@ use anyhow::Result;
 use tokio::fs::File;
 use tracing::error;
 use zbus::zvariant::Fd;
-use zbus::{interface, Connection, SignalContext};
+use zbus::{fdo, interface, Connection, SignalContext};
 
+use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{check_support, variant, FanControl, FanControlState, HardwareVariant};
 use crate::power::{
     get_gpu_clocks, get_gpu_performance_level, get_tdp_limit, set_gpu_clocks,
@@ -22,7 +23,7 @@ use crate::wifi::{
     get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
     set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
-use crate::{to_zbus_error, to_zbus_fdo_error, API_VERSION};
+use crate::API_VERSION;
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -67,7 +68,7 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
+    async fn wifi_power_management_state(&self) -> fdo::Result<u32> {
         match get_wifi_power_management_state().await {
             Ok(state) => Ok(state as u32),
             Err(e) => Err(to_zbus_fdo_error(e)),
@@ -78,7 +79,7 @@ impl SteamOSManager {
     async fn set_wifi_power_management_state(&self, state: u32) -> zbus::Result<()> {
         let state = match WifiPowerManagement::try_from(state) {
             Ok(state) => state,
-            Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
+            Err(err) => return Err(fdo::Error::InvalidArgs(err.to_string()).into()),
         };
         set_wifi_power_management_state(state)
             .await
@@ -86,7 +87,7 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
+    async fn fan_control_state(&self) -> fdo::Result<u32> {
         Ok(self
             .fan_control
             .get_state()
@@ -98,7 +99,7 @@ impl SteamOSManager {
     async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
         let state = match FanControlState::try_from(state) {
             Ok(state) => state,
-            Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
+            Err(err) => return Err(fdo::Error::InvalidArgs(err.to_string()).into()),
         };
         // Run what steamos-polkit-helpers/jupiter-fan-control does
         self.fan_control
@@ -108,7 +109,7 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn hardware_currently_supported(&self) -> zbus::fdo::Result<u32> {
+    async fn hardware_currently_supported(&self) -> fdo::Result<u32> {
         match check_support().await {
             Ok(res) => Ok(res as u32),
             Err(e) => Err(to_zbus_fdo_error(e)),
@@ -132,26 +133,26 @@ impl SteamOSManager {
         }
     }
 
-    async fn get_als_integration_time_file_descriptor(&self) -> zbus::fdo::Result<Fd> {
+    async fn get_als_integration_time_file_descriptor(&self) -> fdo::Result<Fd> {
         // Get the file descriptor for the als integration time sysfs path
         let result = File::create(ALS_INTEGRATION_PATH).await;
         match result {
             Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f.into_std().await))),
             Err(message) => {
                 error!("Error opening sysfs file for giving file descriptor: {message}");
-                Err(zbus::fdo::Error::IOError(message.to_string()))
+                Err(fdo::Error::IOError(message.to_string()))
             }
         }
     }
 
-    async fn update_bios(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_bios(&mut self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Update the bios as needed
         self.process_manager
             .get_command_object_path("/usr/bin/jupiter-biosupdate", &["--auto"], "updating BIOS")
             .await
     }
 
-    async fn update_dock(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_dock(&mut self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Update the dock firmware as needed
         self.process_manager
             .get_command_object_path(
@@ -162,7 +163,7 @@ impl SteamOSManager {
             .await
     }
 
-    async fn trim_devices(&mut self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn trim_devices(&mut self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Run steamos-trim-devices script
         self.process_manager
             .get_command_object_path(
@@ -178,7 +179,7 @@ impl SteamOSManager {
         device: &str,
         label: &str,
         validate: bool,
-    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         let mut args = vec!["--label", label, "--device", device];
         if !validate {
             args.push("--skip-validation");
@@ -193,7 +194,7 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
+    async fn gpu_performance_level(&self) -> fdo::Result<u32> {
         match get_gpu_performance_level().await {
             Ok(level) => Ok(level as u32),
             Err(e) => {
@@ -216,7 +217,7 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
+    async fn manual_gpu_clock(&self) -> fdo::Result<u32> {
         get_gpu_clocks()
             .await
             .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
@@ -244,7 +245,7 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn tdp_limit(&self) -> zbus::fdo::Result<u32> {
+    async fn tdp_limit(&self) -> fdo::Result<u32> {
         get_tdp_limit().await.map_err(to_zbus_fdo_error)
     }
 
@@ -276,12 +277,12 @@ impl SteamOSManager {
         mode: u32,
         buffer_size: u32,
         #[zbus(signal_context)] ctx: SignalContext<'_>,
-    ) -> zbus::fdo::Result<()> {
+    ) -> fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
         let wanted_mode = match WifiDebugMode::try_from(mode) {
             Ok(mode) => mode,
-            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
+            Err(e) => return Err(fdo::Error::InvalidArgs(e.to_string())),
         };
         match set_wifi_debug_mode(
             wanted_mode,
@@ -305,7 +306,7 @@ impl SteamOSManager {
 
     /// WifiBackend property.
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_backend(&self) -> zbus::fdo::Result<u32> {
+    async fn wifi_backend(&self) -> fdo::Result<u32> {
         match get_wifi_backend().await {
             Ok(backend) => Ok(backend as u32),
             Err(e) => Err(to_zbus_fdo_error(e)),
@@ -313,15 +314,15 @@ impl SteamOSManager {
     }
 
     #[zbus(property)]
-    async fn set_wifi_backend(&mut self, backend: u32) -> zbus::fdo::Result<()> {
+    async fn set_wifi_backend(&mut self, backend: u32) -> fdo::Result<()> {
         if self.wifi_debug_mode == WifiDebugMode::On {
-            return Err(zbus::fdo::Error::Failed(String::from(
+            return Err(fdo::Error::Failed(String::from(
                 "operation not supported when wifi_debug_mode=on",
             )));
         }
         let backend = match WifiBackend::try_from(backend) {
             Ok(backend) => backend,
-            Err(e) => return Err(zbus::fdo::Error::InvalidArgs(e.to_string())),
+            Err(e) => return Err(fdo::Error::InvalidArgs(e.to_string())),
         };
         set_wifi_backend(backend)
             .await

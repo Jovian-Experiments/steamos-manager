@@ -8,7 +8,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use steamos_manager::{RootDaemon, UserDaemon};
+use steamos_manager::daemon;
 
 #[derive(Parser)]
 struct Args {
@@ -21,8 +21,8 @@ struct Args {
 pub async fn main() -> Result<()> {
     let args = Args::parse();
     if args.root {
-        RootDaemon().await
+        daemon::root().await
     } else {
-        UserDaemon().await
+        daemon::user().await
     }
 }

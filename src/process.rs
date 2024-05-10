@@ -15,9 +15,9 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use tokio::process::{Child, Command};
 use tracing::error;
-use zbus::interface;
+use zbus::{fdo, interface};
 
-use crate::to_zbus_fdo_error;
+use crate::error::to_zbus_fdo_error;
 
 const PROCESS_PREFIX: &str = "/com/steampowered/SteamOSManager1/Process";
 
@@ -48,7 +48,7 @@ impl ProcessManager {
         executable: &str,
         args: &[impl AsRef<OsStr>],
         operation_name: &str,
-    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         // Run the given executable and give back an object path
         let path = format!("{}{}", PROCESS_PREFIX, self.next_process);
         self.next_process += 1;
@@ -128,9 +128,9 @@ impl SubProcess {
 
 #[interface(name = "com.steampowered.SteamOSManager1.SubProcess")]
 impl SubProcess {
-    pub async fn pause(&mut self) -> zbus::fdo::Result<()> {
+    pub async fn pause(&mut self) -> fdo::Result<()> {
         if self.paused {
-            return Err(zbus::fdo::Error::Failed("Already paused".to_string()));
+            return Err(fdo::Error::Failed("Already paused".to_string()));
         }
         // Pause the given process if possible
         // Return true on success, false otherwise
@@ -139,17 +139,17 @@ impl SubProcess {
         result
     }
 
-    pub async fn resume(&mut self) -> zbus::fdo::Result<()> {
+    pub async fn resume(&mut self) -> fdo::Result<()> {
         // Resume the given process if possible
         if !self.paused {
-            return Err(zbus::fdo::Error::Failed("Not paused".to_string()));
+            return Err(fdo::Error::Failed("Not paused".to_string()));
         }
         let result = self.send_signal(Signal::SIGCONT).map_err(to_zbus_fdo_error);
         self.paused = false;
         result
     }
 
-    pub async fn cancel(&mut self) -> zbus::fdo::Result<()> {
+    pub async fn cancel(&mut self) -> fdo::Result<()> {
         if self.try_wait().map_err(to_zbus_fdo_error)?.is_none() {
             self.send_signal(Signal::SIGTERM)
                 .map_err(to_zbus_fdo_error)?;
@@ -160,14 +160,14 @@ impl SubProcess {
         Ok(())
     }
 
-    pub async fn kill(&mut self) -> zbus::fdo::Result<()> {
+    pub async fn kill(&mut self) -> fdo::Result<()> {
         match self.try_wait().map_err(to_zbus_fdo_error)? {
             Some(_) => Ok(()),
             None => self.send_signal(signal::SIGKILL).map_err(to_zbus_fdo_error),
         }
     }
 
-    pub async fn wait(&mut self) -> zbus::fdo::Result<i32> {
+    pub async fn wait(&mut self) -> fdo::Result<i32> {
         if self.paused {
             self.resume().await?;
         }
@@ -175,16 +175,14 @@ impl SubProcess {
         let code = match self.exit_code_internal().await.map_err(to_zbus_fdo_error) {
             Ok(v) => v,
             Err(_) => {
-                return Err(zbus::fdo::Error::Failed(
-                    "Unable to get exit code".to_string(),
-                ));
+                return Err(fdo::Error::Failed("Unable to get exit code".to_string()));
             }
         };
         self.exit_code = Some(code);
         Ok(code)
     }
 
-    pub async fn exit_code(&mut self) -> zbus::fdo::Result<i32> {
+    pub async fn exit_code(&mut self) -> fdo::Result<i32> {
         match self.try_wait() {
             Ok(Some(i)) => Ok(i),
             _ => Err(zbus::fdo::Error::Failed(
@@ -275,14 +273,14 @@ mod test {
 
         assert_eq!(
             pause_process.pause().await.unwrap_err(),
-            zbus::fdo::Error::Failed("Already paused".to_string())
+            fdo::Error::Failed("Already paused".to_string())
         );
 
         pause_process.resume().await.expect("resume");
 
         assert_eq!(
             pause_process.resume().await.unwrap_err(),
-            zbus::fdo::Error::Failed("Not paused".to_string())
+            fdo::Error::Failed("Not paused".to_string())
         );
 
         // Sleep gives 0 exit code when done, -1 when we haven't waited for it yet

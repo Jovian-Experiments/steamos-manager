@@ -15,27 +15,21 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 mod cec;
-mod daemon;
 mod ds_inhibit;
+mod error;
 mod hardware;
 mod manager;
 mod power;
 mod process;
-mod proxy;
-mod root;
 mod sls;
 mod systemd;
-mod user;
-mod user_manager;
-mod wifi;
+
+pub mod daemon;
+pub mod proxy;
+pub mod wifi;
 
 #[cfg(test)]
 mod testing;
-
-pub use proxy::ManagerProxy;
-pub use root::daemon as RootDaemon;
-pub use user::daemon as UserDaemon;
-pub use wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 
 const API_VERSION: u32 = 8;
 
@@ -85,18 +79,18 @@ pub fn path<S: AsRef<str>>(path: S) -> PathBuf {
         .join(path.as_ref().trim_start_matches('/'))
 }
 
-pub async fn write_synced<P: AsRef<Path>>(path: P, bytes: &[u8]) -> Result<()> {
+pub(crate) async fn write_synced<P: AsRef<Path>>(path: P, bytes: &[u8]) -> Result<()> {
     let mut file = File::create(path.as_ref()).await?;
     file.write_all(bytes).await?;
     Ok(file.sync_data().await?)
 }
 
-pub fn read_comm(pid: u32) -> Result<String> {
+pub(crate) fn read_comm(pid: u32) -> Result<String> {
     let comm = std::fs::read_to_string(path(format!("/proc/{}/comm", pid)))?;
     Ok(comm.trim_end().to_string())
 }
 
-pub fn get_appid(pid: u32) -> Result<Option<u64>> {
+pub(crate) fn get_appid(pid: u32) -> Result<Option<u64>> {
     let environ = std::fs::read_to_string(path(format!("/proc/{}/environ", pid)))?;
     for env_var in environ.split('\0') {
         let (key, value) = match env_var.split_once('=') {
@@ -136,21 +130,6 @@ async fn reload() -> Result<()> {
             .recv()
             .await
             .ok_or(anyhow!("SIGHUP handler failed!"))?;
-    }
-}
-
-pub fn to_zbus_fdo_error<S: ToString>(error: S) -> zbus::fdo::Error {
-    zbus::fdo::Error::Failed(error.to_string())
-}
-
-pub fn to_zbus_error<S: ToString>(error: S) -> zbus::Error {
-    zbus::Error::Failure(error.to_string())
-}
-
-pub fn zbus_to_zbus_fdo(error: zbus::Error) -> zbus::fdo::Error {
-    match error {
-        zbus::Error::FDO(error) => *error,
-        error => zbus::fdo::Error::Failed(error.to_string()),
     }
 }
 

@@ -10,10 +10,11 @@ use anyhow::Result;
 use tracing::error;
 use zbus::proxy::Builder;
 use zbus::zvariant::Fd;
-use zbus::{interface, Connection, Proxy, SignalContext};
+use zbus::{fdo, interface, Connection, Proxy, SignalContext};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
-use crate::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo, API_VERSION};
+use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
+use crate::API_VERSION;
 
 macro_rules! method {
     ($self:expr, $method:expr, $($args:expr),+) => {
@@ -50,14 +51,14 @@ macro_rules! setter {
     };
 }
 
-pub struct SteamOSManagerUser {
+pub struct SteamOSManager {
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
 }
 
-impl SteamOSManagerUser {
+impl SteamOSManager {
     pub async fn new(connection: Connection, system_conn: &Connection) -> Result<Self> {
-        Ok(SteamOSManagerUser {
+        Ok(SteamOSManager {
             hdmi_cec: HdmiCecControl::new(&connection).await?,
             proxy: Builder::new(system_conn)
                 .destination("com.steampowered.SteamOSManager1")?
@@ -71,14 +72,14 @@ impl SteamOSManagerUser {
 }
 
 #[interface(name = "com.steampowered.SteamOSManager1.Manager")]
-impl SteamOSManagerUser {
+impl SteamOSManager {
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
         API_VERSION
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn hdmi_cec_state(&self) -> zbus::fdo::Result<u32> {
+    async fn hdmi_cec_state(&self) -> fdo::Result<u32> {
         match self.hdmi_cec.get_enabled_state().await {
             Ok(state) => Ok(state as u32),
             Err(e) => Err(to_zbus_fdo_error(e)),
@@ -89,7 +90,7 @@ impl SteamOSManagerUser {
     async fn set_hdmi_cec_state(&self, state: u32) -> zbus::Result<()> {
         let state = match HdmiCecState::try_from(state) {
             Ok(state) => state,
-            Err(err) => return Err(zbus::fdo::Error::InvalidArgs(err.to_string()).into()),
+            Err(err) => return Err(fdo::Error::InvalidArgs(err.to_string()).into()),
         };
         self.hdmi_cec
             .set_enabled_state(state)
@@ -98,12 +99,12 @@ impl SteamOSManagerUser {
             .map_err(to_zbus_error)
     }
 
-    async fn prepare_factory_reset(&self) -> zbus::fdo::Result<u32> {
+    async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
         method!(self, "PrepareFactoryReset")
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_power_management_state(&self) -> zbus::fdo::Result<u32> {
+    async fn wifi_power_management_state(&self) -> fdo::Result<u32> {
         getter!(self, "WifiPowerManagementState")
     }
 
@@ -113,7 +114,7 @@ impl SteamOSManagerUser {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn fan_control_state(&self) -> zbus::fdo::Result<u32> {
+    async fn fan_control_state(&self) -> fdo::Result<u32> {
         getter!(self, "FanControlState")
     }
 
@@ -123,16 +124,16 @@ impl SteamOSManagerUser {
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn hardware_currently_supported(&self) -> zbus::fdo::Result<u32> {
+    async fn hardware_currently_supported(&self) -> fdo::Result<u32> {
         getter!(self, "HardwareCurrentlySupported")
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn als_calibration_gain(&self) -> zbus::fdo::Result<f64> {
+    async fn als_calibration_gain(&self) -> fdo::Result<f64> {
         getter!(self, "AlsCalibrationGain")
     }
 
-    async fn get_als_integration_time_file_descriptor(&self) -> zbus::fdo::Result<Fd> {
+    async fn get_als_integration_time_file_descriptor(&self) -> fdo::Result<Fd> {
         let m = self
             .proxy
             .call_method::<&str, ()>("GetAlsIntegrationTimeFileDescriptor", &())
@@ -144,15 +145,15 @@ impl SteamOSManagerUser {
         }
     }
 
-    async fn update_bios(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_bios(&self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "UpdateBios")
     }
 
-    async fn update_dock(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_dock(&self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "UpdateDock")
     }
 
-    async fn trim_devices(&self) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn trim_devices(&self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "TrimDevices")
     }
 
@@ -161,12 +162,12 @@ impl SteamOSManagerUser {
         device: &str,
         label: &str,
         validate: bool,
-    ) -> zbus::fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "FormatDevice", device, label, validate)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn gpu_performance_level(&self) -> zbus::fdo::Result<u32> {
+    async fn gpu_performance_level(&self) -> fdo::Result<u32> {
         getter!(self, "GpuPerformanceLevel")
     }
 
@@ -176,7 +177,7 @@ impl SteamOSManagerUser {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn manual_gpu_clock(&self) -> zbus::fdo::Result<u32> {
+    async fn manual_gpu_clock(&self) -> fdo::Result<u32> {
         getter!(self, "ManualGpuClock")
     }
 
@@ -186,17 +187,17 @@ impl SteamOSManagerUser {
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_min(&self) -> zbus::fdo::Result<u32> {
+    async fn manual_gpu_clock_min(&self) -> fdo::Result<u32> {
         getter!(self, "ManualGpuClockMin")
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_max(&self) -> zbus::fdo::Result<u32> {
+    async fn manual_gpu_clock_max(&self) -> fdo::Result<u32> {
         getter!(self, "ManualGpuClockMax")
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn tdp_limit(&self) -> zbus::fdo::Result<u32> {
+    async fn tdp_limit(&self) -> fdo::Result<u32> {
         getter!(self, "TdpLimit")
     }
 
@@ -206,17 +207,17 @@ impl SteamOSManagerUser {
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_min(&self) -> zbus::fdo::Result<u32> {
+    async fn tdp_limit_min(&self) -> fdo::Result<u32> {
         getter!(self, "TdpLimitMin")
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_max(&self) -> zbus::fdo::Result<u32> {
+    async fn tdp_limit_max(&self) -> fdo::Result<u32> {
         getter!(self, "TdpLimitMax")
     }
 
     #[zbus(property)]
-    async fn wifi_debug_mode_state(&self) -> zbus::fdo::Result<u32> {
+    async fn wifi_debug_mode_state(&self) -> fdo::Result<u32> {
         getter!(self, "WifiDebugModeState")
     }
 
@@ -225,7 +226,7 @@ impl SteamOSManagerUser {
         mode: u32,
         buffer_size: u32,
         #[zbus(signal_context)] ctx: SignalContext<'_>,
-    ) -> zbus::fdo::Result<()> {
+    ) -> fdo::Result<()> {
         method!(self, "SetWifiDebugMode", mode, buffer_size)?;
         self.wifi_debug_mode_state_changed(&ctx)
             .await
@@ -234,7 +235,7 @@ impl SteamOSManagerUser {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_backend(&self) -> zbus::fdo::Result<u32> {
+    async fn wifi_backend(&self) -> fdo::Result<u32> {
         getter!(self, "WifiBackend")
     }
 
@@ -268,7 +269,7 @@ mod test {
             .build()
             .await
             .unwrap();
-        let manager = SteamOSManagerUser::new(connection.clone(), &connection)
+        let manager = SteamOSManager::new(connection.clone(), &connection)
             .await
             .unwrap();
         connection
@@ -306,7 +307,7 @@ mod test {
         let manager_ref = test
             .connection
             .object_server()
-            .interface::<_, SteamOSManagerUser>("/com/steampowered/SteamOSManager1")
+            .interface::<_, SteamOSManager>("/com/steampowered/SteamOSManager1")
             .await
             .expect("interface");
         let manager = manager_ref.get().await;

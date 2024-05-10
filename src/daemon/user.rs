@@ -13,21 +13,22 @@ use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
 use crate::daemon::Daemon;
-use crate::ds_inhibit::Inhibitor;
-use crate::manager;
-use crate::sls::ftrace::Ftrace;
+use crate::manager::user::SteamOSManager;
 
-async fn create_connection() -> Result<Connection> {
-    let connection = ConnectionBuilder::system()?
+async fn create_connections() -> Result<(Connection, Connection)> {
+    let system = Connection::system().await?;
+    let connection = ConnectionBuilder::session()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;
-    let manager = manager::SteamOSManager::new(connection.clone()).await?;
+
+    let manager = SteamOSManager::new(connection.clone(), &system).await?;
     connection
         .object_server()
         .at("/com/steampowered/SteamOSManager1", manager)
         .await?;
-    Ok(connection)
+
+    Ok((connection, system))
 }
 
 pub async fn daemon() -> Result<()> {
@@ -37,7 +38,7 @@ pub async fn daemon() -> Result<()> {
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
 
-    let connection = match create_connection().await {
+    let (_session, system) = match create_connections().await {
         Ok(c) => c,
         Err(e) => {
             let _guard = tracing::subscriber::set_default(subscriber);
@@ -45,13 +46,8 @@ pub async fn daemon() -> Result<()> {
             bail!(e);
         }
     };
-    let mut daemon = Daemon::new(subscriber, connection.clone()).await?;
 
-    let ftrace = Ftrace::init(connection.clone()).await?;
-    daemon.add_service(ftrace);
-
-    let inhibitor = Inhibitor::init().await?;
-    daemon.add_service(inhibitor);
+    let mut daemon = Daemon::new(subscriber, system).await?;
 
     daemon.run().await
 }

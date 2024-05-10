@@ -124,7 +124,7 @@ impl fmt::Display for WifiBackend {
     }
 }
 
-pub async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
+pub(crate) async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
     // Copy override.conf file into place or out of place depending
     // on install value
 
@@ -174,7 +174,7 @@ async fn start_tracing(buffer_size: u32) -> Result<()> {
     .await
 }
 
-pub async fn set_wifi_debug_mode(
+pub(crate) async fn set_wifi_debug_mode(
     mode: WifiDebugMode,
     buffer_size: u32,
     should_trace: bool,
@@ -225,7 +225,7 @@ pub async fn set_wifi_debug_mode(
     Ok(())
 }
 
-pub async fn get_wifi_backend() -> Result<WifiBackend> {
+pub(crate) async fn get_wifi_backend() -> Result<WifiBackend> {
     let wifi_backend_contents = fs::read_to_string(path(WIFI_BACKEND_PATH))
         .await?
         .trim()
@@ -240,11 +240,11 @@ pub async fn get_wifi_backend() -> Result<WifiBackend> {
     bail!("WiFi backend not found in config");
 }
 
-pub async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
+pub(crate) async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
     run_script("/usr/bin/steamos-wifi-set-backend", &[backend.to_string()]).await
 }
 
-pub async fn get_wifi_power_management_state() -> Result<WifiPowerManagement> {
+pub(crate) async fn get_wifi_power_management_state() -> Result<WifiPowerManagement> {
     let output = script_output("/usr/bin/iwconfig", &["wlan0"]).await?;
     for line in output.lines() {
         return Ok(match line.trim() {
@@ -256,7 +256,7 @@ pub async fn get_wifi_power_management_state() -> Result<WifiPowerManagement> {
     bail!("Failed to query power management state")
 }
 
-pub async fn set_wifi_power_management_state(state: WifiPowerManagement) -> Result<()> {
+pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) -> Result<()> {
     let state = match state {
         WifiPowerManagement::Disabled => "off",
         WifiPowerManagement::Enabled => "on",
