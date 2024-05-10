@@ -99,6 +99,14 @@ enum Commands {
 
     GetWifiPowerManagementState {},
 
+    GetHdmiCecState {},
+    SetHdmiCecState {
+        // Set the state of HDMI-CEC support
+        // 0 - disabled, 1 - only controls, 2 - TV waking
+        #[arg(short, long)]
+        value: u32,
+    },
+
     UpdateBios {},
     UpdateDock {},
     TrimDevices {},
@@ -218,6 +226,13 @@ async fn main() -> Result<()> {
         Some(Commands::GetWifiPowerManagementState {}) => {
             let state = proxy.wifi_power_management_state().await?;
             println!("Wifi power management state: {state}");
+        }
+        Some(Commands::SetHdmiCecState { value }) => {
+            proxy.set_hdmi_cec_state(*value).await?;
+        }
+        Some(Commands::GetHdmiCecState {}) => {
+            let state = proxy.hdmi_cec_state().await?;
+            println!("HDMI-CEC state: {state}");
         }
         Some(Commands::UpdateBios {}) => {
             let _ = proxy.update_bios().await?;

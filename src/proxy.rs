@@ -113,6 +113,12 @@ trait Manager {
     fn wifi_power_management_state(&self) -> zbus::Result<u32>;
     #[zbus(property)]
     fn set_wifi_power_management_state(&self, value: u32) -> zbus::Result<()>;
+
+    /// HdmiCecState property
+    #[zbus(property)]
+    fn hdmi_cec_state(&self) -> zbus::Result<u32>;
+    #[zbus(property)]
+    fn set_hdmi_cec_state(&self, value: u32) -> zbus::Result<()>;
 }
 
 #[proxy(
