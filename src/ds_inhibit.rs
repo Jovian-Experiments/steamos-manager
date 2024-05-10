@@ -4,9 +4,9 @@ use inotify::{Event, EventMask, EventStream, Inotify, WatchDescriptor, WatchMask
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::thread::sleep;
 use std::time::Duration;
 use tokio::fs::{self, read_dir, read_link};
+use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn};
 
@@ -243,7 +243,7 @@ impl Inhibitor {
             };
             debug!("New device {} found", path.display());
             let path = crate::path("/dev").join(path);
-            sleep(QSEC); // Wait a quarter second for nodes to enumerate
+            sleep(QSEC).await; // Wait a quarter second for nodes to enumerate
             if let Err(e) = self.watch(path.as_path()).await {
                 error!("Encountered error attempting to watch: {e}");
                 return Err(e);
@@ -299,12 +299,9 @@ mod test {
     use crate::testing;
     use std::fs::{create_dir_all, read_to_string, remove_file, write, File};
     use std::os::unix::fs::symlink;
-    use tokio::time::sleep;
 
-    async fn nyield(times: u32) {
-        for _ in 0..times {
-            sleep(Duration::from_millis(1)).await;
-        }
+    async fn nyield(time: u64) {
+        sleep(Duration::from_millis(time)).await;
     }
 
     #[tokio::test]
@@ -499,7 +496,7 @@ mod test {
             inhibitor.run().await.expect("run");
         });
 
-        nyield(1).await;
+        nyield(5).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "0\n"
@@ -507,7 +504,7 @@ mod test {
 
         symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
         let f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(3).await;
+        nyield(10).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "1\n"
@@ -515,7 +512,7 @@ mod test {
 
         drop(f);
         remove_file(path.join("proc/1/fd/3")).expect("rm");
-        nyield(1).await;
+        nyield(5).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "0\n"
@@ -543,13 +540,13 @@ mod test {
             inhibitor.run().await.expect("run");
         });
 
-        nyield(1).await;
+        nyield(5).await;
         assert!(read_to_string(sys_base.join("input/input0/inhibited")).is_err());
 
         File::create(hid.hidraw()).expect("hidraw");
         symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
         let _f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(4).await;
+        nyield(300).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "1\n"
@@ -576,14 +573,14 @@ mod test {
             inhibitor.run().await.expect("run");
         });
 
-        nyield(3).await;
+        nyield(5).await;
         assert!(read_to_string(sys_base.join("input/input0/inhibited")).is_err());
 
         File::create(hid.hidraw()).expect("hidraw");
-        nyield(3).await;
+        nyield(50).await;
         symlink(hid.hidraw(), path("/proc/1/fd/3")).expect("symlink");
         let _f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(3).await;
+        nyield(250).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "1\n"
