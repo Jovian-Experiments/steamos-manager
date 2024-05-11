@@ -9,7 +9,6 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use itertools::Itertools;
 use std::ops::Deref;
-use std::str::FromStr;
 use steamos_manager::proxy::ManagerProxy;
 use steamos_manager::wifi::WifiBackend;
 use zbus::fdo::PropertiesProxy;
@@ -88,7 +87,7 @@ enum Commands {
     /// Set the wifi backend if possible
     SetWifiBackend {
         /// Supported backends are iwd, wpa_supplicant
-        backend: String,
+        backend: WifiBackend,
     },
 
     /// Get the wifi backend
@@ -223,13 +222,8 @@ async fn main() -> Result<()> {
             let value = proxy.tdp_limit_min().await?;
             println!("TDP limit min: {value}");
         }
-        Commands::SetWifiBackend { backend } => match WifiBackend::from_str(backend) {
-            Ok(b) => {
-                proxy.set_wifi_backend(b as u32).await?;
-            }
-            Err(_) => {
-                println!("Unknown wifi backend {backend}");
-            }
+        Commands::SetWifiBackend { backend } => {
+            proxy.set_wifi_backend(*backend as u32).await?;
         },
         Commands::GetWifiBackend => {
             let backend = proxy.wifi_backend().await?;
