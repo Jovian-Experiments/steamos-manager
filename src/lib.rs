@@ -19,12 +19,12 @@ mod ds_inhibit;
 mod error;
 mod hardware;
 mod manager;
-mod power;
 mod process;
 mod sls;
 mod systemd;
 
 pub mod daemon;
+pub mod power;
 pub mod proxy;
 pub mod wifi;
 

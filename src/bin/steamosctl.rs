@@ -9,6 +9,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use itertools::Itertools;
 use std::ops::Deref;
+use steamos_manager::power::GPUPerformanceLevel;
 use steamos_manager::proxy::ManagerProxy;
 use steamos_manager::wifi::WifiBackend;
 use zbus::fdo::PropertiesProxy;
@@ -44,8 +45,8 @@ enum Commands {
 
     /// Set the GPU performance level
     SetGPUPerformanceLevel {
-        /// 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
-        level: u32,
+        /// Allowed levels are auto, low, high, manual, peak_performance
+        level: GPUPerformanceLevel,
     },
 
     /// Get the GPU performance level
@@ -182,11 +183,14 @@ async fn main() -> Result<()> {
             proxy.set_fan_control_state(*state).await?;
         }
         Commands::SetGPUPerformanceLevel { level } => {
-            proxy.set_gpu_performance_level(*level).await?;
+            proxy.set_gpu_performance_level(*level as u32).await?;
         }
         Commands::GetGPUPerformanceLevel => {
             let level = proxy.gpu_performance_level().await?;
-            println!("GPU performance level: {level}");
+            match GPUPerformanceLevel::try_from(level) {
+                Ok(l) => println!("GPU performance level: {}", l.to_string()),
+                Err(_) => println!("Got unknown value {level} from backend"),
+            }
         }
         Commands::SetManualGPUClock { freq } => {
             proxy.set_manual_gpu_clock(*freq).await?;
