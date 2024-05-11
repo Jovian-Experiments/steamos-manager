@@ -29,10 +29,10 @@ struct Args {
 #[derive(Subcommand)]
 enum Commands {
     /// Get luminance sensor calibration gain
-    GetAlsCalibrationGain {},
+    GetAlsCalibrationGain,
 
     /// Get if the hardware is currently supported
-    GetHardwareCurrentlySupported {},
+    GetHardwareCurrentlySupported,
 
     /// Set the fan control state
     SetFanControlState {
@@ -41,7 +41,7 @@ enum Commands {
     },
 
     /// Get the fan control state
-    GetFanControlState {},
+    GetFanControlState,
 
     /// Set the GPU performance level
     SetGPUPerformanceLevel {
@@ -50,7 +50,7 @@ enum Commands {
     },
 
     /// Get the GPU performance level
-    GetGPUPerformanceLevel {},
+    GetGPUPerformanceLevel,
 
     /// Set the GPU clock value manually. Only works when performance level is set to Manual
     SetManualGPUClock {
@@ -59,13 +59,13 @@ enum Commands {
     },
 
     /// Get the GPU clock frequency, in MHz. Only works when performance level is set to Manual
-    GetManualGPUClock {},
+    GetManualGPUClock,
 
     /// Get the maximum allowed GPU clock frequency for the Manual performance level
-    GetManualGPUClockMax {},
+    GetManualGPUClockMax,
 
     /// Get the minimum allowed GPU clock frequency for the Manual performance level
-    GetManualGPUClockMin {},
+    GetManualGPUClockMin,
 
     /// Set the TDP limit
     SetTDPLimit {
@@ -74,16 +74,16 @@ enum Commands {
     },
 
     /// Get the TDP limit
-    GetTDPLimit {},
+    GetTDPLimit,
 
     /// Get the maximum allowed TDP limit
-    GetTDPLimitMax {},
+    GetTDPLimitMax,
 
     /// Get the minimum allowed TDP limit
-    GetTDPLimitMin {},
+    GetTDPLimitMin,
 
     /// Get the current API version
-    GetVersion {},
+    GetVersion,
 
     /// Set the wifi backend if possible
     SetWifiBackend {
@@ -92,7 +92,7 @@ enum Commands {
     },
 
     /// Get the wifi backend
-    GetWifiBackend {},
+    GetWifiBackend,
 
     /// Set wifi debug mode
     SetWifiDebugMode {
@@ -104,7 +104,7 @@ enum Commands {
     },
 
     /// Get wifi debug mode
-    GetWifiDebugMode {},
+    GetWifiDebugMode,
 
     /// Set the wifi power management state
     SetWifiPowerManagementState {
@@ -113,10 +113,10 @@ enum Commands {
     },
 
     /// Get the wifi power management state
-    GetWifiPowerManagementState {},
+    GetWifiPowerManagementState,
 
     /// Get the state of HDMI-CEC support
-    GetHdmiCecState {},
+    GetHdmiCecState,
 
     /// Set the state of HDMI-CEC support
     SetHdmiCecState {
@@ -125,16 +125,16 @@ enum Commands {
     },
 
     /// Update the BIOS, if possible
-    UpdateBios {},
+    UpdateBios,
 
     /// Update the dock, if possible
-    UpdateDock {},
+    UpdateDock,
 
     /// Trim applicable drives
-    TrimDevices {},
+    TrimDevices,
 
     /// Factory reset the device
-    FactoryReset {},
+    FactoryReset,
 }
 
 #[tokio::main]
@@ -168,15 +168,15 @@ async fn main() -> Result<()> {
 
     // Then process arguments
     match &args.command {
-        Some(Commands::GetAlsCalibrationGain {}) => {
+        Some(Commands::GetAlsCalibrationGain) => {
             let gain = proxy.als_calibration_gain().await?;
             println!("ALS calibration gain: {gain}");
         }
-        Some(Commands::GetHardwareCurrentlySupported {}) => {
+        Some(Commands::GetHardwareCurrentlySupported) => {
             let supported = proxy.hardware_currently_supported().await?;
             println!("Hardware currently supported: {supported}");
         }
-        Some(Commands::GetVersion {}) => {
+        Some(Commands::GetVersion) => {
             let version = proxy.version().await?;
             println!("Version: {version}");
         }
@@ -186,41 +186,41 @@ async fn main() -> Result<()> {
         Some(Commands::SetGPUPerformanceLevel { level }) => {
             proxy.set_gpu_performance_level(*level).await?;
         }
-        Some(Commands::GetGPUPerformanceLevel {}) => {
+        Some(Commands::GetGPUPerformanceLevel) => {
             let level = proxy.gpu_performance_level().await?;
             println!("GPU performance level: {level}");
         }
         Some(Commands::SetManualGPUClock { freq }) => {
             proxy.set_manual_gpu_clock(*freq).await?;
         }
-        Some(Commands::GetManualGPUClock {}) => {
+        Some(Commands::GetManualGPUClock) => {
             let clock = proxy.manual_gpu_clock().await?;
             println!("Manual GPU Clock: {clock}");
         }
-        Some(Commands::GetManualGPUClockMax {}) => {
+        Some(Commands::GetManualGPUClockMax) => {
             let value = proxy.manual_gpu_clock_max().await?;
             println!("Manual GPU Clock Max: {value}");
         }
-        Some(Commands::GetManualGPUClockMin {}) => {
+        Some(Commands::GetManualGPUClockMin) => {
             let value = proxy.manual_gpu_clock_min().await?;
             println!("Manual GPU Clock Min: {value}");
         }
         Some(Commands::SetTDPLimit { limit }) => {
             proxy.set_tdp_limit(*limit).await?;
         }
-        Some(Commands::GetTDPLimit {}) => {
+        Some(Commands::GetTDPLimit) => {
             let limit = proxy.tdp_limit().await?;
             println!("TDP limit: {limit}");
         }
-        Some(Commands::GetFanControlState {}) => {
+        Some(Commands::GetFanControlState) => {
             let state = proxy.fan_control_state().await?;
             println!("Fan control state: {state}");
         }
-        Some(Commands::GetTDPLimitMax {}) => {
+        Some(Commands::GetTDPLimitMax) => {
             let value = proxy.tdp_limit_max().await?;
             println!("TDP limit max: {value}");
         }
-        Some(Commands::GetTDPLimitMin {}) => {
+        Some(Commands::GetTDPLimitMin) => {
             let value = proxy.tdp_limit_min().await?;
             println!("TDP limit min: {value}");
         }
@@ -232,7 +232,7 @@ async fn main() -> Result<()> {
                 println!("Unknown wifi backend {backend}");
             }
         },
-        Some(Commands::GetWifiBackend {}) => {
+        Some(Commands::GetWifiBackend) => {
             let backend = proxy.wifi_backend().await?;
             let backend_string = WifiBackend::try_from(backend).unwrap().to_string();
             println!("Wifi backend: {backend_string}");
@@ -240,34 +240,34 @@ async fn main() -> Result<()> {
         Some(Commands::SetWifiDebugMode { mode, buffer }) => {
             proxy.set_wifi_debug_mode(*mode, *buffer).await?;
         }
-        Some(Commands::GetWifiDebugMode {}) => {
+        Some(Commands::GetWifiDebugMode) => {
             let mode = proxy.wifi_debug_mode_state().await?;
             println!("Wifi debug mode: {mode}");
         }
         Some(Commands::SetWifiPowerManagementState { state }) => {
             proxy.set_wifi_power_management_state(*state).await?;
         }
-        Some(Commands::GetWifiPowerManagementState {}) => {
+        Some(Commands::GetWifiPowerManagementState) => {
             let state = proxy.wifi_power_management_state().await?;
             println!("Wifi power management state: {state}");
         }
         Some(Commands::SetHdmiCecState { state }) => {
             proxy.set_hdmi_cec_state(*state).await?;
         }
-        Some(Commands::GetHdmiCecState {}) => {
+        Some(Commands::GetHdmiCecState) => {
             let state = proxy.hdmi_cec_state().await?;
             println!("HDMI-CEC state: {state}");
         }
-        Some(Commands::UpdateBios {}) => {
+        Some(Commands::UpdateBios) => {
             let _ = proxy.update_bios().await?;
         }
-        Some(Commands::UpdateDock {}) => {
+        Some(Commands::UpdateDock) => {
             let _ = proxy.update_dock().await?;
         }
-        Some(Commands::FactoryReset {}) => {
+        Some(Commands::FactoryReset) => {
             let _ = proxy.prepare_factory_reset().await?;
         }
-        Some(Commands::TrimDevices {}) => {
+        Some(Commands::TrimDevices) => {
             let _ = proxy.trim_devices().await?;
         }
         None => {}
