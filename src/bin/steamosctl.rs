@@ -28,88 +28,112 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Get luminance sensor calibration gain
     GetAlsCalibrationGain {},
+
+    /// Get if the hardware is currently supported
     GetHardwareCurrentlySupported {},
 
+    /// Set the fan control state
     SetFanControlState {
-        // Set the fan control state.
-        // 0 - BIOS, 1 - OS
-        #[arg(short, long)]
-        value: u32,
+        /// 0 - BIOS, 1 - OS
+        state: u32,
     },
 
+    /// Get the fan control state
     GetFanControlState {},
 
+    /// Set the GPU performance level
     SetGPUPerformanceLevel {
-        // Set the gpu performance level
-        // 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
-        #[arg(short, long)]
-        value: u32,
+        /// 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
+        level: u32,
     },
 
+    /// Get the GPU performance level
     GetGPUPerformanceLevel {},
 
+    /// Set the GPU clock value manually. Only works when performance level is set to Manual
     SetManualGPUClock {
-        // Set the GPU clock value manually
-        // Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set to Manual
-        #[arg(short, long)]
-        value: u32,
+        /// GPU clock frequency in MHz
+        freq: u32,
     },
 
+    /// Get the GPU clock frequency, in MHz. Only works when performance level is set to Manual
     GetManualGPUClock {},
+
+    /// Get the maximum allowed GPU clock frequency for the Manual performance level
     GetManualGPUClockMax {},
+
+    /// Get the minimum allowed GPU clock frequency for the Manual performance level
     GetManualGPUClockMin {},
 
+    /// Set the TDP limit
     SetTDPLimit {
-        // Set the TDP limit
-        #[arg(short, long)]
-        value: u32,
+        /// TDP limit, in W
+        limit: u32,
     },
 
+    /// Get the TDP limit
     GetTDPLimit {},
+
+    /// Get the maximum allowed TDP limit
     GetTDPLimitMax {},
+
+    /// Get the minimum allowed TDP limit
     GetTDPLimitMin {},
 
+    /// Get the current API version
     GetVersion {},
 
+    /// Set the wifi backend if possible
     SetWifiBackend {
-        // Set the wifi backend to given string if possible
-        // Supported values are iwd|wpa_supplicant
-        #[arg(short, long)]
+        /// Supported backends are iwd, wpa_supplicant
         backend: String,
     },
 
+    /// Get the wifi backend
     GetWifiBackend {},
 
+    /// Set wifi debug mode
     SetWifiDebugMode {
-        // Set wifi debug mode to given value
-        // 1 for on, 0 for off currently
-        #[arg(short, long)]
+        /// 1 for on, 0 for off
         mode: u32,
+        /// The size of the debug buffer, in bytes
+        #[arg(default_value_t = 20000)]
+        buffer: u32,
     },
 
+    /// Get wifi debug mode
     GetWifiDebugMode {},
 
+    /// Set the wifi power management state
     SetWifiPowerManagementState {
-        // Set the wifi power management state
-        // 0 - disabled, 1 - enabled
-        #[arg(short, long)]
-        value: u32,
+        /// 0 - disabled, 1 - enabled
+        state: u32,
     },
 
+    /// Get the wifi power management state
     GetWifiPowerManagementState {},
 
+    /// Get the state of HDMI-CEC support
     GetHdmiCecState {},
+
+    /// Set the state of HDMI-CEC support
     SetHdmiCecState {
-        // Set the state of HDMI-CEC support
-        // 0 - disabled, 1 - only controls, 2 - TV waking
-        #[arg(short, long)]
-        value: u32,
+        /// 0 - disabled, 1 - only controls, 2 - Controls and TV waking
+        state: u32,
     },
 
+    /// Update the BIOS, if possible
     UpdateBios {},
+
+    /// Update the dock, if possible
     UpdateDock {},
+
+    /// Trim applicable drives
     TrimDevices {},
+
+    /// Factory reset the device
     FactoryReset {},
 }
 
@@ -156,18 +180,18 @@ async fn main() -> Result<()> {
             let version = proxy.version().await?;
             println!("Version: {version}");
         }
-        Some(Commands::SetFanControlState { value }) => {
-            proxy.set_fan_control_state(*value).await?;
+        Some(Commands::SetFanControlState { state }) => {
+            proxy.set_fan_control_state(*state).await?;
         }
-        Some(Commands::SetGPUPerformanceLevel { value }) => {
-            proxy.set_gpu_performance_level(*value).await?;
+        Some(Commands::SetGPUPerformanceLevel { level }) => {
+            proxy.set_gpu_performance_level(*level).await?;
         }
         Some(Commands::GetGPUPerformanceLevel {}) => {
             let level = proxy.gpu_performance_level().await?;
             println!("GPU performance level: {level}");
         }
-        Some(Commands::SetManualGPUClock { value }) => {
-            proxy.set_manual_gpu_clock(*value).await?;
+        Some(Commands::SetManualGPUClock { freq }) => {
+            proxy.set_manual_gpu_clock(*freq).await?;
         }
         Some(Commands::GetManualGPUClock {}) => {
             let clock = proxy.manual_gpu_clock().await?;
@@ -181,8 +205,8 @@ async fn main() -> Result<()> {
             let value = proxy.manual_gpu_clock_min().await?;
             println!("Manual GPU Clock Min: {value}");
         }
-        Some(Commands::SetTDPLimit { value }) => {
-            proxy.set_tdp_limit(*value).await?;
+        Some(Commands::SetTDPLimit { limit }) => {
+            proxy.set_tdp_limit(*limit).await?;
         }
         Some(Commands::GetTDPLimit {}) => {
             let limit = proxy.tdp_limit().await?;
@@ -213,22 +237,22 @@ async fn main() -> Result<()> {
             let backend_string = WifiBackend::try_from(backend).unwrap().to_string();
             println!("Wifi backend: {backend_string}");
         }
-        Some(Commands::SetWifiDebugMode { mode }) => {
-            proxy.set_wifi_debug_mode(*mode, 20000).await?;
+        Some(Commands::SetWifiDebugMode { mode, buffer }) => {
+            proxy.set_wifi_debug_mode(*mode, *buffer).await?;
         }
         Some(Commands::GetWifiDebugMode {}) => {
             let mode = proxy.wifi_debug_mode_state().await?;
             println!("Wifi debug mode: {mode}");
         }
-        Some(Commands::SetWifiPowerManagementState { value }) => {
-            proxy.set_wifi_power_management_state(*value).await?;
+        Some(Commands::SetWifiPowerManagementState { state }) => {
+            proxy.set_wifi_power_management_state(*state).await?;
         }
         Some(Commands::GetWifiPowerManagementState {}) => {
             let state = proxy.wifi_power_management_state().await?;
             println!("Wifi power management state: {state}");
         }
-        Some(Commands::SetHdmiCecState { value }) => {
-            proxy.set_hdmi_cec_state(*value).await?;
+        Some(Commands::SetHdmiCecState { state }) => {
+            proxy.set_hdmi_cec_state(*state).await?;
         }
         Some(Commands::GetHdmiCecState {}) => {
             let state = proxy.hdmi_cec_state().await?;
