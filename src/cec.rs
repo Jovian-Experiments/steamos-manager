@@ -6,8 +6,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::Result;
+use anyhow::{bail, Error, Result};
 use std::fmt;
+use std::str::FromStr;
 use zbus::Connection;
 
 use crate::systemd::{daemon_reload, EnableState, SystemdUnit};
@@ -31,6 +32,18 @@ impl TryFrom<u32> for HdmiCecState {
     }
 }
 
+impl FromStr for HdmiCecState {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<HdmiCecState, Self::Err> {
+        Ok(match input {
+            "disable" | "disabled" | "off" => HdmiCecState::Disabled,
+            "control-only" | "ControlOnly" => HdmiCecState::ControlOnly,
+            "control-wake" | "control-and-wake" | "ControlAndWake" => HdmiCecState::ControlAndWake,
+            v => bail!("No enum match for value {v}"),
+        })
+    }
+}
+
 impl fmt::Display for HdmiCecState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -41,7 +54,7 @@ impl fmt::Display for HdmiCecState {
     }
 }
 
-pub struct HdmiCecControl<'dbus> {
+pub(crate) struct HdmiCecControl<'dbus> {
     plasma_rc_unit: SystemdUnit<'dbus>,
     wakehook_unit: SystemdUnit<'dbus>,
     connection: Connection,
