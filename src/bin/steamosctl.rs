@@ -9,9 +9,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use itertools::Itertools;
 use std::ops::Deref;
+use steamos_manager::cec::HdmiCecState;
+use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::GPUPerformanceLevel;
 use steamos_manager::proxy::ManagerProxy;
-use steamos_manager::wifi::WifiBackend;
+use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
 use zbus::names::InterfaceName;
 use zbus::{zvariant, Connection};
@@ -36,8 +38,8 @@ enum Commands {
 
     /// Set the fan control state
     SetFanControlState {
-        /// 0 - BIOS, 1 - OS
-        state: u32,
+        /// Valid options are bios, os
+        state: FanControlState,
     },
 
     /// Get the fan control state
@@ -45,7 +47,7 @@ enum Commands {
 
     /// Set the GPU performance level
     SetGPUPerformanceLevel {
-        /// Allowed levels are auto, low, high, manual, peak_performance
+        /// Valid levels are auto, low, high, manual, peak_performance
         level: GPUPerformanceLevel,
     },
 
@@ -96,8 +98,8 @@ enum Commands {
 
     /// Set wifi debug mode
     SetWifiDebugMode {
-        /// 1 for on, 0 for off
-        mode: u32,
+        /// Valid modes are on, off
+        mode: WifiDebugMode,
         /// The size of the debug buffer, in bytes
         #[arg(default_value_t = 20000)]
         buffer: u32,
@@ -108,8 +110,8 @@ enum Commands {
 
     /// Set the wifi power management state
     SetWifiPowerManagementState {
-        /// 0 - disabled, 1 - enabled
-        state: u32,
+        /// Valid modes are enabled, disabled
+        state: WifiPowerManagement,
     },
 
     /// Get the wifi power management state
@@ -120,8 +122,8 @@ enum Commands {
 
     /// Set the state of HDMI-CEC support
     SetHdmiCecState {
-        /// 0 - disabled, 1 - only controls, 2 - Controls and TV waking
-        state: u32,
+        /// Valid modes are disabled, control-only, control-and-wake
+        state: HdmiCecState,
     },
 
     /// Update the BIOS, if possible
@@ -180,7 +182,7 @@ async fn main() -> Result<()> {
             println!("Version: {version}");
         }
         Commands::SetFanControlState { state } => {
-            proxy.set_fan_control_state(*state).await?;
+            proxy.set_fan_control_state(*state as u32).await?;
         }
         Commands::SetGPUPerformanceLevel { level } => {
             proxy.set_gpu_performance_level(*level as u32).await?;
@@ -235,21 +237,21 @@ async fn main() -> Result<()> {
             println!("Wifi backend: {backend_string}");
         }
         Commands::SetWifiDebugMode { mode, buffer } => {
-            proxy.set_wifi_debug_mode(*mode, *buffer).await?;
+            proxy.set_wifi_debug_mode(*mode as u32, *buffer).await?;
         }
         Commands::GetWifiDebugMode => {
             let mode = proxy.wifi_debug_mode_state().await?;
             println!("Wifi debug mode: {mode}");
         }
         Commands::SetWifiPowerManagementState { state } => {
-            proxy.set_wifi_power_management_state(*state).await?;
+            proxy.set_wifi_power_management_state(*state as u32).await?;
         }
         Commands::GetWifiPowerManagementState => {
             let state = proxy.wifi_power_management_state().await?;
             println!("Wifi power management state: {state}");
         }
         Commands::SetHdmiCecState { state } => {
-            proxy.set_hdmi_cec_state(*state).await?;
+            proxy.set_hdmi_cec_state(*state as u32).await?;
         }
         Commands::GetHdmiCecState => {
             let state = proxy.hdmi_cec_state().await?;
