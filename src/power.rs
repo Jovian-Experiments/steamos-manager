@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, ensure, Error, Result};
+use anyhow::{bail, ensure, Error, Result};
 use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::fs::{self, File};
@@ -52,14 +52,14 @@ impl TryFrom<u32> for GPUPerformanceLevel {
 impl FromStr for GPUPerformanceLevel {
     type Err = Error;
     fn from_str(input: &str) -> Result<GPUPerformanceLevel, Self::Err> {
-        match input {
-            "auto" => Ok(GPUPerformanceLevel::Auto),
-            "low" => Ok(GPUPerformanceLevel::Low),
-            "high" => Ok(GPUPerformanceLevel::High),
-            "manual" => Ok(GPUPerformanceLevel::Manual),
-            "peak_performance" => Ok(GPUPerformanceLevel::ProfilePeak),
-            v => Err(anyhow!("No enum match for value {v}")),
-        }
+        Ok(match input {
+            "auto" => GPUPerformanceLevel::Auto,
+            "low" => GPUPerformanceLevel::Low,
+            "high" => GPUPerformanceLevel::High,
+            "manual" => GPUPerformanceLevel::Manual,
+            "peak_performance" => GPUPerformanceLevel::ProfilePeak,
+            v => bail!("No enum match for value {v}"),
+        })
     }
 }
 
