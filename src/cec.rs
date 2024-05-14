@@ -54,6 +54,16 @@ impl fmt::Display for HdmiCecState {
     }
 }
 
+impl HdmiCecState {
+    pub fn to_human_readable(&self) -> &'static str {
+        match self {
+            HdmiCecState::Disabled => "disabled",
+            HdmiCecState::ControlOnly => "control-only",
+            HdmiCecState::ControlAndWake => "control-and-wake",
+        }
+    }
+}
+
 pub(crate) struct HdmiCecControl<'dbus> {
     plasma_rc_unit: SystemdUnit<'dbus>,
     wakehook_unit: SystemdUnit<'dbus>,

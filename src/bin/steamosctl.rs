@@ -184,6 +184,13 @@ async fn main() -> Result<()> {
         Commands::SetFanControlState { state } => {
             proxy.set_fan_control_state(*state as u32).await?;
         }
+        Commands::GetFanControlState => {
+            let state = proxy.fan_control_state().await?;
+            match FanControlState::try_from(state) {
+                Ok(s) => println!("Fan control state: {}", s.to_string()),
+                Err(_) => println!("Got unknown value {state} from backend"),
+            }
+        }
         Commands::SetGPUPerformanceLevel { level } => {
             proxy.set_gpu_performance_level(*level as u32).await?;
         }
@@ -216,10 +223,6 @@ async fn main() -> Result<()> {
             let limit = proxy.tdp_limit().await?;
             println!("TDP limit: {limit}");
         }
-        Commands::GetFanControlState => {
-            let state = proxy.fan_control_state().await?;
-            println!("Fan control state: {state}");
-        }
         Commands::GetTDPLimitMax => {
             let value = proxy.tdp_limit_max().await?;
             println!("TDP limit max: {value}");
@@ -233,29 +236,40 @@ async fn main() -> Result<()> {
         },
         Commands::GetWifiBackend => {
             let backend = proxy.wifi_backend().await?;
-            let backend_string = WifiBackend::try_from(backend).unwrap().to_string();
-            println!("Wifi backend: {backend_string}");
+            match WifiBackend::try_from(backend) {
+                Ok(be) => println!("Wifi backend: {}", be.to_string()),
+                Err(_) => println!("Got unknown value {backend} from backend"),
+            }
         }
         Commands::SetWifiDebugMode { mode, buffer } => {
             proxy.set_wifi_debug_mode(*mode as u32, *buffer).await?;
         }
         Commands::GetWifiDebugMode => {
             let mode = proxy.wifi_debug_mode_state().await?;
-            println!("Wifi debug mode: {mode}");
+            match WifiDebugMode::try_from(mode) {
+                Ok(m) => println!("Wifi debug mode: {}", m.to_string()),
+                Err(_) => println!("Got unknown value {mode} from backend"),
+            }
         }
         Commands::SetWifiPowerManagementState { state } => {
             proxy.set_wifi_power_management_state(*state as u32).await?;
         }
         Commands::GetWifiPowerManagementState => {
             let state = proxy.wifi_power_management_state().await?;
-            println!("Wifi power management state: {state}");
+            match WifiPowerManagement::try_from(state) {
+                Ok(s) => println!("Wifi power management state: {}", s.to_string()),
+                Err(_) => println!("Got unknown value {state} from backend"),
+            }
         }
         Commands::SetHdmiCecState { state } => {
             proxy.set_hdmi_cec_state(*state as u32).await?;
         }
         Commands::GetHdmiCecState => {
             let state = proxy.hdmi_cec_state().await?;
-            println!("HDMI-CEC state: {state}");
+            match HdmiCecState::try_from(state) {
+                Ok(s) => println!("HDMI-CEC state: {}", s.to_human_readable()),
+                Err(_) => println!("Got unknown value {state} from backend"),
+            }
         }
         Commands::UpdateBios => {
             let _ = proxy.update_bios().await?;
