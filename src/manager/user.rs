@@ -120,7 +120,7 @@ impl SteamOSManager {
 
     #[zbus(property)]
     async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
-        setter!(self, "SetFanControlState", state)
+        setter!(self, "FanControlState", state)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
