@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, ensure, Error, Result};
+use anyhow::{bail, ensure, Error, Result};
 use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::fs::{self, File};
@@ -52,14 +52,14 @@ impl TryFrom<u32> for GPUPerformanceLevel {
 impl FromStr for GPUPerformanceLevel {
     type Err = Error;
     fn from_str(input: &str) -> Result<GPUPerformanceLevel, Self::Err> {
-        match input {
-            "auto" => Ok(GPUPerformanceLevel::Auto),
-            "low" => Ok(GPUPerformanceLevel::Low),
-            "high" => Ok(GPUPerformanceLevel::High),
-            "manual" => Ok(GPUPerformanceLevel::Manual),
-            "peak_performance" => Ok(GPUPerformanceLevel::ProfilePeak),
-            v => Err(anyhow!("No enum match for value {v}")),
-        }
+        Ok(match input {
+            "auto" => GPUPerformanceLevel::Auto,
+            "low" => GPUPerformanceLevel::Low,
+            "high" => GPUPerformanceLevel::High,
+            "manual" => GPUPerformanceLevel::Manual,
+            "peak_performance" => GPUPerformanceLevel::ProfilePeak,
+            v => bail!("No enum match for value {v}"),
+        })
     }
 }
 
@@ -75,7 +75,7 @@ impl ToString for GPUPerformanceLevel {
     }
 }
 
-pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
+pub(crate) async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
     let base = find_hwmon().await?;
     let level = fs::read_to_string(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX))
         .await
@@ -84,7 +84,7 @@ pub async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
     GPUPerformanceLevel::from_str(level.trim())
 }
 
-pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
+pub(crate) async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
     let level: String = level.to_string();
     let base = find_hwmon().await?;
     write_synced(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX), level.as_bytes())
@@ -92,7 +92,7 @@ pub async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()>
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
 
-pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
+pub(crate) async fn set_gpu_clocks(clocks: u32) -> Result<()> {
     // Set GPU clocks to given value valid between 200 - 1600
     // Only used when GPU Performance Level is manual, but write whenever called.
     ensure!((200..=1600).contains(&clocks), "Invalid clocks");
@@ -125,7 +125,7 @@ pub async fn set_gpu_clocks(clocks: u32) -> Result<()> {
     Ok(())
 }
 
-pub async fn get_gpu_clocks() -> Result<u32> {
+pub(crate) async fn get_gpu_clocks() -> Result<u32> {
     let base = find_hwmon().await?;
     let clocks_file = File::open(base.join(GPU_CLOCKS_SUFFIX)).await?;
     let mut reader = BufReader::new(clocks_file);
@@ -170,14 +170,14 @@ async fn find_hwmon() -> Result<PathBuf> {
     }
 }
 
-pub async fn get_tdp_limit() -> Result<u32> {
+pub(crate) async fn get_tdp_limit() -> Result<u32> {
     let base = find_hwmon().await?;
     let power1cap = fs::read_to_string(base.join(TDP_LIMIT1)).await?;
     let power1cap: u32 = power1cap.trim_end().parse()?;
     Ok(power1cap / 1000000)
 }
 
-pub async fn set_tdp_limit(limit: u32) -> Result<()> {
+pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
     // Set TDP limit given if within range (3-15)
     // Returns false on error or out of range
     ensure!((3..=15).contains(&limit), "Invalid limit");
@@ -201,7 +201,7 @@ pub async fn set_tdp_limit(limit: u32) -> Result<()> {
 }
 
 #[cfg(test)]
-pub mod test {
+pub(crate) mod test {
     use super::*;
     use crate::testing;
     use anyhow::anyhow;

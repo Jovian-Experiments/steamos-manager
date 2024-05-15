@@ -9,9 +9,11 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use itertools::Itertools;
 use std::ops::Deref;
-use std::str::FromStr;
+use steamos_manager::cec::HdmiCecState;
+use steamos_manager::hardware::FanControlState;
+use steamos_manager::power::GPUPerformanceLevel;
 use steamos_manager::proxy::ManagerProxy;
-use steamos_manager::wifi::WifiBackend;
+use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
 use zbus::names::InterfaceName;
 use zbus::{zvariant, Connection};
@@ -19,98 +21,122 @@ use zbus::{zvariant, Connection};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Optionally get all properties
-    #[arg(short, long)]
-    all_properties: bool,
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    GetAlsCalibrationGain {},
-    GetHardwareCurrentlySupported {},
+    /// Get all properties
+    GetAllProperties,
 
+    /// Get luminance sensor calibration gain
+    GetAlsCalibrationGain,
+
+    /// Get if the hardware is currently supported
+    GetHardwareCurrentlySupported,
+
+    /// Set the fan control state
     SetFanControlState {
-        // Set the fan control state.
-        // 0 - BIOS, 1 - OS
-        #[arg(short, long)]
-        value: u32,
+        /// Valid options are bios, os
+        state: FanControlState,
     },
 
-    GetFanControlState {},
+    /// Get the fan control state
+    GetFanControlState,
 
+    /// Set the GPU performance level
     SetGPUPerformanceLevel {
-        // Set the gpu performance level
-        // 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
-        #[arg(short, long)]
-        value: u32,
+        /// Valid levels are auto, low, high, manual, peak_performance
+        level: GPUPerformanceLevel,
     },
 
-    GetGPUPerformanceLevel {},
+    /// Get the GPU performance level
+    GetGPUPerformanceLevel,
 
+    /// Set the GPU clock value manually. Only works when performance level is set to Manual
     SetManualGPUClock {
-        // Set the GPU clock value manually
-        // Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set to Manual
-        #[arg(short, long)]
-        value: u32,
+        /// GPU clock frequency in MHz
+        freq: u32,
     },
 
-    GetManualGPUClock {},
-    GetManualGPUClockMax {},
-    GetManualGPUClockMin {},
+    /// Get the GPU clock frequency, in MHz. Only works when performance level is set to Manual
+    GetManualGPUClock,
 
+    /// Get the maximum allowed GPU clock frequency for the Manual performance level
+    GetManualGPUClockMax,
+
+    /// Get the minimum allowed GPU clock frequency for the Manual performance level
+    GetManualGPUClockMin,
+
+    /// Set the TDP limit
     SetTDPLimit {
-        // Set the TDP limit
-        #[arg(short, long)]
-        value: u32,
+        /// TDP limit, in W
+        limit: u32,
     },
 
-    GetTDPLimit {},
-    GetTDPLimitMax {},
-    GetTDPLimitMin {},
+    /// Get the TDP limit
+    GetTDPLimit,
 
-    GetVersion {},
+    /// Get the maximum allowed TDP limit
+    GetTDPLimitMax,
 
+    /// Get the minimum allowed TDP limit
+    GetTDPLimitMin,
+
+    /// Get the current API version
+    GetVersion,
+
+    /// Set the wifi backend if possible
     SetWifiBackend {
-        // Set the wifi backend to given string if possible
-        // Supported values are iwd|wpa_supplicant
-        #[arg(short, long)]
-        backend: String,
+        /// Supported backends are iwd, wpa_supplicant
+        backend: WifiBackend,
     },
 
-    GetWifiBackend {},
+    /// Get the wifi backend
+    GetWifiBackend,
 
+    /// Set wifi debug mode
     SetWifiDebugMode {
-        // Set wifi debug mode to given value
-        // 1 for on, 0 for off currently
-        #[arg(short, long)]
-        mode: u32,
+        /// Valid modes are on, off
+        mode: WifiDebugMode,
+        /// The size of the debug buffer, in bytes
+        #[arg(default_value_t = 20000)]
+        buffer: u32,
     },
 
-    GetWifiDebugMode {},
+    /// Get wifi debug mode
+    GetWifiDebugMode,
 
+    /// Set the wifi power management state
     SetWifiPowerManagementState {
-        // Set the wifi power management state
-        // 0 - disabled, 1 - enabled
-        #[arg(short, long)]
-        value: u32,
+        /// Valid modes are enabled, disabled
+        state: WifiPowerManagement,
     },
 
-    GetWifiPowerManagementState {},
+    /// Get the wifi power management state
+    GetWifiPowerManagementState,
 
-    GetHdmiCecState {},
+    /// Get the state of HDMI-CEC support
+    GetHdmiCecState,
+
+    /// Set the state of HDMI-CEC support
     SetHdmiCecState {
-        // Set the state of HDMI-CEC support
-        // 0 - disabled, 1 - only controls, 2 - TV waking
-        #[arg(short, long)]
-        value: u32,
+        /// Valid modes are disabled, control-only, control-and-wake
+        state: HdmiCecState,
     },
 
-    UpdateBios {},
-    UpdateDock {},
-    TrimDevices {},
-    FactoryReset {},
+    /// Update the BIOS, if possible
+    UpdateBios,
+
+    /// Update the dock, if possible
+    UpdateDock,
+
+    /// Trim applicable drives
+    TrimDevices,
+
+    /// Factory reset the device
+    FactoryReset,
 }
 
 #[tokio::main]
@@ -124,129 +150,139 @@ async fn main() -> Result<()> {
     let conn = Connection::session().await?;
     let proxy = ManagerProxy::builder(&conn).build().await?;
 
-    if args.all_properties {
-        let properties_proxy = PropertiesProxy::new(
-            &conn,
-            "com.steampowered.SteamOSManager1",
-            "/com/steampowered/SteamOSManager1",
-        )
-        .await?;
-        let name = InterfaceName::try_from("com.steampowered.SteamOSManager1.Manager")?;
-        let properties = properties_proxy
-            .get_all(zvariant::Optional::from(Some(name)))
-            .await?;
-        for key in properties.keys().sorted() {
-            let value = &properties[key];
-            let val = value.deref();
-            println!("{key}: {val}");
-        }
-    }
-
     // Then process arguments
     match &args.command {
-        Some(Commands::GetAlsCalibrationGain {}) => {
+        Commands::GetAllProperties => {
+            let properties_proxy = PropertiesProxy::new(
+                &conn,
+                "com.steampowered.SteamOSManager1",
+                "/com/steampowered/SteamOSManager1",
+            )
+            .await?;
+            let name = InterfaceName::try_from("com.steampowered.SteamOSManager1.Manager")?;
+            let properties = properties_proxy
+                .get_all(zvariant::Optional::from(Some(name)))
+                .await?;
+            for key in properties.keys().sorted() {
+                let value = &properties[key];
+                let val = value.deref();
+                println!("{key}: {val}");
+            }
+        }
+        Commands::GetAlsCalibrationGain => {
             let gain = proxy.als_calibration_gain().await?;
             println!("ALS calibration gain: {gain}");
         }
-        Some(Commands::GetHardwareCurrentlySupported {}) => {
+        Commands::GetHardwareCurrentlySupported => {
             let supported = proxy.hardware_currently_supported().await?;
             println!("Hardware currently supported: {supported}");
         }
-        Some(Commands::GetVersion {}) => {
+        Commands::GetVersion => {
             let version = proxy.version().await?;
             println!("Version: {version}");
         }
-        Some(Commands::SetFanControlState { value }) => {
-            proxy.set_fan_control_state(*value).await?;
+        Commands::SetFanControlState { state } => {
+            proxy.set_fan_control_state(*state as u32).await?;
         }
-        Some(Commands::SetGPUPerformanceLevel { value }) => {
-            proxy.set_gpu_performance_level(*value).await?;
+        Commands::GetFanControlState => {
+            let state = proxy.fan_control_state().await?;
+            match FanControlState::try_from(state) {
+                Ok(s) => println!("Fan control state: {}", s.to_string()),
+                Err(_) => println!("Got unknown value {state} from backend"),
+            }
         }
-        Some(Commands::GetGPUPerformanceLevel {}) => {
+        Commands::SetGPUPerformanceLevel { level } => {
+            proxy.set_gpu_performance_level(*level as u32).await?;
+        }
+        Commands::GetGPUPerformanceLevel => {
             let level = proxy.gpu_performance_level().await?;
-            println!("GPU performance level: {level}");
+            match GPUPerformanceLevel::try_from(level) {
+                Ok(l) => println!("GPU performance level: {}", l.to_string()),
+                Err(_) => println!("Got unknown value {level} from backend"),
+            }
         }
-        Some(Commands::SetManualGPUClock { value }) => {
-            proxy.set_manual_gpu_clock(*value).await?;
+        Commands::SetManualGPUClock { freq } => {
+            proxy.set_manual_gpu_clock(*freq).await?;
         }
-        Some(Commands::GetManualGPUClock {}) => {
+        Commands::GetManualGPUClock => {
             let clock = proxy.manual_gpu_clock().await?;
             println!("Manual GPU Clock: {clock}");
         }
-        Some(Commands::GetManualGPUClockMax {}) => {
+        Commands::GetManualGPUClockMax => {
             let value = proxy.manual_gpu_clock_max().await?;
             println!("Manual GPU Clock Max: {value}");
         }
-        Some(Commands::GetManualGPUClockMin {}) => {
+        Commands::GetManualGPUClockMin => {
             let value = proxy.manual_gpu_clock_min().await?;
             println!("Manual GPU Clock Min: {value}");
         }
-        Some(Commands::SetTDPLimit { value }) => {
-            proxy.set_tdp_limit(*value).await?;
+        Commands::SetTDPLimit { limit } => {
+            proxy.set_tdp_limit(*limit).await?;
         }
-        Some(Commands::GetTDPLimit {}) => {
+        Commands::GetTDPLimit => {
             let limit = proxy.tdp_limit().await?;
             println!("TDP limit: {limit}");
         }
-        Some(Commands::GetFanControlState {}) => {
-            let state = proxy.fan_control_state().await?;
-            println!("Fan control state: {state}");
-        }
-        Some(Commands::GetTDPLimitMax {}) => {
+        Commands::GetTDPLimitMax => {
             let value = proxy.tdp_limit_max().await?;
             println!("TDP limit max: {value}");
         }
-        Some(Commands::GetTDPLimitMin {}) => {
+        Commands::GetTDPLimitMin => {
             let value = proxy.tdp_limit_min().await?;
             println!("TDP limit min: {value}");
         }
-        Some(Commands::SetWifiBackend { backend }) => match WifiBackend::from_str(backend) {
-            Ok(b) => {
-                proxy.set_wifi_backend(b as u32).await?;
-            }
-            Err(_) => {
-                println!("Unknown wifi backend {backend}");
-            }
+        Commands::SetWifiBackend { backend } => {
+            proxy.set_wifi_backend(*backend as u32).await?;
         },
-        Some(Commands::GetWifiBackend {}) => {
+        Commands::GetWifiBackend => {
             let backend = proxy.wifi_backend().await?;
-            let backend_string = WifiBackend::try_from(backend).unwrap().to_string();
-            println!("Wifi backend: {backend_string}");
+            match WifiBackend::try_from(backend) {
+                Ok(be) => println!("Wifi backend: {}", be.to_string()),
+                Err(_) => println!("Got unknown value {backend} from backend"),
+            }
         }
-        Some(Commands::SetWifiDebugMode { mode }) => {
-            proxy.set_wifi_debug_mode(*mode, 20000).await?;
+        Commands::SetWifiDebugMode { mode, buffer } => {
+            proxy.set_wifi_debug_mode(*mode as u32, *buffer).await?;
         }
-        Some(Commands::GetWifiDebugMode {}) => {
+        Commands::GetWifiDebugMode => {
             let mode = proxy.wifi_debug_mode_state().await?;
-            println!("Wifi debug mode: {mode}");
+            match WifiDebugMode::try_from(mode) {
+                Ok(m) => println!("Wifi debug mode: {}", m.to_string()),
+                Err(_) => println!("Got unknown value {mode} from backend"),
+            }
         }
-        Some(Commands::SetWifiPowerManagementState { value }) => {
-            proxy.set_wifi_power_management_state(*value).await?;
+        Commands::SetWifiPowerManagementState { state } => {
+            proxy.set_wifi_power_management_state(*state as u32).await?;
         }
-        Some(Commands::GetWifiPowerManagementState {}) => {
+        Commands::GetWifiPowerManagementState => {
             let state = proxy.wifi_power_management_state().await?;
-            println!("Wifi power management state: {state}");
+            match WifiPowerManagement::try_from(state) {
+                Ok(s) => println!("Wifi power management state: {}", s.to_string()),
+                Err(_) => println!("Got unknown value {state} from backend"),
+            }
         }
-        Some(Commands::SetHdmiCecState { value }) => {
-            proxy.set_hdmi_cec_state(*value).await?;
+        Commands::SetHdmiCecState { state } => {
+            proxy.set_hdmi_cec_state(*state as u32).await?;
         }
-        Some(Commands::GetHdmiCecState {}) => {
+        Commands::GetHdmiCecState => {
             let state = proxy.hdmi_cec_state().await?;
-            println!("HDMI-CEC state: {state}");
+            match HdmiCecState::try_from(state) {
+                Ok(s) => println!("HDMI-CEC state: {}", s.to_human_readable()),
+                Err(_) => println!("Got unknown value {state} from backend"),
+            }
         }
-        Some(Commands::UpdateBios {}) => {
+        Commands::UpdateBios => {
             let _ = proxy.update_bios().await?;
         }
-        Some(Commands::UpdateDock {}) => {
+        Commands::UpdateDock => {
             let _ = proxy.update_dock().await?;
         }
-        Some(Commands::FactoryReset {}) => {
+        Commands::FactoryReset => {
             let _ = proxy.prepare_factory_reset().await?;
         }
-        Some(Commands::TrimDevices {}) => {
+        Commands::TrimDevices => {
             let _ = proxy.trim_devices().await?;
         }
-        None => {}
     }
 
     Ok(())

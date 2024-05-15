@@ -14,17 +14,17 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-mod cec;
 mod ds_inhibit;
 mod error;
-mod hardware;
 mod manager;
-mod power;
 mod process;
 mod sls;
 mod systemd;
 
+pub mod cec;
 pub mod daemon;
+pub mod hardware;
+pub mod power;
 pub mod proxy;
 pub mod wifi;
 

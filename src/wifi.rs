@@ -64,6 +64,17 @@ impl TryFrom<u32> for WifiDebugMode {
     }
 }
 
+impl FromStr for WifiDebugMode {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<WifiDebugMode, Self::Err> {
+        Ok(match input {
+            "enable" | "enabled" | "on" | "1" => WifiDebugMode::On,
+            "disable" | "disabled" | "off" | "0" => WifiDebugMode::Off,
+            v => bail!("No enum match for value {v}"),
+        })
+    }
+}
+
 impl fmt::Display for WifiDebugMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -81,6 +92,17 @@ impl TryFrom<u32> for WifiPowerManagement {
             x if x == WifiPowerManagement::Enabled as u32 => Ok(WifiPowerManagement::Enabled),
             _ => Err("No enum match for value {v}"),
         }
+    }
+}
+
+impl FromStr for WifiPowerManagement {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<WifiPowerManagement, Self::Err> {
+        Ok(match input {
+            "enable" | "enabled" | "on" | "1" => WifiPowerManagement::Enabled,
+            "disable" | "disabled" | "off" | "0" => WifiPowerManagement::Disabled,
+            v => bail!("No enum match for value {v}"),
+        })
     }
 }
 

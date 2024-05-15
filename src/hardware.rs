@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{Error, Result};
+use anyhow::{bail, Error, Result};
 use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
@@ -19,7 +19,7 @@ const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
 
 #[derive(PartialEq, Debug, Copy, Clone)]
-pub enum HardwareVariant {
+pub(crate) enum HardwareVariant {
     Unknown,
     Jupiter,
     Galileo,
@@ -27,7 +27,7 @@ pub enum HardwareVariant {
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
-pub enum HardwareCurrentlySupported {
+pub(crate) enum HardwareCurrentlySupported {
     Unsupported = 0,
     Supported = 1,
 }
@@ -85,6 +85,17 @@ impl TryFrom<u32> for FanControlState {
     }
 }
 
+impl FromStr for FanControlState {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<FanControlState, Self::Err> {
+        Ok(match input.to_lowercase().as_str() {
+            "bios" => FanControlState::Bios,
+            "os" => FanControlState::Os,
+            v => bail!("No enum match for value {v}"),
+        })
+    }
+}
+
 impl fmt::Display for FanControlState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -94,7 +105,7 @@ impl fmt::Display for FanControlState {
     }
 }
 
-pub async fn variant() -> Result<HardwareVariant> {
+pub(crate) async fn variant() -> Result<HardwareVariant> {
     let board_vendor = fs::read_to_string(path(BOARD_VENDOR_PATH)).await?;
     if board_vendor.trim_end() != "Valve" {
         return Ok(HardwareVariant::Unknown);
@@ -104,7 +115,7 @@ pub async fn variant() -> Result<HardwareVariant> {
     HardwareVariant::from_str(board_name.trim_end())
 }
 
-pub async fn check_support() -> Result<HardwareCurrentlySupported> {
+pub(crate) async fn check_support() -> Result<HardwareCurrentlySupported> {
     // Run jupiter-check-support note this script does exit 1 for "Support: No" case
     // so no need to parse output, etc.
     let res = script_exit_code("/usr/bin/jupiter-check-support", &[] as &[String; 0]).await?;
@@ -115,7 +126,7 @@ pub async fn check_support() -> Result<HardwareCurrentlySupported> {
     })
 }
 
-pub struct FanControl {
+pub(crate) struct FanControl {
     connection: Connection,
 }
 
