@@ -1,8 +1,0 @@
-#!/bin/bash
-# Tell steamos-manager to start wifi debugmode
-# parameters are 2 unsigned integers
-# mode: 1 for on, 0 for off
-# buffer_size: the size in kilobytes to use for the trace (if on galileo device).
-
-busctl call com.steampowered.SteamOSManager1 /com/steampowered/SteamOSManager1 com.steampowered.SteamOSManager1.Manager SetWifiDebugMode uu 1 20000
-
