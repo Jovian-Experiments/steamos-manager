@@ -10,7 +10,6 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::signal::unix::{signal, SignalKind};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -120,16 +119,6 @@ pub(crate) fn get_appid(pid: u32) -> Result<Option<u64>> {
         get_appid(ppid)
     } else {
         Ok(None)
-    }
-}
-
-async fn reload() -> Result<()> {
-    loop {
-        let mut sighup = signal(SignalKind::hangup())?;
-        sighup
-            .recv()
-            .await
-            .ok_or(anyhow!("SIGHUP handler failed!"))?;
     }
 }
 
