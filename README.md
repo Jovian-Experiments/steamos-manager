@@ -67,3 +67,11 @@ If the new functionality requires elevated privileges, then extend the system
 daemon's DBus API in `src/manager/root.rs` with the necessary helpers to complete
 the task. Please consider keeping as much logic as possible in the user context.
 
+## Building
+
+TODO: pretty much a rust standard Building
+
+## Running tests
+
+TODO
+
