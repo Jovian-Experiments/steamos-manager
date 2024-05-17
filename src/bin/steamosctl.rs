@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
         Commands::GetFanControlState => {
             let state = proxy.fan_control_state().await?;
             match FanControlState::try_from(state) {
-                Ok(s) => println!("Fan control state: {}", s.to_string()),
+                Ok(s) => println!("Fan control state: {}", s),
                 Err(_) => println!("Got unknown value {state} from backend"),
             }
         }
@@ -237,7 +237,7 @@ async fn main() -> Result<()> {
         Commands::GetWifiBackend => {
             let backend = proxy.wifi_backend().await?;
             match WifiBackend::try_from(backend) {
-                Ok(be) => println!("Wifi backend: {}", be.to_string()),
+                Ok(be) => println!("Wifi backend: {}", be),
                 Err(_) => println!("Got unknown value {backend} from backend"),
             }
         }
@@ -247,7 +247,7 @@ async fn main() -> Result<()> {
         Commands::GetWifiDebugMode => {
             let mode = proxy.wifi_debug_mode_state().await?;
             match WifiDebugMode::try_from(mode) {
-                Ok(m) => println!("Wifi debug mode: {}", m.to_string()),
+                Ok(m) => println!("Wifi debug mode: {}", m),
                 Err(_) => println!("Got unknown value {mode} from backend"),
             }
         }
@@ -257,7 +257,7 @@ async fn main() -> Result<()> {
         Commands::GetWifiPowerManagementState => {
             let state = proxy.wifi_power_management_state().await?;
             match WifiPowerManagement::try_from(state) {
-                Ok(s) => println!("Wifi power management state: {}", s.to_string()),
+                Ok(s) => println!("Wifi power management state: {}", s),
                 Err(_) => println!("Got unknown value {state} from backend"),
             }
         }
