@@ -19,7 +19,7 @@ use zbus::{fdo, interface};
 
 use crate::error::to_zbus_fdo_error;
 
-const PROCESS_PREFIX: &str = "/com/steampowered/SteamOSManager1/Process";
+const PROCESS_PREFIX: &str = "/com/steampowered/SteamOSManager1/Job";
 
 pub struct ProcessManager {
     // The thing that manages subprocesses.
@@ -29,7 +29,7 @@ pub struct ProcessManager {
     next_process: u32,
 }
 
-pub struct SubProcess {
+pub struct Job {
     process: Child,
     paused: bool,
     exit_code: Option<i32>,
@@ -63,14 +63,11 @@ impl ProcessManager {
         zbus::zvariant::OwnedObjectPath::try_from(path).map_err(to_zbus_fdo_error)
     }
 
-    pub async fn run_long_command(
-        executable: &str,
-        args: &[impl AsRef<OsStr>],
-    ) -> Result<SubProcess> {
+    pub async fn run_long_command(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<Job> {
         // Run the given executable with the given arguments
         // Return an id that can be used later to pause/cancel/resume as needed
         let child = Command::new(executable).args(args).spawn()?;
-        Ok(SubProcess {
+        Ok(Job {
             process: child,
             paused: false,
             exit_code: None,
@@ -78,7 +75,7 @@ impl ProcessManager {
     }
 }
 
-impl SubProcess {
+impl Job {
     fn send_signal(&self, signal: nix::sys::signal::Signal) -> Result<()> {
         let pid = match self.process.id() {
             Some(id) => id,
@@ -114,7 +111,7 @@ impl SubProcess {
         Ok(self.exit_code)
     }
 
-    async fn exit_code_internal(&mut self) -> Result<i32> {
+    async fn wait_internal(&mut self) -> Result<i32> {
         if let Some(code) = self.exit_code {
             // Just give the exit_code if we have it already
             Ok(code)
@@ -126,8 +123,8 @@ impl SubProcess {
     }
 }
 
-#[interface(name = "com.steampowered.SteamOSManager1.SubProcess")]
-impl SubProcess {
+#[interface(name = "com.steampowered.SteamOSManager1.Job")]
+impl Job {
     pub async fn pause(&mut self) -> fdo::Result<()> {
         if self.paused {
             return Err(fdo::Error::Failed("Already paused".to_string()));
@@ -149,10 +146,13 @@ impl SubProcess {
         result
     }
 
-    pub async fn cancel(&mut self) -> fdo::Result<()> {
+    pub async fn cancel(&mut self, force: bool) -> fdo::Result<()> {
         if self.try_wait().map_err(to_zbus_fdo_error)?.is_none() {
-            self.send_signal(Signal::SIGTERM)
-                .map_err(to_zbus_fdo_error)?;
+            self.send_signal(match force {
+                true => Signal::SIGKILL,
+                false => Signal::SIGTERM,
+            })
+            .map_err(to_zbus_fdo_error)?;
             if self.paused {
                 self.resume().await?;
             }
@@ -160,19 +160,12 @@ impl SubProcess {
         Ok(())
     }
 
-    pub async fn kill(&mut self) -> fdo::Result<()> {
-        match self.try_wait().map_err(to_zbus_fdo_error)? {
-            Some(_) => Ok(()),
-            None => self.send_signal(signal::SIGKILL).map_err(to_zbus_fdo_error),
-        }
-    }
-
     pub async fn wait(&mut self) -> fdo::Result<i32> {
         if self.paused {
             self.resume().await?;
         }
 
-        let code = match self.exit_code_internal().await.map_err(to_zbus_fdo_error) {
+        let code = match self.wait_internal().await.map_err(to_zbus_fdo_error) {
             Ok(v) => v,
             Err(_) => {
                 return Err(fdo::Error::Failed("Unable to get exit code".to_string()));
@@ -180,15 +173,6 @@ impl SubProcess {
         };
         self.exit_code = Some(code);
         Ok(code)
-    }
-
-    pub async fn exit_code(&mut self) -> fdo::Result<i32> {
-        match self.try_wait() {
-            Ok(Some(i)) => Ok(i),
-            _ => Err(zbus::fdo::Error::Failed(
-                "Unable to get exit code. The process may still be running.".to_string(),
-            )),
-        }
     }
 }
 
@@ -297,10 +281,10 @@ mod test {
         let mut sleep_process = ProcessManager::run_long_command("/usr/bin/sleep", &["0.1"])
             .await
             .unwrap();
-        sleep_process.kill().await.expect("kill");
+        sleep_process.cancel(true).await.expect("kill");
 
         // Killing a process should be idempotent
-        sleep_process.kill().await.expect("kill");
+        sleep_process.cancel(true).await.expect("kill");
 
         assert_eq!(
             sleep_process.wait().await.unwrap(),
@@ -319,26 +303,11 @@ mod test {
         assert_eq!(pause_process.try_wait().expect("try_wait"), None);
 
         // Canceling a process should unpause it
-        pause_process.cancel().await.expect("pause");
+        pause_process.cancel(false).await.expect("pause");
         assert_eq!(
             pause_process.wait().await.unwrap(),
             -(Signal::SIGTERM as i32)
         );
-    }
-
-    #[tokio::test]
-    async fn test_exit_code_early() {
-        let _h = testing::start();
-
-        let mut sleep_process = ProcessManager::run_long_command("/usr/bin/sleep", &["0.1"])
-            .await
-            .unwrap();
-        assert_eq!(
-            sleep_process.exit_code().await.unwrap_err().to_string(),
-            "org.freedesktop.DBus.Error.Failed: Unable to get exit code. The process may still be running."
-        );
-
-        assert_eq!(sleep_process.wait().await.unwrap(), 0);
     }
 
     #[tokio::test]

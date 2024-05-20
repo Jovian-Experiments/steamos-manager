@@ -104,13 +104,13 @@
         UpdateBios:
 
         Perform a BIOS update.
-        
-        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
+
+        @jobpath: An object path that can be used to pause/resume/cancel the operation
 
         Version available: 8
     -->
     <method name="UpdateBios">
-      <arg type="o" name="objectpath" direction="out"/>
+      <arg type="o" name="jobpath" direction="out"/>
     </method>
 
     <!--
@@ -118,12 +118,12 @@
 
         Perform a Dock Firmware update.
 
-        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
+        @jobpath: An object path that can be used to pause/resume/cancel the operation
 
         Version available: 8
     -->
     <method name="UpdateDock">
-      <arg type="o" name="objectpath" direction="out"/>
+      <arg type="o" name="jobpath" direction="out"/>
     </method>
 
     <!--
@@ -133,12 +133,12 @@
         is important as some devices are not safe to trim unless some kernel
         quirks are available.
 
-        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
+        @jobpath: An object path that can be used to pause/resume/cancel the operation
 
         Version available: 8
     -->
     <method name="TrimDevices">
-      <arg type="o" name="objectpath" direction="out"/>
+      <arg type="o" name="jobpath" direction="out"/>
     </method>
 
     <!--
@@ -147,7 +147,7 @@
         @device: Which device to format, e.g. /dev/mmcblk0
         @label: Filesystem label to assign to the formatted device
         @validate: When set runs common checks for conterfeit flash media before formatting, e.g. f3probe
-        @objectpath: An object path that can be used to pause/resume/cancel/kill the operation
+        @jobpath: An object path that can be used to pause/resume/cancel the operation
 
         Format and optionally validate a storage device to a steam compatible filesystem.
 
@@ -157,7 +157,7 @@
       <arg type="s" name="device" direction="in"/>
       <arg type="s" name="label" direction="in"/>
       <arg type="b" name="validate" direction="in"/>
-      <arg type="o" name="objectpath" direction="out"/>
+      <arg type="o" name="jobpath" direction="out"/>
     </method>
 
     <!--
@@ -280,54 +280,49 @@
   </interface>
 
   <!--
-      com.steampowered.SteamOSManager1.SubProcess
-      @short_description: Interface to control a subprocess
+      com.steampowered.SteamOSManager1.Job
+      @short_description: Interface to control a job
 
       Version available: 8
   -->
-  <interface name="com.steampowered.SteamOSManager1.SubProcess">
+  <interface name="com.steampowered.SteamOSManager1.Job">
       <!--
         Pause the operation
       -->
       <method name="Pause"/>
-      
+
       <!--
         Resume the operation
       -->
       <method name="Resume"/>
-      
-      <!--
-        Cancel the operation
-          
-        Note this sends a SIGTERM to the subprocess, vs Kill which sends SIGKILL.
-      -->
-      <method name="Cancel"/>
 
       <!--
-        Kill the operation
-        
-        Note this sends a SIGKILL, vs Cancel which sends SIGTERM.
+        Cancel the operation
+
+        @force Use sigkill if true, sigterm otherwise.
       -->
-      <method name="Kill"/>
-      
+      <method name="Cancel">
+        <arg type="b" name="force" direction="in"/>
+      </method>
+
       <!--
         Wait for process to end and get exit code, resuming if paused
 
-        @exit_code The exit code, or negative signal number if the process
+        @result The exit code, or negative signal number if the process
         exited via signal.
       -->
       <method name="Wait">
-        <arg type="i" name="exit_code" direction="out"/>
+        <arg type="i" name="result" direction="out"/>
       </method>
 
       <!--
         Get the exit code of the process if possible.
 
-        @exit_code The exit code, or negative signal number if the process
+        @result The exit code, or negative signal number if the process
         exited via signal.
         -->
       <method name="ExitCode">
-        <arg type="i" name="exit_code" direction="out"/>
+        <arg type="i" name="result" direction="out"/>
       </method>
   </interface>
 

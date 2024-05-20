@@ -233,7 +233,7 @@ async fn main() -> Result<()> {
         }
         Commands::SetWifiBackend { backend } => {
             proxy.set_wifi_backend(*backend as u32).await?;
-        },
+        }
         Commands::GetWifiBackend => {
             let backend = proxy.wifi_backend().await?;
             match WifiBackend::try_from(backend) {

@@ -123,21 +123,18 @@ trait Manager {
 
 #[proxy(
     default_service = "com.steampowered.SteamOSManager1",
-    interface = "com.steampowered.SteamOSManager1.SubProcess",
+    interface = "com.steampowered.SteamOSManager1.Job",
     assume_defaults = true
 )]
-trait SubProcess {
+trait Job {
     /// Cancel method
-    fn cancel(&self) -> zbus::Result<()>;
+    fn cancel(&self, force: bool) -> zbus::Result<()>;
 
     /// ExitCode method
     fn exit_code(&self) -> zbus::Result<i32>;
 
     /// WaitForExitCode method
     fn wait_for_exit_code(&self) -> zbus::Result<i32>;
-
-    /// Kill method
-    fn kill(&self) -> zbus::Result<()>;
 
     /// Pause method
     fn pause(&self) -> zbus::Result<()>;
