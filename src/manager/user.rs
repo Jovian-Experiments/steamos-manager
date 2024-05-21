@@ -14,6 +14,9 @@ use zbus::{fdo, interface, Connection, Proxy, SignalContext};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
+use crate::hardware::check_support;
+use crate::power::{get_gpu_clocks, get_gpu_performance_level, get_tdp_limit};
+use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
 
 macro_rules! method {
@@ -63,7 +66,7 @@ impl SteamOSManager {
             proxy: Builder::new(system_conn)
                 .destination("com.steampowered.SteamOSManager1")?
                 .path("/com/steampowered/SteamOSManager1")?
-                .interface("com.steampowered.SteamOSManager1.Manager")?
+                .interface("com.steampowered.SteamOSManager1.RootManager")?
                 .cache_properties(zbus::CacheProperties::No)
                 .build()
                 .await?,
@@ -105,12 +108,18 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn wifi_power_management_state(&self) -> fdo::Result<u32> {
-        getter!(self, "WifiPowerManagementState")
+        match get_wifi_power_management_state().await {
+            Ok(state) => Ok(state as u32),
+            Err(e) => Err(to_zbus_fdo_error(e)),
+        }
     }
 
     #[zbus(property)]
     async fn set_wifi_power_management_state(&self, state: u32) -> zbus::Result<()> {
-        setter!(self, "WifiPowerManagementState", state)
+        self.proxy
+            .call("SetWifiPowerManagementState", &(state))
+            .await
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -125,7 +134,10 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "const"))]
     async fn hardware_currently_supported(&self) -> fdo::Result<u32> {
-        getter!(self, "HardwareCurrentlySupported")
+        match check_support().await {
+            Ok(res) => Ok(res as u32),
+            Err(e) => Err(to_zbus_fdo_error(e)),
+        }
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -168,52 +180,71 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn gpu_performance_level(&self) -> fdo::Result<u32> {
-        getter!(self, "GpuPerformanceLevel")
+        match get_gpu_performance_level().await {
+            Ok(level) => Ok(level as u32),
+            Err(e) => {
+                error!("Error getting GPU performance level: {e}");
+                Err(to_zbus_fdo_error(e))
+            }
+        }
     }
 
     #[zbus(property)]
     async fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()> {
-        setter!(self, "GpuPerformanceLevel", level)
+        self.proxy
+            .call("SetGpuPerformanceLevel", &(level))
+            .await
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn manual_gpu_clock(&self) -> fdo::Result<u32> {
-        getter!(self, "ManualGpuClock")
+        get_gpu_clocks()
+            .await
+            .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
+            .map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property)]
     async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
-        setter!(self, "ManualGpuClock", clocks)
+        setter!(self, "SetManualGpuClock", clocks)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_min(&self) -> fdo::Result<u32> {
-        getter!(self, "ManualGpuClockMin")
+    async fn manual_gpu_clock_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        200
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_max(&self) -> fdo::Result<u32> {
-        getter!(self, "ManualGpuClockMax")
+    async fn manual_gpu_clock_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        1600
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn tdp_limit(&self) -> fdo::Result<u32> {
-        getter!(self, "TdpLimit")
+        get_tdp_limit().await.map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property)]
     async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
-        setter!(self, "TdpLimit", limit)
+        self.proxy
+            .call("SetTdpLimit", &(limit))
+            .await
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_min(&self) -> fdo::Result<u32> {
-        getter!(self, "TdpLimitMin")
+    async fn tdp_limit_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        3
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_max(&self) -> fdo::Result<u32> {
-        getter!(self, "TdpLimitMax")
+    async fn tdp_limit_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        15
     }
 
     #[zbus(property)]
@@ -236,12 +267,18 @@ impl SteamOSManager {
 
     #[zbus(property(emits_changed_signal = "false"))]
     async fn wifi_backend(&self) -> fdo::Result<u32> {
-        getter!(self, "WifiBackend")
+        match get_wifi_backend().await {
+            Ok(backend) => Ok(backend as u32),
+            Err(e) => Err(to_zbus_fdo_error(e)),
+        }
     }
 
     #[zbus(property)]
     async fn set_wifi_backend(&self, backend: u32) -> zbus::Result<()> {
-        setter!(self, "WifiBackend", backend)
+        self.proxy
+            .call("SetWifiBackend", &(backend))
+            .await
+            .map_err(to_zbus_error)
     }
 }
 

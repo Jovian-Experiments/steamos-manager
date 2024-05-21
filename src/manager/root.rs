@@ -13,15 +13,12 @@ use zbus::zvariant::Fd;
 use zbus::{fdo, interface, Connection, SignalContext};
 
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
-use crate::hardware::{check_support, variant, FanControl, FanControlState, HardwareVariant};
-use crate::power::{
-    get_gpu_clocks, get_gpu_performance_level, get_tdp_limit, set_gpu_clocks,
-    set_gpu_performance_level, set_tdp_limit, GPUPerformanceLevel,
-};
+use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
+use crate::power::{set_gpu_clocks, set_gpu_performance_level, set_tdp_limit, GPUPerformanceLevel};
 use crate::process::{run_script, script_output, ProcessManager};
 use crate::wifi::{
-    get_wifi_backend, get_wifi_power_management_state, set_wifi_backend, set_wifi_debug_mode,
-    set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
+    set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state, WifiBackend,
+    WifiDebugMode, WifiPowerManagement,
 };
 use crate::API_VERSION;
 
@@ -56,7 +53,7 @@ impl SteamOSManager {
 
 const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
 
-#[interface(name = "com.steampowered.SteamOSManager1.Manager")]
+#[interface(name = "com.steampowered.SteamOSManager1.RootManager")]
 impl SteamOSManager {
     async fn prepare_factory_reset(&self) -> u32 {
         // Run steamos factory reset script and return true on success
@@ -67,23 +64,14 @@ impl SteamOSManager {
         }
     }
 
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_power_management_state(&self) -> fdo::Result<u32> {
-        match get_wifi_power_management_state().await {
-            Ok(state) => Ok(state as u32),
-            Err(e) => Err(to_zbus_fdo_error(e)),
-        }
-    }
-
-    #[zbus(property)]
-    async fn set_wifi_power_management_state(&self, state: u32) -> zbus::Result<()> {
+    async fn set_wifi_power_management_state(&self, state: u32) -> fdo::Result<()> {
         let state = match WifiPowerManagement::try_from(state) {
             Ok(state) => state,
-            Err(err) => return Err(fdo::Error::InvalidArgs(err.to_string()).into()),
+            Err(err) => return Err(to_zbus_fdo_error(err)),
         };
         set_wifi_power_management_state(state)
             .await
-            .map_err(to_zbus_error)
+            .map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -106,14 +94,6 @@ impl SteamOSManager {
             .set_state(state)
             .await
             .map_err(to_zbus_error)
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn hardware_currently_supported(&self) -> fdo::Result<u32> {
-        match check_support().await {
-            Ok(res) => Ok(res as u32),
-            Err(e) => Err(to_zbus_fdo_error(e)),
-        }
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -193,77 +173,26 @@ impl SteamOSManager {
             .await
     }
 
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn gpu_performance_level(&self) -> fdo::Result<u32> {
-        match get_gpu_performance_level().await {
-            Ok(level) => Ok(level as u32),
-            Err(e) => {
-                error!("Error getting GPU performance level: {e}");
-                Err(to_zbus_fdo_error(e))
-            }
-        }
-    }
-
-    #[zbus(property)]
-    async fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()> {
+    async fn set_gpu_performance_level(&self, level: u32) -> fdo::Result<()> {
         let level = match GPUPerformanceLevel::try_from(level) {
             Ok(level) => level,
-            Err(e) => return Err(zbus::Error::Failure(e.to_string())),
+            Err(e) => return Err(to_zbus_fdo_error(e)),
         };
         set_gpu_performance_level(level)
             .await
             .inspect_err(|message| error!("Error setting GPU performance level: {message}"))
-            .map_err(to_zbus_error)
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn manual_gpu_clock(&self) -> fdo::Result<u32> {
-        get_gpu_clocks()
-            .await
-            .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
             .map_err(to_zbus_fdo_error)
     }
 
-    #[zbus(property)]
-    async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
+    async fn set_manual_gpu_clock(&self, clocks: u32) -> fdo::Result<()> {
         set_gpu_clocks(clocks)
             .await
             .inspect_err(|message| error!("Error setting manual GPU clock: {message}"))
-            .map_err(to_zbus_error)
+            .map_err(to_zbus_fdo_error)
     }
 
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_min(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        200
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_max(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        1600
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn tdp_limit(&self) -> fdo::Result<u32> {
-        get_tdp_limit().await.map_err(to_zbus_fdo_error)
-    }
-
-    #[zbus(property)]
-    async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
-        set_tdp_limit(limit).await.map_err(to_zbus_error)
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_min(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        3
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_max(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        15
+    async fn set_tdp_limit(&self, limit: u32) -> fdo::Result<()> {
+        set_tdp_limit(limit).await.map_err(to_zbus_fdo_error)
     }
 
     #[zbus(property)]
@@ -304,16 +233,6 @@ impl SteamOSManager {
         }
     }
 
-    /// WifiBackend property.
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_backend(&self) -> fdo::Result<u32> {
-        match get_wifi_backend().await {
-            Ok(backend) => Ok(backend as u32),
-            Err(e) => Err(to_zbus_fdo_error(e)),
-        }
-    }
-
-    #[zbus(property)]
     async fn set_wifi_backend(&mut self, backend: u32) -> fdo::Result<()> {
         if self.wifi_debug_mode == WifiDebugMode::On {
             return Err(fdo::Error::Failed(String::from(
@@ -340,12 +259,10 @@ impl SteamOSManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{power, testing};
-    use std::collections::HashMap;
-    use std::iter::zip;
-    use tokio::fs::{create_dir_all, read, write};
-    use zbus::{Connection, ConnectionBuilder, Interface};
-    use zbus_xml::{Method, Node, Property};
+    use crate::power::{self, get_gpu_performance_level};
+    use crate::testing;
+    use tokio::fs::{create_dir_all, write};
+    use zbus::{Connection, ConnectionBuilder};
 
     struct TestHandle {
         _handle: testing::TestHandle,
@@ -394,15 +311,11 @@ mod test {
     }
 
     #[zbus::proxy(
-        interface = "com.steampowered.SteamOSManager1.Manager",
+        interface = "com.steampowered.SteamOSManager1.RootManager",
         default_service = "com.steampowered.SteamOSManager1.Test.GpuPerformanceLevel",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait GpuPerformanceLevel {
-        #[zbus(property)]
-        fn gpu_performance_level(&self) -> zbus::Result<u32>;
-
-        #[zbus(property)]
         fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()>;
     }
 
@@ -414,14 +327,6 @@ mod test {
         let proxy = GpuPerformanceLevelProxy::new(&test.connection)
             .await
             .unwrap();
-        set_gpu_performance_level(GPUPerformanceLevel::Auto)
-            .await
-            .expect("set");
-        assert_eq!(
-            proxy.gpu_performance_level().await.unwrap(),
-            GPUPerformanceLevel::Auto as u32
-        );
-
         proxy
             .set_gpu_performance_level(GPUPerformanceLevel::Low as u32)
             .await
@@ -433,15 +338,11 @@ mod test {
     }
 
     #[zbus::proxy(
-        interface = "com.steampowered.SteamOSManager1.Manager",
+        interface = "com.steampowered.SteamOSManager1.RootManager",
         default_service = "com.steampowered.SteamOSManager1.Test.ManualGpuClock",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait ManualGpuClock {
-        #[zbus(property)]
-        fn manual_gpu_clock(&self) -> zbus::Result<u32>;
-
-        #[zbus(property)]
         fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()>;
     }
 
@@ -452,11 +353,6 @@ mod test {
         let proxy = ManualGpuClockProxy::new(&test.connection).await.unwrap();
 
         power::test::setup().await;
-        assert!(proxy.manual_gpu_clock().await.is_err());
-
-        power::test::write_clocks(1600).await;
-        assert_eq!(proxy.manual_gpu_clock().await.unwrap(), 1600);
-
         proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
         power::test::expect_clocks(200).await;
 
@@ -465,7 +361,7 @@ mod test {
     }
 
     #[zbus::proxy(
-        interface = "com.steampowered.SteamOSManager1.Manager",
+        interface = "com.steampowered.SteamOSManager1.RootManager",
         default_service = "com.steampowered.SteamOSManager1.Test.Version",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
@@ -479,88 +375,5 @@ mod test {
         let test = start("Version").await;
         let proxy = VersionProxy::new(&test.connection).await.unwrap();
         assert_eq!(proxy.version().await, Ok(API_VERSION));
-    }
-
-    fn collect_methods<'a>(methods: &'a [Method<'a>]) -> HashMap<String, &'a Method<'a>> {
-        let mut map = HashMap::new();
-        for method in methods.iter() {
-            map.insert(method.name().to_string(), method);
-        }
-        map
-    }
-
-    fn collect_properties<'a>(props: &'a [Property<'a>]) -> HashMap<String, &'a Property<'a>> {
-        let mut map = HashMap::new();
-        for prop in props.iter() {
-            map.insert(prop.name().to_string(), prop);
-        }
-        map
-    }
-
-    #[tokio::test]
-    async fn interface_matches() {
-        let test = start("Interface").await;
-
-        let manager_ref = test
-            .connection
-            .object_server()
-            .interface::<_, SteamOSManager>("/com/steampowered/SteamOSManager1")
-            .await
-            .expect("interface");
-        let manager = manager_ref.get().await;
-        let mut remote_interface_string = String::from(
-            "<node name=\"/\" xmlns:doc=\"http://www.freedesktop.org/dbus/1.0/doc.dtd\">",
-        );
-        manager.introspect_to_writer(&mut remote_interface_string, 0);
-        remote_interface_string.push_str("</node>");
-        let remote_interfaces =
-            Node::from_reader::<&[u8]>(remote_interface_string.as_bytes()).expect("from_reader");
-        let remote_interface: Vec<_> = remote_interfaces
-            .interfaces()
-            .iter()
-            .filter(|iface| iface.name() == "com.steampowered.SteamOSManager1.Manager")
-            .collect();
-        assert_eq!(remote_interface.len(), 1);
-        let remote_interface = remote_interface[0];
-        let remote_methods = collect_methods(remote_interface.methods());
-        let remote_properties = collect_properties(remote_interface.properties());
-
-        let local_interface_string = read("com.steampowered.SteamOSManager1.xml")
-            .await
-            .expect("read");
-        let local_interfaces =
-            Node::from_reader::<&[u8]>(local_interface_string.as_ref()).expect("from_reader");
-        let local_interface: Vec<_> = local_interfaces
-            .interfaces()
-            .iter()
-            .filter(|iface| iface.name() == "com.steampowered.SteamOSManager1.Manager")
-            .collect();
-        assert_eq!(local_interface.len(), 1);
-        let local_interface = local_interface[0];
-        let local_methods = collect_methods(local_interface.methods());
-        let local_properties = collect_properties(local_interface.properties());
-
-        for key in remote_methods.keys() {
-            let local_method = local_methods.get(key).expect(key);
-            let remote_method = remote_methods.get(key).expect(key);
-
-            assert_eq!(local_method.name(), remote_method.name());
-            assert_eq!(local_method.args().len(), remote_method.args().len());
-            for (local_arg, remote_arg) in
-                zip(local_method.args().iter(), remote_method.args().iter())
-            {
-                assert_eq!(local_arg.direction(), remote_arg.direction());
-                assert_eq!(local_arg.ty(), remote_arg.ty());
-            }
-        }
-
-        for key in remote_properties.keys() {
-            let local_property = local_properties.get(key).expect(key);
-            let remote_property = remote_properties.get(key).expect(key);
-
-            assert_eq!(local_property.name(), remote_property.name());
-            assert_eq!(local_property.ty(), remote_property.ty());
-            assert_eq!(local_property.access(), remote_property.access());
-        }
     }
 }

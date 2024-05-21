@@ -32,7 +32,7 @@ async fn create_connection() -> Result<Connection> {
 
 pub async fn daemon() -> Result<()> {
     // This daemon is responsible for creating a dbus api that steam client can use to do various OS
-    // level things. It implements com.steampowered.SteamOSManager1.Manager interface
+    // level things. It implements com.steampowered.SteamOSManager1.RootManager interface
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
