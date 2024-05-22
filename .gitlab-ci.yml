@@ -6,9 +6,7 @@ image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/archlinux:base-devel
 test:
   stage: test
   tags:
-    - docker
-    - linux
-    - isolated
+    - x86_64-linux-kvm-docker
   script:
     - pacman -Sy --noconfirm --needed dbus rust
     - dbus-run-session cargo test
