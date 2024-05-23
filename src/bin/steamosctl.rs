@@ -197,7 +197,7 @@ async fn main() -> Result<()> {
         Commands::GetGPUPerformanceLevel => {
             let level = proxy.gpu_performance_level().await?;
             match GPUPerformanceLevel::try_from(level) {
-                Ok(l) => println!("GPU performance level: {}", l.to_string()),
+                Ok(l) => println!("GPU performance level: {}", l),
                 Err(_) => println!("Got unknown value {level} from backend"),
             }
         }

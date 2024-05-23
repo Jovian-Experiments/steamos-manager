@@ -6,6 +6,7 @@
  */
 
 use anyhow::{bail, ensure, Error, Result};
+use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tokio::fs::{self, File};
@@ -63,15 +64,15 @@ impl FromStr for GPUPerformanceLevel {
     }
 }
 
-impl ToString for GPUPerformanceLevel {
-    fn to_string(&self) -> String {
-        String::from(match self {
-            GPUPerformanceLevel::Auto => "auto",
-            GPUPerformanceLevel::Low => "low",
-            GPUPerformanceLevel::High => "high",
-            GPUPerformanceLevel::Manual => "manual",
-            GPUPerformanceLevel::ProfilePeak => "peak_performance",
-        })
+impl fmt::Display for GPUPerformanceLevel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GPUPerformanceLevel::Auto => write!(f, "auto"),
+            GPUPerformanceLevel::Low => write!(f, "low"),
+            GPUPerformanceLevel::High => write!(f, "high"),
+            GPUPerformanceLevel::Manual => write!(f, "manual"),
+            GPUPerformanceLevel::ProfilePeak => write!(f, "peak_performance"),
+        }
     }
 }
 
