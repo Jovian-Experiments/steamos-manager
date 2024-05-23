@@ -8,7 +8,6 @@
 use anyhow::{anyhow, ensure, Result};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::path::PathBuf;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -24,8 +23,8 @@ use crate::sls::{LogLayer, LogReceiver};
 use crate::Service;
 
 mod config;
-mod root;
-mod user;
+pub(crate) mod root;
+pub(crate) mod user;
 
 pub use root::daemon as root;
 pub use user::daemon as user;
@@ -33,6 +32,7 @@ pub use user::daemon as user;
 pub(crate) trait DaemonContext: Sized {
     type State: for<'a> Deserialize<'a> + Serialize + Default + Debug;
     type Config: for<'a> Deserialize<'a> + Default + Debug;
+    type Command: Send;
 
     fn state_path(&self) -> Result<PathBuf> {
         let config_path = self.user_config_path()?;
@@ -51,17 +51,20 @@ pub(crate) trait DaemonContext: Sized {
     ) -> Result<()>;
 
     async fn reload(&mut self, config: Self::Config, daemon: &mut Daemon<Self>) -> Result<()>;
+
+    async fn handle_command(&mut self, cmd: Self::Command, daemon: &mut Daemon<Self>)
+        -> Result<()>;
 }
 
 pub(crate) struct Daemon<C: DaemonContext> {
     services: JoinSet<Result<()>>,
     token: CancellationToken,
-    channel: Receiver<DaemonCommand>,
-    _context: PhantomData<C>,
+    channel: Receiver<DaemonCommand<C::Command>>,
 }
 
 #[derive(Debug)]
-pub(crate) enum DaemonCommand {
+pub(crate) enum DaemonCommand<T> {
+    ContextCommand(T),
     ReadConfig,
     WriteState,
 }
@@ -70,7 +73,7 @@ impl<C: DaemonContext> Daemon<C> {
     pub(crate) async fn new<S: SubscriberExt + Send + Sync + for<'a> LookupSpan<'a>>(
         subscriber: S,
         connection: Connection,
-        channel: Receiver<DaemonCommand>,
+        channel: Receiver<DaemonCommand<C::Command>>,
     ) -> Result<Daemon<C>> {
         let services = JoinSet::new();
         let token = CancellationToken::new();
@@ -84,7 +87,6 @@ impl<C: DaemonContext> Daemon<C> {
             services,
             token,
             channel,
-            _context: PhantomData::default(),
         };
         daemon.add_service(log_receiver);
 
@@ -139,7 +141,9 @@ impl<C: DaemonContext> Daemon<C> {
                     None => Err(anyhow!("SIGHUP machine broke")),
                 },
                 msg = self.channel.recv() => match msg {
-                    Some(msg) => self.handle_message(&mut context, msg).await,
+                    Some(msg) => {
+                        self.handle_message(msg, &mut context).await
+                    }
                     None => Err(anyhow!("All senders have been closed")),
                 },
                 _ = sigquit.recv() => Err(anyhow!("Got SIGQUIT")),
@@ -165,8 +169,13 @@ impl<C: DaemonContext> Daemon<C> {
         res.inspect_err(|e| error!("Encountered error: {e}"))
     }
 
-    async fn handle_message(&mut self, context: &mut C, cmd: DaemonCommand) -> Result<()> {
+    async fn handle_message(
+        &mut self,
+        cmd: DaemonCommand<C::Command>,
+        context: &mut C,
+    ) -> Result<()> {
         match cmd {
+            DaemonCommand::ContextCommand(cmd) => context.handle_command(cmd, self).await,
             DaemonCommand::ReadConfig => match read_config(context).await {
                 Ok(config) => context.reload(config, self).await,
                 Err(error) => {
@@ -179,6 +188,12 @@ impl<C: DaemonContext> Daemon<C> {
     }
 }
 
-pub(crate) fn channel() -> (Sender<DaemonCommand>, Receiver<DaemonCommand>) {
+// Rust doesn't support a good way to simplify this type yet
+// See <https://github.com/rust-lang/rust/issues/8995>
+#[allow(clippy::type_complexity)]
+pub(crate) fn channel<C: DaemonContext>() -> (
+    Sender<DaemonCommand<C::Command>>,
+    Receiver<DaemonCommand<C::Command>>,
+) {
     mpsc::channel(10)
 }

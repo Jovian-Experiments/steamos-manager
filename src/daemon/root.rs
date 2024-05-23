@@ -36,11 +36,15 @@ pub(crate) struct RootState {
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 pub(crate) struct RootServicesState {}
 
+#[derive(Debug)]
+pub(crate) enum RootCommand {}
+
 struct RootContext {}
 
 impl DaemonContext for RootContext {
     type State = RootState;
     type Config = RootConfig;
+    type Command = RootCommand;
 
     fn user_config_path(&self) -> Result<PathBuf> {
         Ok(path("/etc/steamos-manager"))
@@ -72,6 +76,14 @@ impl DaemonContext for RootContext {
         // Nothing to do yet
         Ok(())
     }
+
+    async fn handle_command(
+        &mut self,
+        _cmd: RootCommand,
+        _daemon: &mut Daemon<RootContext>,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 async fn create_connection() -> Result<Connection> {
@@ -93,7 +105,7 @@ pub async fn daemon() -> Result<()> {
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
-    let (_tx, rx) = channel();
+    let (_tx, rx) = channel::<RootContext>();
 
     let connection = match create_connection().await {
         Ok(c) => c,

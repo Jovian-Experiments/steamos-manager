@@ -41,6 +41,7 @@ struct UserContext {}
 impl DaemonContext for UserContext {
     type State = UserState;
     type Config = UserConfig;
+    type Command = ();
 
     #[cfg(not(test))]
     fn user_config_path(&self) -> Result<PathBuf> {
@@ -79,6 +80,15 @@ impl DaemonContext for UserContext {
         // Nothing to do yet
         Ok(())
     }
+
+    async fn handle_command(
+        &mut self,
+        _cmd: Self::Command,
+        _daemon: &mut Daemon<UserContext>,
+    ) -> Result<()> {
+        // Nothing to do yet
+        Ok(())
+    }
 }
 
 async fn create_connections() -> Result<(Connection, Connection)> {
@@ -103,7 +113,7 @@ pub async fn daemon() -> Result<()> {
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
-    let (_tx, rx) = channel();
+    let (_tx, rx) = channel::<UserContext>();
 
     let (_session, system) = match create_connections().await {
         Ok(c) => c,
