@@ -202,8 +202,14 @@ mod test {
             1: u32 = Supported,
         });
         assert!(HardwareCurrentlySupported::try_from(2).is_err());
-        assert_eq!(HardwareCurrentlySupported::Unsupported.to_string(), "Unsupported");
-        assert_eq!(HardwareCurrentlySupported::Supported.to_string(), "Supported");
+        assert_eq!(
+            HardwareCurrentlySupported::Unsupported.to_string(),
+            "Unsupported"
+        );
+        assert_eq!(
+            HardwareCurrentlySupported::Supported.to_string(),
+            "Supported"
+        );
     }
 
     #[test]
@@ -214,8 +220,14 @@ mod test {
             "BIOS": str = Bios,
             "OS": str = Os,
         });
-        assert_eq!(FanControlState::from_str("os").unwrap(), FanControlState::Os);
-        assert_eq!(FanControlState::from_str("bios").unwrap(), FanControlState::Bios);
+        assert_eq!(
+            FanControlState::from_str("os").unwrap(),
+            FanControlState::Os
+        );
+        assert_eq!(
+            FanControlState::from_str("bios").unwrap(),
+            FanControlState::Bios
+        );
         assert!(FanControlState::try_from(2).is_err());
         assert!(FanControlState::from_str("on").is_err());
     }

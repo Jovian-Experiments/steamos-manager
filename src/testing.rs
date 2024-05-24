@@ -38,7 +38,7 @@ macro_rules! enum_on_off {
         assert_eq!($enum::from_str("disable").unwrap(), $enum::$off);
         assert_eq!($enum::from_str("disabled").unwrap(), $enum::$off);
         assert_eq!($enum::from_str("0").unwrap(), $enum::$off);
-    }
+    };
 }
 
 pub fn start() -> TestHandle {
