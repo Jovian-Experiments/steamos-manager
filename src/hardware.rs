@@ -159,7 +159,7 @@ impl FanControl {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::testing;
+    use crate::{enum_roundtrip, testing};
     use tokio::fs::{create_dir_all, write};
 
     #[tokio::test]
@@ -193,5 +193,30 @@ mod test {
             .await
             .expect("write");
         assert_eq!(variant().await.unwrap(), HardwareVariant::Unknown);
+    }
+
+    #[test]
+    fn hardware_currently_supported_roundtrip() {
+        enum_roundtrip!(HardwareCurrentlySupported {
+            0: u32 = Unsupported,
+            1: u32 = Supported,
+        });
+        assert!(HardwareCurrentlySupported::try_from(2).is_err());
+        assert_eq!(HardwareCurrentlySupported::Unsupported.to_string(), "Unsupported");
+        assert_eq!(HardwareCurrentlySupported::Supported.to_string(), "Supported");
+    }
+
+    #[test]
+    fn fan_control_state_roundtrip() {
+        enum_roundtrip!(FanControlState {
+            0: u32 = Bios,
+            1: u32 = Os,
+            "BIOS": str = Bios,
+            "OS": str = Os,
+        });
+        assert_eq!(FanControlState::from_str("os").unwrap(), FanControlState::Os);
+        assert_eq!(FanControlState::from_str("bios").unwrap(), FanControlState::Bios);
+        assert!(FanControlState::try_from(2).is_err());
+        assert!(FanControlState::from_str("on").is_err());
     }
 }
