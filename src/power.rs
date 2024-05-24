@@ -204,7 +204,7 @@ pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use crate::testing;
+    use crate::{enum_roundtrip, testing};
     use anyhow::anyhow;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
 
@@ -451,5 +451,23 @@ CCLK_RANGE in Core0:
 
         assert!(set_gpu_clocks(1600).await.is_ok());
         expect_clocks(1600).await;
+    }
+
+    #[test]
+    fn gpu_performance_level_roundtrip() {
+        enum_roundtrip!(GPUPerformanceLevel {
+            0: u32 = Auto,
+            1: u32 = Low,
+            2: u32 = High,
+            3: u32 = Manual,
+            4: u32 = ProfilePeak,
+            "auto": str = Auto,
+            "low": str = Low,
+            "high": str = High,
+            "manual": str = Manual,
+            "peak_performance": str = ProfilePeak,
+        });
+        assert!(GPUPerformanceLevel::try_from(5).is_err());
+        assert!(GPUPerformanceLevel::from_str("profile_peak").is_err());
     }
 }
