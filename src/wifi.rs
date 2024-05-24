@@ -67,7 +67,7 @@ impl TryFrom<u32> for WifiDebugMode {
 impl FromStr for WifiDebugMode {
     type Err = Error;
     fn from_str(input: &str) -> Result<WifiDebugMode, Self::Err> {
-        Ok(match input {
+        Ok(match input.to_lowercase().as_str() {
             "enable" | "enabled" | "on" | "1" => WifiDebugMode::On,
             "disable" | "disabled" | "off" | "0" => WifiDebugMode::Off,
             v => bail!("No enum match for value {v}"),
@@ -98,7 +98,7 @@ impl TryFrom<u32> for WifiPowerManagement {
 impl FromStr for WifiPowerManagement {
     type Err = Error;
     fn from_str(input: &str) -> Result<WifiPowerManagement, Self::Err> {
-        Ok(match input {
+        Ok(match input.to_lowercase().as_str() {
             "enable" | "enabled" | "on" | "1" => WifiPowerManagement::Enabled,
             "disable" | "disabled" | "off" | "0" => WifiPowerManagement::Disabled,
             v => bail!("No enum match for value {v}"),
@@ -292,7 +292,7 @@ pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::testing;
+    use crate::{enum_on_off, enum_roundtrip, testing};
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, try_exists, write};
 
     #[test]
@@ -378,5 +378,43 @@ mod test {
             get_wifi_backend().await.unwrap(),
             WifiBackend::WPASupplicant
         );
+    }
+
+    #[test]
+    fn wifi_debug_mode_roundtrip() {
+        enum_roundtrip!(WifiDebugMode {
+            0: u32 = Off,
+            1: u32 = On,
+            "Off": str = Off,
+            "On": str = On,
+        });
+        enum_on_off!(WifiDebugMode => (On, Off));
+        assert!(WifiDebugMode::try_from(2).is_err());
+        assert!(WifiDebugMode::from_str("onf").is_err());
+    }
+
+    #[test]
+    fn wifi_power_management_roundtrip() {
+        enum_roundtrip!(WifiPowerManagement {
+            0: u32 = Disabled,
+            1: u32 = Enabled,
+            "Disabled": str = Disabled,
+            "Enabled": str = Enabled,
+        });
+        enum_on_off!(WifiPowerManagement => (Enabled, Disabled));
+        assert!(WifiPowerManagement::try_from(2).is_err());
+        assert!(WifiPowerManagement::from_str("onf").is_err());
+    }
+
+    #[test]
+    fn wifi_backend_roundtrip() {
+        enum_roundtrip!(WifiBackend {
+            0: u32 = Iwd,
+            1: u32 = WPASupplicant,
+            "iwd": str = Iwd,
+            "wpa_supplicant": str = WPASupplicant,
+        });
+        assert!(WifiBackend::try_from(2).is_err());
+        assert!(WifiBackend::from_str("iwl").is_err());
     }
 }
