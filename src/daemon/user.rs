@@ -6,14 +6,80 @@
  */
 
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tracing::error;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, Registry};
+#[cfg(not(test))]
+use xdg::BaseDirectories;
 use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
-use crate::daemon::Daemon;
+use crate::daemon::{Daemon, DaemonContext};
 use crate::manager::user::SteamOSManager;
+use crate::path;
+
+#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+struct UserConfig {
+    pub services: UserServicesConfig,
+}
+
+#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+pub(crate) struct UserServicesConfig {}
+
+#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+struct UserState {
+    pub services: UserServicesState,
+}
+
+#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+pub(crate) struct UserServicesState {}
+
+struct UserContext {}
+
+impl DaemonContext for UserContext {
+    type State = UserState;
+    type Config = UserConfig;
+
+    #[cfg(not(test))]
+    fn user_config_path(&self) -> Result<PathBuf> {
+        let xdg_base = BaseDirectories::new()?;
+        Ok(xdg_base.get_config_file("steamos-manager"))
+    }
+
+    #[cfg(test)]
+    fn user_config_path(&self) -> Result<PathBuf> {
+        Ok(path("steamos-manager"))
+    }
+
+    fn system_config_path(&self) -> Result<PathBuf> {
+        Ok(path("/usr/lib/steamos-manager/user.d"))
+    }
+
+    fn state(&self) -> UserState {
+        UserState::default()
+    }
+
+    async fn start(
+        &mut self,
+        _state: UserState,
+        _config: UserConfig,
+        _daemon: &mut Daemon<UserContext>,
+    ) -> Result<()> {
+        // Nothing to do yet
+        Ok(())
+    }
+
+    async fn reload(
+        &mut self,
+        _config: UserConfig,
+        _daemon: &mut Daemon<UserContext>,
+    ) -> Result<()> {
+        // Nothing to do yet
+        Ok(())
+    }
+}
 
 async fn create_connections() -> Result<(Connection, Connection)> {
     let system = Connection::system().await?;
@@ -47,7 +113,8 @@ pub async fn daemon() -> Result<()> {
         }
     };
 
+    let context = UserContext {};
     let mut daemon = Daemon::new(subscriber, system).await?;
 
-    daemon.run().await
+    daemon.run(context).await
 }
