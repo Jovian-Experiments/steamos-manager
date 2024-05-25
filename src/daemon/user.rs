@@ -16,7 +16,7 @@ use xdg::BaseDirectories;
 use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
-use crate::daemon::{Daemon, DaemonContext};
+use crate::daemon::{channel, Daemon, DaemonContext};
 use crate::manager::user::SteamOSManager;
 use crate::path;
 
@@ -103,6 +103,7 @@ pub async fn daemon() -> Result<()> {
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
+    let (_tx, rx) = channel();
 
     let (_session, system) = match create_connections().await {
         Ok(c) => c,
@@ -114,7 +115,7 @@ pub async fn daemon() -> Result<()> {
     };
 
     let context = UserContext {};
-    let mut daemon = Daemon::new(subscriber, system).await?;
+    let mut daemon = Daemon::new(subscriber, system, rx).await?;
 
     daemon.run(context).await
 }

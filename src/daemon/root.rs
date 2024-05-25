@@ -14,7 +14,7 @@ use tracing_subscriber::{fmt, Registry};
 use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
-use crate::daemon::{Daemon, DaemonContext};
+use crate::daemon::{channel, Daemon, DaemonContext};
 use crate::ds_inhibit::Inhibitor;
 use crate::manager::root::SteamOSManager;
 use crate::path;
@@ -93,6 +93,7 @@ pub async fn daemon() -> Result<()> {
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
+    let (_tx, rx) = channel();
 
     let connection = match create_connection().await {
         Ok(c) => c,
@@ -104,7 +105,7 @@ pub async fn daemon() -> Result<()> {
     };
 
     let context = RootContext {};
-    let mut daemon = Daemon::new(subscriber, connection.clone()).await?;
+    let mut daemon = Daemon::new(subscriber, connection.clone(), rx).await?;
 
     let ftrace = Ftrace::init(connection.clone()).await?;
     daemon.add_service(ftrace);
