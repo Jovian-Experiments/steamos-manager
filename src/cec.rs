@@ -35,10 +35,10 @@ impl TryFrom<u32> for HdmiCecState {
 impl FromStr for HdmiCecState {
     type Err = Error;
     fn from_str(input: &str) -> Result<HdmiCecState, Self::Err> {
-        Ok(match input {
+        Ok(match input.to_lowercase().as_str() {
             "disable" | "disabled" | "off" => HdmiCecState::Disabled,
-            "control-only" | "ControlOnly" => HdmiCecState::ControlOnly,
-            "control-wake" | "control-and-wake" | "ControlAndWake" => HdmiCecState::ControlAndWake,
+            "control-only" | "controlonly" => HdmiCecState::ControlOnly,
+            "control-wake" | "control-and-wake" | "controlandwake" => HdmiCecState::ControlAndWake,
             v => bail!("No enum match for value {v}"),
         })
     }
@@ -121,5 +121,42 @@ impl<'dbus> HdmiCecControl<'dbus> {
         };
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::enum_roundtrip;
+
+    #[test]
+    fn hdmi_cec_state_roundtrip() {
+        enum_roundtrip!(HdmiCecState {
+            0: u32 = Disabled,
+            1: u32 = ControlOnly,
+            2: u32 = ControlAndWake,
+            "Disabled": str = Disabled,
+            "ControlOnly": str = ControlOnly,
+            "ControlAndWake": str = ControlAndWake,
+        });
+        assert_eq!(
+            HdmiCecState::from_str("control-only").unwrap(),
+            HdmiCecState::ControlOnly
+        );
+        assert_eq!(
+            HdmiCecState::from_str("control-and-wake").unwrap(),
+            HdmiCecState::ControlAndWake
+        );
+        assert_eq!(HdmiCecState::Disabled.to_human_readable(), "disabled");
+        assert_eq!(
+            HdmiCecState::ControlOnly.to_human_readable(),
+            "control-only"
+        );
+        assert_eq!(
+            HdmiCecState::ControlAndWake.to_human_readable(),
+            "control-and-wake"
+        );
+        assert!(HdmiCecState::try_from(3).is_err());
+        assert!(HdmiCecState::from_str("working").is_err());
     }
 }
