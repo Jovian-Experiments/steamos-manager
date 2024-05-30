@@ -19,6 +19,7 @@ mod manager;
 mod process;
 mod sls;
 mod systemd;
+mod thread;
 
 pub mod cec;
 pub mod daemon;
