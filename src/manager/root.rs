@@ -260,6 +260,7 @@ impl SteamOSManager {
 mod test {
     use super::*;
     use crate::power::{self, get_gpu_performance_level};
+    use crate::power::test::{format_clocks, read_clocks};
     use crate::testing;
     use tokio::fs::{create_dir_all, write};
     use zbus::{Connection, ConnectionBuilder};
@@ -354,10 +355,10 @@ mod test {
 
         power::test::setup().await;
         proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
-        power::test::expect_clocks(200).await;
+        assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
 
         assert!(proxy.set_manual_gpu_clock(100).await.is_err());
-        power::test::expect_clocks(200).await;
+        assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
     }
 
     #[zbus::proxy(

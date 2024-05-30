@@ -245,12 +245,14 @@ CCLK_RANGE in Core0:
         write(filename.as_path(), contents).await.expect("write");
     }
 
-    pub async fn expect_clocks(mhz: u32) {
+    pub async fn read_clocks() -> Result<String, std::io::Error> {
         let base = find_hwmon().await.unwrap();
-        let clocks = read_to_string(base.join(GPU_CLOCKS_SUFFIX))
+        read_to_string(base.join(GPU_CLOCKS_SUFFIX))
             .await
-            .expect("read");
-        assert_eq!(clocks, format!("s 0 {mhz}\ns 1 {mhz}\nc\n"));
+    }
+
+    pub fn format_clocks(mhz: u32) -> String {
+        format!("s 0 {mhz}\ns 1 {mhz}\nc\n")
     }
 
     #[tokio::test]
@@ -447,10 +449,11 @@ CCLK_RANGE in Core0:
         assert!(set_gpu_clocks(2000).await.is_err());
 
         assert!(set_gpu_clocks(200).await.is_ok());
-        expect_clocks(200).await;
+
+        assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
 
         assert!(set_gpu_clocks(1600).await.is_ok());
-        expect_clocks(1600).await;
+        assert_eq!(read_clocks().await.unwrap(), format_clocks(1600));
     }
 
     #[test]
