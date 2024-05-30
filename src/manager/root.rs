@@ -259,8 +259,8 @@ impl SteamOSManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::power::{self, get_gpu_performance_level};
     use crate::power::test::{format_clocks, read_clocks};
+    use crate::power::{self, get_gpu_performance_level};
     use crate::testing;
     use tokio::fs::{create_dir_all, write};
     use zbus::{Connection, ConnectionBuilder};

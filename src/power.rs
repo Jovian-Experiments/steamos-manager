@@ -247,8 +247,7 @@ CCLK_RANGE in Core0:
 
     pub async fn read_clocks() -> Result<String, std::io::Error> {
         let base = find_hwmon().await.unwrap();
-        read_to_string(base.join(GPU_CLOCKS_SUFFIX))
-            .await
+        read_to_string(base.join(GPU_CLOCKS_SUFFIX)).await
     }
 
     pub fn format_clocks(mhz: u32) -> String {
