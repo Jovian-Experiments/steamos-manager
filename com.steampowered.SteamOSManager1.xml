@@ -346,4 +346,18 @@
       </method>
   </interface>
 
+  <!--
+      com.steampowered.SteamOSManager1.UdevEvents
+      @short_description: Specific udev events that are monitored to be
+      bubbled up to the desktop interface
+
+      Version available: 9
+  -->
+  <interface name="com.steampowered.SteamOSManager1.UdevEvents">
+      <signal name="OverCurrent">
+        <arg type="s" name="devpath"/>
+        <arg type="s" name="port"/>
+        <arg type="t" name="count"/>
+      </signal>
+  </interface>
 </node>

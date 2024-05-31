@@ -19,6 +19,7 @@ use zbus::ConnectionBuilder;
 use crate::daemon::{channel, Daemon, DaemonContext};
 use crate::manager::user::SteamOSManager;
 use crate::path;
+use crate::udev::UdevMonitor;
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 struct UserConfig {
@@ -36,7 +37,9 @@ struct UserState {
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 pub(crate) struct UserServicesState {}
 
-struct UserContext {}
+struct UserContext {
+    session: Connection,
+}
 
 impl DaemonContext for UserContext {
     type State = UserState;
@@ -66,9 +69,11 @@ impl DaemonContext for UserContext {
         &mut self,
         _state: UserState,
         _config: UserConfig,
-        _daemon: &mut Daemon<UserContext>,
+        daemon: &mut Daemon<UserContext>,
     ) -> Result<()> {
-        // Nothing to do yet
+        let udev = UdevMonitor::init(&self.session).await?;
+        daemon.add_service(udev);
+
         Ok(())
     }
 
@@ -115,7 +120,7 @@ pub async fn daemon() -> Result<()> {
     let subscriber = Registry::default().with(stdout_log);
     let (_tx, rx) = channel::<UserContext>();
 
-    let (_session, system) = match create_connections().await {
+    let (session, system) = match create_connections().await {
         Ok(c) => c,
         Err(e) => {
             let _guard = tracing::subscriber::set_default(subscriber);
@@ -124,7 +129,7 @@ pub async fn daemon() -> Result<()> {
         }
     };
 
-    let context = UserContext {};
+    let context = UserContext { session };
     let mut daemon = Daemon::new(subscriber, system, rx).await?;
 
     daemon.run(context).await
