@@ -5,7 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, ensure, Error, Result};
+use anyhow::{anyhow, bail, ensure, Error, Result};
+use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -13,16 +14,82 @@ use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::error;
 
+use crate::hardware::is_deck;
 use crate::{path, write_synced};
 
 const GPU_HWMON_PREFIX: &str = "/sys/class/hwmon";
 const GPU_HWMON_NAME: &str = "amdgpu";
+const GPU_DRM_PREFIX: &str = "/sys/class/drm";
+const GPU_VENDOR: &str = "0x1002";
 
+const GPU_POWER_PROFILE_SUFFIX: &str = "device/pp_power_profile_mode";
 const GPU_PERFORMANCE_LEVEL_SUFFIX: &str = "device/power_dpm_force_performance_level";
 const GPU_CLOCKS_SUFFIX: &str = "device/pp_od_clk_voltage";
 
 const TDP_LIMIT1: &str = "power1_cap";
 const TDP_LIMIT2: &str = "power2_cap";
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(u32)]
+pub enum GPUPowerProfile {
+    // Currently firmware exposes these values, though
+    // deck doesn't support them yet
+    FullScreen = 1, // 3D_FULL_SCREEN
+    Video = 3,
+    VR = 4,
+    Compute = 5,
+    Custom = 6,
+    // Currently only capped and uncapped are supported on
+    // deck hardware/firmware. Add more later as needed
+    Capped = 8,
+    Uncapped = 9,
+}
+
+impl TryFrom<u32> for GPUPowerProfile {
+    type Error = &'static str;
+    fn try_from(v: u32) -> Result<Self, Self::Error> {
+        match v {
+            x if x == GPUPowerProfile::FullScreen as u32 => Ok(GPUPowerProfile::FullScreen),
+            x if x == GPUPowerProfile::Video as u32 => Ok(GPUPowerProfile::Video),
+            x if x == GPUPowerProfile::VR as u32 => Ok(GPUPowerProfile::VR),
+            x if x == GPUPowerProfile::Compute as u32 => Ok(GPUPowerProfile::Compute),
+            x if x == GPUPowerProfile::Custom as u32 => Ok(GPUPowerProfile::Custom),
+            x if x == GPUPowerProfile::Capped as u32 => Ok(GPUPowerProfile::Capped),
+            x if x == GPUPowerProfile::Uncapped as u32 => Ok(GPUPowerProfile::Uncapped),
+            _ => Err("No GPUPowerProfile for value"),
+        }
+    }
+}
+
+impl FromStr for GPUPowerProfile {
+    type Err = Error;
+    fn from_str(input: &str) -> Result<GPUPowerProfile, Self::Err> {
+        Ok(match input.to_lowercase().as_str() {
+            "3d_full_screen" => GPUPowerProfile::FullScreen,
+            "video" => GPUPowerProfile::Video,
+            "vr" => GPUPowerProfile::VR,
+            "compute" => GPUPowerProfile::Compute,
+            "custom" => GPUPowerProfile::Custom,
+            "capped" => GPUPowerProfile::Capped,
+            "uncapped" => GPUPowerProfile::Uncapped,
+            _ => bail!("No match for value {input}"),
+        })
+    }
+}
+
+impl fmt::Display for GPUPowerProfile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            GPUPowerProfile::FullScreen => write!(f, "3d_full_screen"),
+            GPUPowerProfile::Video => write!(f, "video"),
+            GPUPowerProfile::VR => write!(f, "vr"),
+            GPUPowerProfile::Compute => write!(f, "compute"),
+            GPUPowerProfile::Custom => write!(f, "custom"),
+            GPUPowerProfile::Capped => write!(f, "capped"),
+            GPUPowerProfile::Uncapped => write!(f, "uncapped"),
+        }
+    }
+}
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -74,6 +141,88 @@ impl fmt::Display for GPUPerformanceLevel {
             GPUPerformanceLevel::ProfilePeak => write!(f, "peak_performance"),
         }
     }
+}
+
+async fn read_gpu_sysfs_contents() -> Result<String> {
+    // check which profile is current and return if possible
+    let base = find_gpu_prefix().await?;
+    fs::read_to_string(base.join(GPU_POWER_PROFILE_SUFFIX))
+        .await
+        .map_err(|message| anyhow!("Error opening sysfs file for reading {message}"))
+}
+
+pub(crate) async fn get_gpu_power_profile() -> Result<GPUPowerProfile> {
+    // check which profile is current and return if possible
+    let contents = read_gpu_sysfs_contents().await?;
+
+    // NOTE: We don't filter based on is_deck here because the sysfs
+    // firmware support setting the value to no-op values.
+    let lines = contents.lines();
+    for line in lines {
+        let mut words = line.split_whitespace();
+        let value: u32 = match words.next() {
+            Some(v) => v
+                .parse()
+                .map_err(|message| anyhow!("Unable to parse value from sysfs {message}"))?,
+            None => bail!("Unable to get value from sysfs"),
+        };
+        let name = match words.next() {
+            Some(v) => v.to_string(),
+            None => bail!("Unable to get name from sysfs"),
+        };
+        if name.ends_with('*') {
+            match GPUPowerProfile::try_from(value) {
+                Ok(v) => {
+                    return Ok(v);
+                }
+                Err(e) => bail!("Unable to parse value for gpu power profile {e}"),
+            }
+        }
+    }
+    bail!("Unable to determine current gpu power profile");
+}
+
+pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
+    let contents = read_gpu_sysfs_contents().await?;
+    let deck = is_deck().await?;
+
+    let mut map = HashMap::new();
+    let lines = contents.lines();
+    for line in lines {
+        let mut words = line.split_whitespace();
+        let value: u32 = match words.next() {
+            Some(v) => v
+                .parse()
+                .map_err(|message| anyhow!("Unable to parse value from sysfs {message}"))?,
+            None => bail!("Unable to get value from sysfs"),
+        };
+        let name = match words.next() {
+            Some(v) => v.to_string().replace('*', ""),
+            None => bail!("Unable to get name from sysfs"),
+        };
+        if deck {
+            // Deck is designed to operate in one of the CAPPED or UNCAPPED power profiles,
+            // the other profiles aren't correctly tuned for the hardware.
+            if value == GPUPowerProfile::Capped as u32 || value == GPUPowerProfile::Uncapped as u32
+            {
+                map.insert(value, name);
+            } else {
+                // Got unsupported value, so don't include it
+            }
+        } else {
+            // Do basic validation to ensure our enum is up to date?
+            map.insert(value, name);
+        }
+    }
+    Ok(map)
+}
+
+pub(crate) async fn set_gpu_power_profile(value: GPUPowerProfile) -> Result<()> {
+    let profile = (value as u32).to_string();
+    let base = find_gpu_prefix().await?;
+    write_synced(base.join(GPU_POWER_PROFILE_SUFFIX), profile.as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
 
 pub(crate) async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
@@ -151,6 +300,24 @@ pub(crate) async fn get_gpu_clocks() -> Result<u32> {
         return Ok(mhz.parse()?);
     }
     Ok(0)
+}
+
+async fn find_gpu_prefix() -> Result<PathBuf> {
+    let mut dir = fs::read_dir(path(GPU_DRM_PREFIX)).await?;
+    loop {
+        let base = match dir.next_entry().await? {
+            Some(entry) => entry.path(),
+            None => bail!("GPU node not found"),
+        };
+        let file_name = base.join("device").join("vendor");
+        let vendor = fs::read_to_string(file_name.as_path())
+            .await?
+            .trim()
+            .to_string();
+        if vendor == GPU_VENDOR {
+            return Ok(base);
+        }
+    }
 }
 
 async fn find_hwmon() -> Result<PathBuf> {
@@ -453,6 +620,30 @@ CCLK_RANGE in Core0:
 
         assert!(set_gpu_clocks(1600).await.is_ok());
         assert_eq!(read_clocks().await.unwrap(), format_clocks(1600));
+    }
+
+    #[test]
+    fn gpu_power_profile_roundtrip() {
+        enum_roundtrip!(GPUPowerProfile {
+            1: u32 = FullScreen,
+            3: u32 = Video,
+            4: u32 = VR,
+            5: u32 = Compute,
+            6: u32 = Custom,
+            8: u32 = Capped,
+            9: u32 = Uncapped,
+            "3d_full_screen": str = FullScreen,
+            "video": str = Video,
+            "vr": str = VR,
+            "compute": str = Compute,
+            "custom": str = Custom,
+            "capped": str = Capped,
+            "uncapped": str = Uncapped,
+        });
+        assert!(GPUPowerProfile::try_from(0).is_err());
+        assert!(GPUPowerProfile::try_from(2).is_err());
+        assert!(GPUPowerProfile::try_from(10).is_err());
+        assert!(GPUPowerProfile::from_str("fullscreen").is_err());
     }
 
     #[test]

@@ -277,6 +277,26 @@
     -->
     <property name="HdmiCecState" type="u" access="readwrite"/>
 
+
+    <!--
+        GpuPowerProfiles:
+
+        Enumerate the supported gpu power profiles available on the system.
+
+        A list of supported profiles (a dictionary of values to names)
+        Version available: 9
+    -->
+    <property name="GpuPowerProfiles" type="a{us}" access="read"/>
+
+    <!--
+        GpuPowerProfile:
+      
+        The current gpu power profile. Valid values come from GpuPowerProfiles property.
+      
+        Version available: 9
+    -->
+    <property name="GpuPowerProfile" type="u" access="readwrite"/>
+    
   </interface>
 
   <!--

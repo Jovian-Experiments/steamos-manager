@@ -14,7 +14,10 @@ use zbus::{fdo, interface, Connection, SignalContext};
 
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
-use crate::power::{set_gpu_clocks, set_gpu_performance_level, set_tdp_limit, GPUPerformanceLevel};
+use crate::power::{
+    set_gpu_clocks, set_gpu_performance_level, set_gpu_power_profile, set_tdp_limit,
+    GPUPerformanceLevel, GPUPowerProfile,
+};
 use crate::process::{run_script, script_output, ProcessManager};
 use crate::wifi::{
     set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state, WifiBackend,
@@ -171,6 +174,14 @@ impl SteamOSManager {
                 format!("formatting {device}").as_str(),
             )
             .await
+    }
+
+    async fn set_gpu_power_profile(&self, value: u32) -> fdo::Result<()> {
+        let profile = GPUPowerProfile::try_from(value).map_err(to_zbus_fdo_error)?;
+        set_gpu_power_profile(profile)
+            .await
+            .inspect_err(|message| error!("Error setting GPU power profile: {message}"))
+            .map_err(to_zbus_fdo_error)
     }
 
     async fn set_gpu_performance_level(&self, level: u32) -> fdo::Result<()> {

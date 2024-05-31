@@ -115,6 +115,13 @@ pub(crate) async fn variant() -> Result<HardwareVariant> {
     HardwareVariant::from_str(board_name.trim_end())
 }
 
+pub(crate) async fn is_deck() -> Result<bool> {
+    match variant().await {
+        Ok(variant) => Ok(variant != HardwareVariant::Unknown),
+        Err(e) => Err(e),
+    }
+}
+
 pub(crate) async fn check_support() -> Result<HardwareCurrentlySupported> {
     // Run jupiter-check-support note this script does exit 1 for "Support: No" case
     // so no need to parse output, etc.

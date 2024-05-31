@@ -7,6 +7,7 @@
  */
 
 use anyhow::Result;
+use std::collections::HashMap;
 use tracing::error;
 use zbus::proxy::Builder;
 use zbus::zvariant::Fd;
@@ -15,7 +16,10 @@ use zbus::{fdo, interface, Connection, Proxy, SignalContext};
 use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
-use crate::power::{get_gpu_clocks, get_gpu_performance_level, get_tdp_limit};
+use crate::power::{
+    get_gpu_clocks, get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles,
+    get_tdp_limit,
+};
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
 
@@ -176,6 +180,30 @@ impl SteamOSManager {
         validate: bool,
     ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "FormatDevice", device, label, validate)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn gpu_power_profiles(&self) -> fdo::Result<HashMap<u32, String>> {
+        get_gpu_power_profiles().await.map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn gpu_power_profile(&self) -> fdo::Result<u32> {
+        match get_gpu_power_profile().await {
+            Ok(profile) => Ok(profile as u32),
+            Err(e) => {
+                error!("Error getting GPU power profile: {e}");
+                Err(to_zbus_fdo_error(e))
+            }
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_gpu_power_profile(&self, profile: u32) -> zbus::Result<()> {
+        self.proxy
+            .call("SetGpuPowerProfile", &(profile))
+            .await
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
