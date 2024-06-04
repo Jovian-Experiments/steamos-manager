@@ -12,7 +12,9 @@ strip="symbols"
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
 clap = { version = "4.5", default-features = false, features = ["derive", "help", "std", "usage"] }
+config = { version = "0.14", default-features = false, features = ["async", "toml"] }
 inotify = { version = "0.10", default-features = false, features = ["stream"] }
 libc = "0.2"
 itertools = "0.12"
