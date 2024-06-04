@@ -62,6 +62,16 @@ trait Manager {
     #[zbus(property)]
     fn set_gpu_performance_level(&self, value: u32) -> zbus::Result<()>;
 
+    /// GpuPowerProfile property
+    #[zbus(property)]
+    fn gpu_power_profile(&self) -> zbus::Result<u32>;
+    #[zbus(property)]
+    fn set_gpu_power_profile(&self, value: u32) -> zbus::Result<()>;
+
+    /// GpuPowerProfiles property
+    #[zbus(property)]
+    fn gpu_power_profiles(&self) -> zbus::Result<std::collections::HashMap<u32, String>>;
+
     /// HardwareCurrentlySupported property
     #[zbus(property)]
     fn hardware_currently_supported(&self) -> zbus::Result<u32>;
