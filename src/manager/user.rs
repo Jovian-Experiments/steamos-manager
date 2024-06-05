@@ -20,8 +20,8 @@ use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
 use crate::power::{
-    get_gpu_clocks, get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles,
-    get_tdp_limit,
+    get_cpu_governor, get_cpu_governors, get_gpu_clocks, get_gpu_performance_level,
+    get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
@@ -189,6 +189,21 @@ impl SteamOSManager {
         validate: bool,
     ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
         method!(self, "FormatDevice", device, label, validate)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn cpu_governors(&self) -> fdo::Result<HashMap<u32, String>> {
+        get_cpu_governors().await.map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn cpu_governor(&self) -> fdo::Result<u32> {
+        get_cpu_governor().await.map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property)]
+    async fn set_cpu_governor(&self, governor: u32) -> zbus::Result<()> {
+        setter!(self, "SetCpuGovernor", &(governor))
     }
 
     #[zbus(property(emits_changed_signal = "false"))]

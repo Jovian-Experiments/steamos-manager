@@ -306,6 +306,27 @@
         Version available: 9
     -->
     <method name="ReloadConfig"/>
+    
+    <!--
+        CpuGovernors:
+
+        Enumerate the supported cpu governors on the system.
+
+        A list of supported governors (a dictionary of values to names)
+        Version available: 9
+    -->
+    <property name="CpuGovernors" type="a{us}" access="read"/>
+
+    <!--
+        CpuGovernor:
+
+        The current governor used for the system's CPUs.
+
+        A value from the CpuGovernors list
+
+        Version available: 9
+    -->
+    <property name="CpuGovernor" type="u" access="readwrite"/>
 
   </interface>
 
