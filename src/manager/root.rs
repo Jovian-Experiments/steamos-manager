@@ -281,50 +281,33 @@ mod test {
         connection: Connection,
     }
 
-    async fn start(name: &str) -> TestHandle {
+    async fn start() -> Result<TestHandle> {
         let handle = testing::start();
-        create_dir_all(crate::path("/sys/class/dmi/id"))
-            .await
-            .expect("create_dir_all");
-        write(crate::path("/sys/class/dmi/id/board_vendor"), "Valve\n")
-            .await
-            .expect("write");
-        write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n")
-            .await
-            .expect("write");
-        create_dir_all(crate::path("/etc/NetworkManager/conf.d"))
-            .await
-            .expect("create_dir_all");
+        create_dir_all(crate::path("/sys/class/dmi/id")).await?;
+        write(crate::path("/sys/class/dmi/id/board_vendor"), "Valve\n").await?;
+        write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n").await?;
+        create_dir_all(crate::path("/etc/NetworkManager/conf.d")).await?;
         write(
             crate::path("/etc/NetworkManager/conf.d/wifi_backend.conf"),
             "wifi.backend=iwd\n",
         )
-        .await
-        .expect("write");
+        .await?;
 
-        let connection = ConnectionBuilder::session()
-            .unwrap()
-            .name(format!("com.steampowered.SteamOSManager1.Test.{name}"))
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-        let manager = SteamOSManager::new(connection.clone()).await.unwrap();
+        let connection = ConnectionBuilder::session()?.build().await?;
+        let manager = SteamOSManager::new(connection.clone()).await?;
         connection
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)
-            .await
-            .expect("object_server at");
+            .await?;
 
-        TestHandle {
+        Ok(TestHandle {
             _handle: handle,
             connection,
-        }
+        })
     }
 
     #[zbus::proxy(
         interface = "com.steampowered.SteamOSManager1.RootManager",
-        default_service = "com.steampowered.SteamOSManager1.Test.GpuPerformanceLevel",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait GpuPerformanceLevel {
@@ -333,10 +316,11 @@ mod test {
 
     #[tokio::test]
     async fn gpu_performance_level() {
-        let test = start("GpuPerformanceLevel").await;
+        let test = start().await.expect("start");
         power::test::setup().await;
 
-        let proxy = GpuPerformanceLevelProxy::new(&test.connection)
+        let name = test.connection.unique_name().unwrap();
+        let proxy = GpuPerformanceLevelProxy::new(&test.connection, name.clone())
             .await
             .unwrap();
         proxy
@@ -351,7 +335,6 @@ mod test {
 
     #[zbus::proxy(
         interface = "com.steampowered.SteamOSManager1.RootManager",
-        default_service = "com.steampowered.SteamOSManager1.Test.ManualGpuClock",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait ManualGpuClock {
@@ -360,9 +343,12 @@ mod test {
 
     #[tokio::test]
     async fn manual_gpu_clock() {
-        let test = start("ManualGpuClock").await;
+        let test = start().await.expect("start");
 
-        let proxy = ManualGpuClockProxy::new(&test.connection).await.unwrap();
+        let name = test.connection.unique_name().unwrap();
+        let proxy = ManualGpuClockProxy::new(&test.connection, name.clone())
+            .await
+            .unwrap();
 
         power::test::setup().await;
         proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
@@ -374,7 +360,6 @@ mod test {
 
     #[zbus::proxy(
         interface = "com.steampowered.SteamOSManager1.RootManager",
-        default_service = "com.steampowered.SteamOSManager1.Test.Version",
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait Version {
@@ -384,8 +369,11 @@ mod test {
 
     #[tokio::test]
     async fn version() {
-        let test = start("Version").await;
-        let proxy = VersionProxy::new(&test.connection).await.unwrap();
+        let test = start().await.expect("start");
+        let name = test.connection.unique_name().unwrap();
+        let proxy = VersionProxy::new(&test.connection, name.clone())
+            .await
+            .unwrap();
         assert_eq!(proxy.version().await, Ok(API_VERSION));
     }
 }

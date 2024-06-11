@@ -325,28 +325,19 @@ mod test {
         connection: Connection,
     }
 
-    async fn start(name: &str) -> TestHandle {
+    async fn start() -> Result<TestHandle> {
         let handle = testing::start();
-        let connection = ConnectionBuilder::session()
-            .unwrap()
-            .name(format!("com.steampowered.SteamOSManager1.UserTest.{name}"))
-            .unwrap()
-            .build()
-            .await
-            .unwrap();
-        let manager = SteamOSManager::new(connection.clone(), &connection)
-            .await
-            .unwrap();
+        let connection = ConnectionBuilder::session()?.build().await?;
+        let manager = SteamOSManager::new(connection.clone(), &connection).await?;
         connection
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)
-            .await
-            .expect("object_server at");
+            .await?;
 
-        TestHandle {
+        Ok(TestHandle {
             _handle: handle,
             connection,
-        }
+        })
     }
 
     fn collect_methods<'a>(methods: &'a [Method<'a>]) -> HashMap<String, &'a Method<'a>> {
@@ -367,7 +358,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches() {
-        let test = start("Interface").await;
+        let test = start().await.expect("start");
 
         let manager_ref = test
             .connection
