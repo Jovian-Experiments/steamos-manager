@@ -114,7 +114,8 @@ async fn read_config_directory<P: AsRef<Path> + Sync + Send>(
                 );
                 return Ok(builder);
             }
-            error!("Error reading config fragment directory: {e}");
+            error!("Error reading config fragment directory {}: {e}",
+                path.as_ref().to_string_lossy());
             return Err(e.into());
         }
     };
