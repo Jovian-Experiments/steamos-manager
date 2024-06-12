@@ -58,7 +58,7 @@ impl DaemonContext for UserContext {
     }
 
     fn system_config_path(&self) -> Result<PathBuf> {
-        Ok(path("/usr/lib/steamos-manager/user.d"))
+        Ok(path("/usr/share/steamos-manager/user.d"))
     }
 
     fn state(&self) -> UserState {

@@ -51,7 +51,7 @@ impl DaemonContext for RootContext {
     }
 
     fn system_config_path(&self) -> Result<PathBuf> {
-        Ok(path("/usr/lib/steamos-manager/system.d"))
+        Ok(path("/usr/share/steamos-manager/system.d"))
     }
 
     fn state(&self) -> RootState {
