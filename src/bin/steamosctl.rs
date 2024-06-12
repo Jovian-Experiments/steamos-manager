@@ -11,7 +11,7 @@ use itertools::Itertools;
 use std::ops::Deref;
 use steamos_manager::cec::HdmiCecState;
 use steamos_manager::hardware::FanControlState;
-use steamos_manager::power::{GPUPerformanceLevel, GPUPowerProfile};
+use steamos_manager::power::{CPUGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::ManagerProxy;
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
@@ -44,6 +44,18 @@ enum Commands {
 
     /// Get the fan control state
     GetFanControlState,
+
+    /// Get the CPU governors supported on this device
+    GetCpuGovernors,
+
+    /// Get the current CPU governor
+    GetCpuGovernor,
+
+    /// Set the current CPU governor
+    SetCpuGovernor {
+        /// Valid governors are get-cpu-governors.
+        governor: CPUGovernor,
+    },
 
     /// Get the GPU power profiles supported on this device
     GetGPUPowerProfiles,
@@ -202,6 +214,30 @@ async fn main() -> Result<()> {
                 Ok(s) => println!("Fan control state: {}", s),
                 Err(_) => println!("Got unknown value {state} from backend"),
             }
+        }
+        Commands::GetCpuGovernors => {
+            let governors = proxy.cpu_governors().await?;
+            println!("Governors:\n");
+            for key in governors.keys().sorted() {
+                let name = &governors[key];
+                println!("{key}: {name}");
+            }
+        }
+        Commands::GetCpuGovernor => {
+            let governor = proxy.cpu_governor().await?;
+            let governor_type = CPUGovernor::try_from(governor);
+            match governor_type {
+                Ok(t) => {
+                    let name = t.to_string();
+                    println!("CPU Governor: {governor} {name}");
+                }
+                Err(_) => {
+                    println!("Unknown CPU governor or unable to get type from {governor}");
+                }
+            }
+        }
+        Commands::SetCpuGovernor { governor } => {
+            proxy.set_cpu_governor(*governor as u32).await?;
         }
         Commands::GetGPUPowerProfiles => {
             let profiles = proxy.gpu_power_profiles().await?;
