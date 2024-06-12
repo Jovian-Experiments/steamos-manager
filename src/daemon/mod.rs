@@ -60,6 +60,7 @@ pub(crate) trait DaemonContext: Sized {
 pub(crate) struct Daemon<C: DaemonContext> {
     services: JoinSet<Result<()>>,
     token: CancellationToken,
+    connection: Connection,
     channel: Receiver<DaemonCommand<C::Command>>,
 }
 
@@ -90,6 +91,7 @@ impl<C: DaemonContext> Daemon<C> {
             services,
             token,
             channel,
+            connection,
         };
         daemon.add_service(log_receiver);
 
@@ -102,6 +104,10 @@ impl<C: DaemonContext> Daemon<C> {
         self.services
             .spawn(async move { service.start(moved_token).await });
         token
+    }
+
+    pub(crate) fn get_connection(&self) -> Connection {
+        self.connection.clone()
     }
 
     pub(crate) async fn run(&mut self, mut context: C) -> Result<()> {
