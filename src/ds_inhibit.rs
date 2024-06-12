@@ -1,4 +1,10 @@
-/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright © 2023 Collabora Ltd.
+ * Copyright © 2024 Valve Software
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use anyhow::{anyhow, Result};
 use inotify::{Event, EventMask, EventStream, Inotify, WatchDescriptor, WatchMask};
 use std::collections::HashMap;
