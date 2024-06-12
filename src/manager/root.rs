@@ -8,10 +8,14 @@
 
 use anyhow::Result;
 use tokio::fs::File;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot;
 use tracing::error;
 use zbus::zvariant::Fd;
 use zbus::{fdo, interface, Connection, SignalContext};
 
+use crate::daemon::root::{Command, RootCommand};
+use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
 use crate::power::{
@@ -34,6 +38,7 @@ enum PrepareFactoryReset {
 
 pub struct SteamOSManager {
     connection: Connection,
+    channel: Sender<Command>,
     wifi_debug_mode: WifiDebugMode,
     fan_control: FanControl,
     // Whether we should use trace-cmd or not.
@@ -43,13 +48,14 @@ pub struct SteamOSManager {
 }
 
 impl SteamOSManager {
-    pub async fn new(connection: Connection) -> Result<Self> {
+    pub async fn new(connection: Connection, channel: Sender<Command>) -> Result<Self> {
         Ok(SteamOSManager {
             fan_control: FanControl::new(connection.clone()),
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
             process_manager: ProcessManager::new(connection.clone()),
             connection,
+            channel,
         })
     }
 }
@@ -260,6 +266,30 @@ impl SteamOSManager {
             .map_err(to_zbus_fdo_error)
     }
 
+    #[zbus(property)]
+    async fn inhibit_ds(&self) -> fdo::Result<bool> {
+        let (tx, rx) = oneshot::channel();
+        self.channel
+            .send(DaemonCommand::ContextCommand(RootCommand::GetDsInhibit(tx)))
+            .await
+            .inspect_err(|message| error!("Error sending GetDsInhibit command: {message}"))
+            .map_err(to_zbus_fdo_error)?;
+        rx.await
+            .inspect_err(|message| error!("Error receiving GetDsInhibit reply: {message}"))
+            .map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property)]
+    async fn set_inhibit_ds(&self, enable: bool) -> zbus::Result<()> {
+        self.channel
+            .send(DaemonCommand::ContextCommand(RootCommand::SetDsInhibit(
+                enable,
+            )))
+            .await
+            .inspect_err(|message| error!("Error sending SetDsInhibit command: {message}"))
+            .map_err(to_zbus_error)
+    }
+
     /// A version property.
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
@@ -270,6 +300,8 @@ impl SteamOSManager {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::daemon::channel;
+    use crate::daemon::root::RootContext;
     use crate::power::test::{format_clocks, read_clocks};
     use crate::power::{self, get_gpu_performance_level};
     use crate::testing;
@@ -293,8 +325,9 @@ mod test {
         )
         .await?;
 
+        let (tx, _rx) = channel::<RootContext>();
         let connection = ConnectionBuilder::session()?.build().await?;
-        let manager = SteamOSManager::new(connection.clone()).await?;
+        let manager = SteamOSManager::new(connection.clone(), tx).await?;
         connection
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)
