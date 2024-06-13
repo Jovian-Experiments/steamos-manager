@@ -27,6 +27,7 @@ pub mod daemon;
 pub mod hardware;
 pub mod power;
 pub mod proxy;
+pub mod wakehook;
 pub mod wifi;
 
 #[cfg(test)]
