@@ -109,16 +109,18 @@ impl DaemonContext for RootContext {
     }
 
     fn state(&self) -> RootState {
-        RootState::default()
+        self.state
     }
 
     async fn start(
         &mut self,
-        _state: RootState,
+        state: RootState,
         _config: RootConfig,
-        _daemon: &mut Daemon<RootContext>,
+        daemon: &mut Daemon<RootContext>,
     ) -> Result<()> {
-        // Nothing to do yet
+        self.state = state;
+        self.reload_ds_inhibit(daemon).await?;
+
         Ok(())
     }
 

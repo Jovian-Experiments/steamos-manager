@@ -13,7 +13,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
 use zbus::connection::Connection;
@@ -109,6 +109,7 @@ impl<C: DaemonContext> Daemon<C> {
 
         let state = read_state(&context).await?;
         let config = read_config(&context).await?;
+        debug!("Starting daemon with state: {state:#?}, config: {config:#?}");
         context.start(state, config, self).await?;
 
         let mut res = loop {
