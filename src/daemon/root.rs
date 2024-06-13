@@ -119,6 +119,11 @@ impl DaemonContext for RootContext {
         daemon: &mut Daemon<RootContext>,
     ) -> Result<()> {
         self.state = state;
+
+        let connection = daemon.get_connection();
+        let ftrace = Ftrace::init(connection).await?;
+        daemon.add_service(ftrace);
+
         self.reload_ds_inhibit(daemon).await?;
 
         Ok(())
@@ -186,9 +191,6 @@ pub async fn daemon() -> Result<()> {
 
     let context = RootContext::new(tx);
     let mut daemon = Daemon::new(subscriber, connection.clone(), rx).await?;
-
-    let ftrace = Ftrace::init(connection).await?;
-    daemon.add_service(ftrace);
 
     daemon.run(context).await
 }
