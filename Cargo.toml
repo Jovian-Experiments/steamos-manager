@@ -25,7 +25,7 @@ tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tracing = { version = "0.1", default-features = false }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt"] }
 udev = "0.8"
 xdg = "2.5"
 zbus = { version = "4", default-features = false, features = ["tokio"] }

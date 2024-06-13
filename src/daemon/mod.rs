@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::EnvFilter;
 use zbus::connection::Connection;
 
 use crate::daemon::config::{read_config, read_state, write_state};
@@ -80,7 +81,9 @@ impl<C: DaemonContext> Daemon<C> {
 
         let log_receiver = LogReceiver::new(connection.clone()).await?;
         let remote_logger = LogLayer::new(&log_receiver).await;
-        let subscriber = subscriber.with(remote_logger);
+        let subscriber = subscriber
+            .with(EnvFilter::from_default_env())
+            .with(remote_logger);
         tracing::subscriber::set_global_default(subscriber)?;
 
         let mut daemon = Daemon {
