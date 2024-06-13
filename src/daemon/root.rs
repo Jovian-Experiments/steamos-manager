@@ -24,6 +24,7 @@ use crate::path;
 use crate::sls::ftrace::Ftrace;
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[serde(default)]
 pub(crate) struct RootConfig {
     pub services: RootServicesConfig,
 }
@@ -32,6 +33,7 @@ pub(crate) struct RootConfig {
 pub(crate) struct RootServicesConfig {}
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[serde(default)]
 pub(crate) struct RootState {
     pub services: RootServicesState,
 }

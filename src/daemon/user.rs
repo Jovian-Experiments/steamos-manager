@@ -22,6 +22,7 @@ use crate::path;
 use crate::udev::UdevMonitor;
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[serde(default)]
 struct UserConfig {
     pub services: UserServicesConfig,
 }
@@ -30,6 +31,7 @@ struct UserConfig {
 pub(crate) struct UserServicesConfig {}
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[serde(default)]
 struct UserState {
     pub services: UserServicesState,
 }
