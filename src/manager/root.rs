@@ -290,6 +290,14 @@ impl SteamOSManager {
             .map_err(to_zbus_error)
     }
 
+    async fn reload_config(&self) -> fdo::Result<()> {
+        self.channel
+            .send(DaemonCommand::ReadConfig)
+            .await
+            .inspect_err(|message| error!("Error sending ReadConfig command: {message}"))
+            .map_err(to_zbus_fdo_error)
+    }
+
     /// A version property.
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
