@@ -8,12 +8,15 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use tokio::sync::mpsc::Sender;
 use tracing::error;
 use zbus::proxy::Builder;
 use zbus::zvariant::Fd;
 use zbus::{fdo, interface, Connection, Proxy, SignalContext};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
+use crate::daemon::user::Command;
+use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
 use crate::power::{
@@ -61,10 +64,11 @@ macro_rules! setter {
 pub struct SteamOSManager {
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
+    channel: Sender<Command>,
 }
 
 impl SteamOSManager {
-    pub async fn new(connection: Connection, system_conn: &Connection) -> Result<Self> {
+    pub async fn new(connection: Connection, system_conn: &Connection, channel: Sender<Command>) -> Result<Self> {
         Ok(SteamOSManager {
             hdmi_cec: HdmiCecControl::new(&connection).await?,
             proxy: Builder::new(system_conn)
@@ -74,6 +78,7 @@ impl SteamOSManager {
                 .cache_properties(zbus::CacheProperties::No)
                 .build()
                 .await?,
+            channel,
         })
     }
 }
@@ -308,12 +313,24 @@ impl SteamOSManager {
             .await
             .map_err(to_zbus_error)
     }
+
+    async fn reload_config(&self) -> fdo::Result<()> {
+        self.channel
+            .send(DaemonCommand::ReadConfig)
+            .await
+            .inspect_err(|message| error!("Error sending ReadConfig command: {message}"))
+            .map_err(to_zbus_fdo_error)?;
+        method!(self, "ReloadConfig")
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::testing;
+    use crate::daemon::channel;
+    use crate::daemon::user::UserContext;
+
     use std::collections::{HashMap, HashSet};
     use std::iter::zip;
     use tokio::fs::read;
@@ -327,8 +344,9 @@ mod test {
 
     async fn start() -> Result<TestHandle> {
         let handle = testing::start();
+        let (tx, _rx) = channel::<UserContext>();
         let connection = ConnectionBuilder::session()?.build().await?;
-        let manager = SteamOSManager::new(connection.clone(), &connection).await?;
+        let manager = SteamOSManager::new(connection.clone(), &connection, tx).await?;
         connection
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)

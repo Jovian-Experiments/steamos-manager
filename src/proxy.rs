@@ -46,6 +46,9 @@ trait Manager {
     /// UpdateDock method
     fn update_dock(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
+    /// ReloadConfig method
+    fn reload_config(&self) -> zbus::Result<()>;
+
     /// AlsCalibrationGain property
     #[zbus(property)]
     fn als_calibration_gain(&self) -> zbus::Result<f64>;

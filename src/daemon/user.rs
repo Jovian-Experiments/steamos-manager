@@ -8,6 +8,7 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tokio::sync::mpsc::Sender;
 use tracing::error;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, Registry};
@@ -16,7 +17,7 @@ use xdg::BaseDirectories;
 use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
-use crate::daemon::{channel, Daemon, DaemonContext};
+use crate::daemon::{channel, Daemon, DaemonCommand, DaemonContext};
 use crate::manager::user::SteamOSManager;
 use crate::path;
 use crate::udev::UdevMonitor;
@@ -98,14 +99,16 @@ impl DaemonContext for UserContext {
     }
 }
 
-async fn create_connections() -> Result<(Connection, Connection)> {
+pub(crate) type Command = DaemonCommand<()>;
+
+async fn create_connections(channel: Sender<Command>) -> Result<(Connection, Connection)> {
     let system = Connection::system().await?;
     let connection = ConnectionBuilder::session()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;
 
-    let manager = SteamOSManager::new(connection.clone(), &system).await?;
+    let manager = SteamOSManager::new(connection.clone(), &system, channel).await?;
     connection
         .object_server()
         .at("/com/steampowered/SteamOSManager1", manager)
@@ -120,9 +123,9 @@ pub async fn daemon() -> Result<()> {
 
     let stdout_log = fmt::layer();
     let subscriber = Registry::default().with(stdout_log);
-    let (_tx, rx) = channel::<UserContext>();
+    let (tx, rx) = channel::<UserContext>();
 
-    let (session, system) = match create_connections().await {
+    let (session, system) = match create_connections(tx).await {
         Ok(c) => c,
         Err(e) => {
             let _guard = tracing::subscriber::set_default(subscriber);

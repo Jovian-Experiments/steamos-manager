@@ -296,6 +296,15 @@
         Version available: 9
     -->
     <property name="GpuPowerProfile" type="u" access="readwrite"/>
+
+    <!--
+        ReloadConfig:
+
+        Reloads the configuration from disk.
+
+        Version available: 9
+    -->
+    <method name="ReloadConfig"/>
     
   </interface>
 
