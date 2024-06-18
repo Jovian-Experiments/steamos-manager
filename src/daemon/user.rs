@@ -23,7 +23,7 @@ use crate::udev::UdevMonitor;
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 #[serde(default)]
-struct UserConfig {
+pub(crate) struct UserConfig {
     pub services: UserServicesConfig,
 }
 
@@ -32,14 +32,14 @@ pub(crate) struct UserServicesConfig {}
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 #[serde(default)]
-struct UserState {
+pub(crate) struct UserState {
     pub services: UserServicesState,
 }
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
 pub(crate) struct UserServicesState {}
 
-struct UserContext {
+pub(crate) struct UserContext {
     session: Connection,
 }
 
