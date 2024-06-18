@@ -20,8 +20,8 @@ use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
 use crate::power::{
-    set_cpu_governor, set_gpu_clocks, set_gpu_performance_level, set_gpu_power_profile,
-    set_tdp_limit, CPUGovernor, GPUPerformanceLevel, GPUPowerProfile,
+    set_cpu_scaling_governor, set_gpu_clocks, set_gpu_performance_level, set_gpu_power_profile,
+    set_tdp_limit, CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile,
 };
 use crate::process::{run_script, script_output, ProcessManager};
 use crate::wifi::{
@@ -191,11 +191,11 @@ impl SteamOSManager {
             .map_err(to_zbus_fdo_error)
     }
 
-    async fn set_cpu_governor(&self, governor: u32) -> fdo::Result<()> {
-        let governor = CPUGovernor::try_from(governor).map_err(to_zbus_fdo_error)?;
-        set_cpu_governor(governor)
+    async fn set_cpu_scaling_governor(&self, governor: String) -> fdo::Result<()> {
+        let g = CPUScalingGovernor::try_from(governor.as_str()).map_err(to_zbus_fdo_error)?;
+        set_cpu_scaling_governor(g)
             .await
-            .inspect_err(|message| error!("Error setting CPU governor: {message}"))
+            .inspect_err(|message| error!("Error setting CPU scaling governor: {message}"))
             .map_err(to_zbus_fdo_error)
     }
 

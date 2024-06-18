@@ -65,15 +65,15 @@ trait Manager {
     #[zbus(property)]
     fn set_gpu_performance_level(&self, value: u32) -> zbus::Result<()>;
 
-    /// CpuGovernor property
+    /// CpuScalingGovernor property
     #[zbus(property)]
-    fn cpu_governor(&self) -> zbus::Result<u32>;
+    fn cpu_scaling_governor(&self) -> zbus::Result<String>;
     #[zbus(property)]
-    fn set_cpu_governor(&self, value: u32) -> zbus::Result<()>;
+    fn set_cpu_scaling_governor(&self, value: String) -> zbus::Result<()>;
 
-    /// CpuGovernors property
+    /// AvailableCpuScalingGovernors property
     #[zbus(property)]
-    fn cpu_governors(&self) -> zbus::Result<std::collections::HashMap<u32, String>>;
+    fn available_cpu_scaling_governors(&self) -> zbus::Result<Vec<String>>;
 
     /// GpuPowerProfile property
     #[zbus(property)]

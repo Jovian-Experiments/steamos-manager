@@ -29,3 +29,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["e
 udev = "0.8"
 xdg = "2.5"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
+strum = { version = "0.26", features = ["derive"] }

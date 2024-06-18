@@ -312,10 +312,10 @@
 
         Enumerate the supported cpu governors on the system.
 
-        A list of supported governors (a dictionary of values to names)
+        A list of supported governor names
         Version available: 9
     -->
-    <property name="CpuGovernors" type="a{us}" access="read"/>
+    <property name="AvailableCpuScalingGovernors" type="as" access="read"/>
 
     <!--
         CpuGovernor:
@@ -326,7 +326,7 @@
 
         Version available: 9
     -->
-    <property name="CpuGovernor" type="u" access="readwrite"/>
+    <property name="CpuScalingGovernor" type="s" access="readwrite"/>
 
   </interface>
 

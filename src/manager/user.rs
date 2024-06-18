@@ -20,8 +20,8 @@ use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
 use crate::power::{
-    get_cpu_governor, get_cpu_governors, get_gpu_clocks, get_gpu_performance_level,
-    get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
+    get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
+    get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
@@ -192,18 +192,31 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn cpu_governors(&self) -> fdo::Result<HashMap<u32, String>> {
-        get_cpu_governors().await.map_err(to_zbus_fdo_error)
+    async fn available_cpu_scaling_governors(&self) -> fdo::Result<Vec<String>> {
+        let governors = get_available_cpu_scaling_governors()
+            .await
+            .map_err(to_zbus_fdo_error)?;
+        let mut result = Vec::new();
+        for g in governors {
+            result.push(g.to_string());
+        }
+        Ok(result)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn cpu_governor(&self) -> fdo::Result<u32> {
-        get_cpu_governor().await.map_err(to_zbus_fdo_error)
+    async fn cpu_scaling_governor(&self) -> fdo::Result<String> {
+        let governor = get_cpu_scaling_governor()
+            .await
+            .map_err(to_zbus_fdo_error)?;
+        Ok(governor.to_string())
     }
 
     #[zbus(property)]
-    async fn set_cpu_governor(&self, governor: u32) -> zbus::Result<()> {
-        setter!(self, "SetCpuGovernor", &(governor))
+    async fn set_cpu_scaling_governor(&self, governor: String) -> zbus::Result<()> {
+        self.proxy
+            .call("SetCpuScalingGovernor", &(governor))
+            .await
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]

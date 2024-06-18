@@ -10,9 +10,10 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
+use strum::{Display, EnumString};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::hardware::is_deck;
 use crate::{path, write_synced};
@@ -21,7 +22,7 @@ const GPU_HWMON_PREFIX: &str = "/sys/class/hwmon";
 const GPU_HWMON_NAME: &str = "amdgpu";
 const GPU_DRM_PREFIX: &str = "/sys/class/drm";
 const GPU_VENDOR: &str = "0x1002";
-const CPU_GOVERNOR_PREFIX: &str = "/sys/devices/system/cpu/cpufreq";
+const CPU_PREFIX: &str = "/sys/devices/system/cpu/cpufreq";
 
 const CPU0_NAME: &str = "policy0";
 const CPU_POLICY_NAME: &str = "policy";
@@ -29,8 +30,8 @@ const CPU_POLICY_NAME: &str = "policy";
 const GPU_POWER_PROFILE_SUFFIX: &str = "device/pp_power_profile_mode";
 const GPU_PERFORMANCE_LEVEL_SUFFIX: &str = "device/power_dpm_force_performance_level";
 const GPU_CLOCKS_SUFFIX: &str = "device/pp_od_clk_voltage";
-const CPU_GOVERNOR_SUFFIX: &str = "scaling_governor";
-const CPU_GOVERNORS_SUFFIX: &str = "scaling_available_governors";
+const CPU_SCALING_GOVERNOR_SUFFIX: &str = "scaling_governor";
+const CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX: &str = "scaling_available_governors";
 
 const TDP_LIMIT1: &str = "power1_cap";
 const TDP_LIMIT2: &str = "power2_cap";
@@ -149,58 +150,15 @@ impl fmt::Display for GPUPerformanceLevel {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
-#[repr(u32)]
-pub enum CPUGovernor {
+#[derive(Display, EnumString, Hash, Eq, PartialEq, Debug, Copy, Clone)]
+#[strum(serialize_all = "lowercase")]
+pub enum CPUScalingGovernor {
     Conservative,
     OnDemand,
     UserSpace,
     PowerSave,
     Performance,
     SchedUtil,
-}
-
-impl TryFrom<u32> for CPUGovernor {
-    type Error = &'static str;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == CPUGovernor::Conservative as u32 => Ok(CPUGovernor::Conservative),
-            x if x == CPUGovernor::OnDemand as u32 => Ok(CPUGovernor::OnDemand),
-            x if x == CPUGovernor::UserSpace as u32 => Ok(CPUGovernor::UserSpace),
-            x if x == CPUGovernor::PowerSave as u32 => Ok(CPUGovernor::PowerSave),
-            x if x == CPUGovernor::Performance as u32 => Ok(CPUGovernor::Performance),
-            x if x == CPUGovernor::SchedUtil as u32 => Ok(CPUGovernor::SchedUtil),
-            _ => Err("No enum match for value {v}"),
-        }
-    }
-}
-
-impl FromStr for CPUGovernor {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<CPUGovernor, Self::Err> {
-        Ok(match input {
-            "conservative" => CPUGovernor::Conservative,
-            "ondemand" => CPUGovernor::OnDemand,
-            "userspace" => CPUGovernor::UserSpace,
-            "powersave" => CPUGovernor::PowerSave,
-            "performance" => CPUGovernor::Performance,
-            "schedutil" => CPUGovernor::SchedUtil,
-            v => bail!("No enum match for value {v}"),
-        })
-    }
-}
-
-impl fmt::Display for CPUGovernor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CPUGovernor::Conservative => write!(f, "conservative"),
-            CPUGovernor::OnDemand => write!(f, "ondemand"),
-            CPUGovernor::UserSpace => write!(f, "userspace"),
-            CPUGovernor::PowerSave => write!(f, "powersave"),
-            CPUGovernor::Performance => write!(f, "performance"),
-            CPUGovernor::SchedUtil => write!(f, "schedutil"),
-        }
-    }
 }
 
 async fn read_gpu_sysfs_contents() -> Result<String> {
@@ -212,24 +170,24 @@ async fn read_gpu_sysfs_contents() -> Result<String> {
 }
 
 async fn read_cpu_governor_sysfs_available_contents() -> Result<String> {
-    let base = path(CPU_GOVERNOR_PREFIX);
-    fs::read_to_string(base.join(CPU0_NAME).join(CPU_GOVERNORS_SUFFIX))
-        .await
-        .map_err(|message| anyhow!("Error opening sysfs file for reading {message}"))
+    let base = path(CPU_PREFIX);
+    Ok(fs::read_to_string(
+        base.join(CPU0_NAME)
+            .join(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX)
+    )
+    .await?)
 }
 
 async fn read_cpu_governor_sysfs_contents() -> Result<String> {
     // Read contents of policy0 path
-    let base = path(CPU_GOVERNOR_PREFIX);
-    let full_path = base.join(CPU0_NAME).join(CPU_GOVERNOR_SUFFIX);
-    fs::read_to_string(full_path)
-        .await
-        .map_err(|message| anyhow!("Error opening sysfs file for reading {message}"))
+    let base = path(CPU_PREFIX);
+    let full_path = base.join(CPU0_NAME).join(CPU_SCALING_GOVERNOR_SUFFIX);
+    Ok(fs::read_to_string(full_path).await?)
 }
 
 async fn write_cpu_governor_sysfs_contents(contents: String) -> Result<()> {
-    // Iterate over all cpuX paths
-    let mut dir = fs::read_dir(path(CPU_GOVERNOR_PREFIX)).await?;
+    // Iterate over all policyX paths
+    let mut dir = fs::read_dir(path(CPU_PREFIX)).await?;
     let mut wrote_stuff = false;
     loop {
         let base = match dir.next_entry().await? {
@@ -238,34 +196,24 @@ async fn write_cpu_governor_sysfs_contents(contents: String) -> Result<()> {
                     .file_name()
                     .into_string()
                     .map_err(|_| anyhow!("Unable to convert path to string"))?;
-                if file_name.starts_with(CPU_POLICY_NAME) {
-                    entry.path()
-                } else {
-                    // Not a policy path, so move on
+                if !file_name.starts_with(CPU_POLICY_NAME) {
                     continue;
                 }
+                entry.path()
             }
             None => {
-                if wrote_stuff {
-                    return Ok(());
-                } else {
-                    bail!("No data written, unable to find any policyX sysfs paths")
-                }
+                ensure!(
+                    wrote_stuff,
+                    "No data written, unable to find any policyX sysfs paths"
+                );
+                return Ok(());
             }
         };
-        let file_name = base.join(CPU_GOVERNOR_SUFFIX);
-        println!(
-            "Trying to write to file at path: {:?}",
-            file_name.as_os_str()
-        );
-        let mut myfile = File::create(file_name)
-            .await
-            .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
-
         // Write contents to each one
         wrote_stuff = true;
-        myfile.write_all(contents.as_bytes()).await?;
-        myfile.sync_data().await?;
+        write_synced(base.join(CPU_SCALING_GOVERNOR_SUFFIX), contents.as_bytes())
+            .await
+            .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?
     }
 }
 
@@ -360,41 +308,35 @@ pub(crate) async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Res
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
 
-pub(crate) async fn get_cpu_governors() -> Result<HashMap<u32, String>> {
+pub(crate) async fn get_available_cpu_scaling_governors() -> Result<Vec<CPUScalingGovernor>> {
     let contents = read_cpu_governor_sysfs_available_contents().await?;
     // Get the list of supported governors from cpu0
-    let mut result = HashMap::new();
+    let mut result = Vec::new();
 
     let words = contents.split_whitespace();
     for word in words {
-        match CPUGovernor::from_str(word) {
-            Ok(v) => {
-                result.insert(v as u32, word.to_string());
-            }
-            Err(message) => bail!("Error parsing governor {message}"),
-        };
+        match CPUScalingGovernor::from_str(word) {
+            Ok(governor) => result.push(governor),
+            Err(message) => warn!("Error parsing governor {message}"),
+        }
     }
 
     Ok(result)
 }
 
-pub(crate) async fn get_cpu_governor() -> Result<u32> {
+pub(crate) async fn get_cpu_scaling_governor() -> Result<CPUScalingGovernor> {
     // get the current governor from cpu0 (assume all others are the same)
     let contents = read_cpu_governor_sysfs_contents().await?;
 
-    let governor = match CPUGovernor::from_str(contents.trim()) {
-        Ok(v) => v,
-        Err(_) => bail!("Error converting CPU governor sysfs file contents to enumeration"),
-    };
-
-    Ok(governor as u32)
+    let contents = contents.trim();
+    CPUScalingGovernor::from_str(contents)
+        .map_err(|message| anyhow!("Error converting CPU scaling governor sysfs file contents to enumeration: {message}"))
 }
 
-pub(crate) async fn set_cpu_governor(governor: CPUGovernor) -> Result<()> {
+pub(crate) async fn set_cpu_scaling_governor(governor: CPUScalingGovernor) -> Result<()> {
     // Set the given governor on all cpus
     let name = governor.to_string();
-    write_cpu_governor_sysfs_contents(name).await?;
-    Ok(())
+    write_cpu_governor_sysfs_contents(name).await
 }
 
 pub(crate) async fn set_gpu_clocks(clocks: u32) -> Result<()> {
@@ -803,13 +745,7 @@ CCLK_RANGE in Core0:
 
     #[test]
     fn cpu_governor_roundtrip() {
-        enum_roundtrip!(CPUGovernor {
-            0: u32 = Conservative,
-            1: u32 = OnDemand,
-            2: u32 = UserSpace,
-            3: u32 = PowerSave,
-            4: u32 = Performance,
-            5: u32 = SchedUtil,
+        enum_roundtrip!(CPUScalingGovernor {
             "conservative": str = Conservative,
             "ondemand": str = OnDemand,
             "userspace": str = UserSpace,
@@ -817,8 +753,7 @@ CCLK_RANGE in Core0:
             "performance": str = Performance,
             "schedutil": str = SchedUtil,
         });
-        assert!(CPUGovernor::try_from(6).is_err());
-        assert!(CPUGovernor::from_str("usersave").is_err());
+        assert!(CPUScalingGovernor::from_str("usersave").is_err());
     }
 
     #[test]
