@@ -68,7 +68,11 @@ pub struct SteamOSManager {
 }
 
 impl SteamOSManager {
-    pub async fn new(connection: Connection, system_conn: &Connection, channel: Sender<Command>) -> Result<Self> {
+    pub async fn new(
+        connection: Connection,
+        system_conn: &Connection,
+        channel: Sender<Command>,
+    ) -> Result<Self> {
         Ok(SteamOSManager {
             hdmi_cec: HdmiCecControl::new(&connection).await?,
             proxy: Builder::new(system_conn)
@@ -327,9 +331,9 @@ impl SteamOSManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::testing;
     use crate::daemon::channel;
     use crate::daemon::user::UserContext;
+    use crate::testing;
 
     use std::collections::{HashMap, HashSet};
     use std::iter::zip;
