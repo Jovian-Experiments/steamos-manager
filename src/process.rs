@@ -222,20 +222,20 @@ pub async fn script_output(executable: &str, args: &[impl AsRef<OsStr>]) -> Resu
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use crate::testing;
     use nix::sys::signal::Signal;
 
-    fn ok(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
+    pub fn ok(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Ok((0, String::from("ok")))
     }
 
-    fn code(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
+    pub fn code(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Ok((1, String::from("code")))
     }
 
-    fn exit(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
+    pub fn exit(_: &str, _: &[&OsStr]) -> Result<(i32, String)> {
         Err(anyhow!("oops!"))
     }
 

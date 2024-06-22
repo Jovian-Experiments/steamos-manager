@@ -7,6 +7,7 @@
  */
 
 use anyhow::Result;
+use std::ffi::OsStr;
 use tokio::fs::File;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
@@ -66,7 +67,7 @@ const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-
 impl SteamOSManager {
     async fn prepare_factory_reset(&self) -> u32 {
         // Run steamos factory reset script and return true on success
-        let res = run_script("/usr/bin/steamos-factory-reset-config", &[""]).await;
+        let res = run_script("/usr/bin/steamos-factory-reset-config", &[] as &[&OsStr]).await;
         match res {
             Ok(_) => PrepareFactoryReset::RebootRequired as u32,
             Err(_) => PrepareFactoryReset::Unknown as u32,
@@ -312,12 +313,13 @@ mod test {
     use crate::daemon::root::RootContext;
     use crate::power::test::{format_clocks, read_clocks};
     use crate::power::{self, get_gpu_performance_level};
+    use crate::process::test::{code, exit, ok};
     use crate::testing;
     use tokio::fs::{create_dir_all, write};
     use zbus::{Connection, ConnectionBuilder};
 
     struct TestHandle {
-        _handle: testing::TestHandle,
+        h: testing::TestHandle,
         connection: Connection,
     }
 
@@ -342,9 +344,80 @@ mod test {
             .await?;
 
         Ok(TestHandle {
-            _handle: handle,
+            h: handle,
             connection,
         })
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.RootManager",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait PrepareFactoryReset {
+        fn prepare_factory_reset(&self) -> zbus::Result<u32>;
+    }
+
+    #[tokio::test]
+    async fn prepare_factory_reset() {
+        let test = start().await.expect("start");
+        let name = test.connection.unique_name().unwrap();
+        let proxy = PrepareFactoryResetProxy::new(&test.connection, name.clone())
+            .await
+            .unwrap();
+
+        test.h.test.process_cb.set(ok);
+        assert_eq!(
+            proxy.prepare_factory_reset().await.unwrap(),
+            PrepareFactoryReset::RebootRequired as u32
+        );
+
+        test.h.test.process_cb.set(code);
+        assert_eq!(
+            proxy.prepare_factory_reset().await.unwrap(),
+            PrepareFactoryReset::Unknown as u32
+        );
+
+        test.h.test.process_cb.set(exit);
+        assert_eq!(
+            proxy.prepare_factory_reset().await.unwrap(),
+            PrepareFactoryReset::Unknown as u32
+        );
+    }
+
+    #[zbus::proxy(
+        interface = "com.steampowered.SteamOSManager1.RootManager",
+        default_path = "/com/steampowered/SteamOSManager1"
+    )]
+    trait AlsCalibrationGain {
+        #[zbus(property(emits_changed_signal = "false"))]
+        fn als_calibration_gain(&self) -> zbus::Result<f64>;
+    }
+
+    #[tokio::test]
+    async fn als_calibration_gain() {
+        let test = start().await.expect("start");
+        let name = test.connection.unique_name().unwrap();
+        let proxy = AlsCalibrationGainProxy::new(&test.connection, name.clone())
+            .await
+            .unwrap();
+
+        test.h
+            .test
+            .process_cb
+            .set(|_, _| Ok((0, String::from("0.0\n"))));
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), 0.0);
+
+        test.h
+            .test
+            .process_cb
+            .set(|_, _| Ok((0, String::from("1.0\n"))));
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), 1.0);
+
+        test.h
+            .test
+            .process_cb
+            .set(|_, _| Ok((0, String::from("big\n"))));
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), -1.0);
     }
 
     #[zbus::proxy(
