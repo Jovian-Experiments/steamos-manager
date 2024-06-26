@@ -21,6 +21,7 @@ use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
 use crate::job::JobManager;
+use crate::platform::platform_config;
 use crate::power::{
     set_cpu_scaling_governor, set_gpu_clocks, set_gpu_performance_level, set_gpu_power_profile,
     set_tdp_limit, CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile,
@@ -31,6 +32,25 @@ use crate::wifi::{
     WifiDebugMode, WifiPowerManagement,
 };
 use crate::API_VERSION;
+
+macro_rules! with_platform_config {
+    ($config:ident = $field:ident ($name:literal) => $eval:expr) => {
+        if let Some(config) = platform_config()
+            .await
+            .map_err(to_zbus_fdo_error)?
+            .as_ref()
+            .and_then(|config| config.$field.as_ref())
+        {
+            let $config = config;
+            $eval
+        } else {
+            Err(fdo::Error::NotSupported(format!(
+                "{} is not supported on this platform",
+                $name
+            )))
+        }
+    };
+}
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
@@ -67,12 +87,16 @@ const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-
 
 #[interface(name = "com.steampowered.SteamOSManager1.RootManager")]
 impl SteamOSManager {
-    async fn prepare_factory_reset(&self) -> u32 {
+    async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
         // Run steamos factory reset script and return true on success
-        let res = run_script("/usr/bin/steamos-factory-reset-config", &[] as &[&OsStr]).await;
-        match res {
-            Ok(_) => PrepareFactoryReset::RebootRequired as u32,
-            Err(_) => PrepareFactoryReset::Unknown as u32,
+        with_platform_config! {
+            config = factory_reset ("PrepareFactoryReset") => {
+                let res = run_script(&config.script, &config.script_args).await;
+                Ok(match res {
+                    Ok(_) => PrepareFactoryReset::RebootRequired as u32,
+                    Err(_) => PrepareFactoryReset::Unknown as u32,
+                })
+            }
         }
     }
 
@@ -139,31 +163,35 @@ impl SteamOSManager {
 
     async fn update_bios(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Update the bios as needed
-        self.job_manager
-            .run_process("/usr/bin/jupiter-biosupdate", &["--auto"], "updating BIOS")
-            .await
+        with_platform_config! {
+            config = update_bios ("UpdateBios") => {
+                self.job_manager
+                    .run_process(&config.script, &config.script_args, "updating BIOS")
+                    .await
+            }
+        }
     }
 
     async fn update_dock(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Update the dock firmware as needed
-        self.job_manager
-            .run_process(
-                "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
-                &[] as &[String; 0],
-                "updating dock",
-            )
-            .await
+        with_platform_config! {
+            config = update_dock ("UpdateDock") => {
+                self.job_manager
+                    .run_process(&config.script, &config.script_args, "updating dock")
+                    .await
+            }
+        }
     }
 
     async fn trim_devices(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Run steamos-trim-devices script
-        self.job_manager
-            .run_process(
-                "/usr/lib/hwsupport/trim-devices.sh",
-                &[] as &[String; 0],
-                "trimming devices",
-            )
-            .await
+        with_platform_config! {
+            config = storage ("TrimDevices") => {
+                self.job_manager
+                    .run_process(&config.trim_devices.script, config.trim_devices.script_args.as_ref(), "trimming devices")
+                    .await
+            }
+        }
     }
 
     async fn format_device(
@@ -172,17 +200,33 @@ impl SteamOSManager {
         label: &str,
         validate: bool,
     ) -> fdo::Result<zvariant::OwnedObjectPath> {
-        let mut args = vec!["--label", label, "--device", device];
-        if !validate {
-            args.push("--skip-validation");
+        with_platform_config! {
+            config = storage ("FormatDevice") => {
+                let config = &config.format_device;
+                let mut args: Vec<&OsStr> = config.script_args.iter().map(AsRef::as_ref).collect();
+
+                args.extend_from_slice(&[OsStr::new(config.label_flag.as_str()), OsStr::new(label)]);
+
+                match (validate, &config.validate_flag, &config.no_validate_flag) {
+                    (true, Some(validate_flag), _) => args.push(OsStr::new(validate_flag)),
+                    (false, _, Some(no_validate_flag)) => args.push(OsStr::new(no_validate_flag)),
+                    _ => (),
+                }
+
+                if let Some(device_flag) = &config.device_flag {
+                    args.push(OsStr::new(device_flag));
+                }
+                args.push(OsStr::new(device));
+
+                self.job_manager
+                    .run_process(
+                        &config.script,
+                        &args,
+                        format!("formatting {device}").as_str(),
+                    )
+                    .await
+            }
         }
-        self.job_manager
-            .run_process(
-                "/usr/lib/hwsupport/format-device.sh",
-                args.as_ref(),
-                format!("formatting {device}").as_str(),
-            )
-            .await
     }
 
     async fn set_gpu_power_profile(&self, value: &str) -> fdo::Result<()> {
@@ -326,6 +370,7 @@ mod test {
     use super::*;
     use crate::daemon::channel;
     use crate::daemon::root::RootContext;
+    use crate::platform::{PlatformConfig, ScriptConfig};
     use crate::power::test::{format_clocks, read_clocks};
     use crate::power::{self, get_gpu_performance_level};
     use crate::process::test::{code, exit, ok};
@@ -379,6 +424,11 @@ mod test {
     #[tokio::test]
     async fn prepare_factory_reset() {
         let test = start().await.expect("start");
+
+        let mut config = PlatformConfig::default();
+        config.factory_reset = Some(ScriptConfig::default());
+        test.h.test.platform_config.replace(Some(config));
+
         let name = test.connection.unique_name().unwrap();
         let proxy = PrepareFactoryResetProxy::new(&test.connection, name.clone())
             .await

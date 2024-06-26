@@ -1,0 +1,18 @@
+[factory_reset]
+script = "/usr/bin/steamos-factory-reset-config"
+
+[update_bios]
+script = "/usr/bin/jupiter-biosupdate"
+script_args = ["--auto"]
+
+[update_dock]
+script = "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh"
+
+[storage.trim_devices]
+script = "/usr/lib/hwsupport/trim-devices.sh"
+
+[storage.format_device]
+script = "/usr/lib/hwsupport/format-device.sh"
+label_flag = "--label"
+device_flag = "--device"
+no_validate_flag = "--skip-validation"

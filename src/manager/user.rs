@@ -21,6 +21,7 @@ use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::{check_support, is_deck, HardwareCurrentlySupported};
 use crate::job::JobManagerCommand;
+use crate::platform::platform_config;
 use crate::power::{
     get_available_cpu_scaling_governors, get_available_gpu_performance_levels,
     get_available_gpu_power_profiles, get_cpu_scaling_governor, get_gpu_clocks,
@@ -577,6 +578,7 @@ pub(crate) async fn create_interfaces(
         proxy: proxy.clone(),
     };
 
+    let config = platform_config().await?;
     let object_server = session.object_server();
     object_server.at(MANAGER_PATH, manager).await?;
 
@@ -585,7 +587,14 @@ pub(crate) async fn create_interfaces(
     }
 
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
-    object_server.at(MANAGER_PATH, factory_reset).await?;
+
+    if config
+        .as_ref()
+        .is_some_and(|config| config.factory_reset.is_some())
+    {
+        object_server.at(MANAGER_PATH, factory_reset).await?;
+    }
+
     object_server.at(MANAGER_PATH, fan_control).await?;
 
     if !get_available_gpu_performance_levels()
@@ -612,9 +621,28 @@ pub(crate) async fn create_interfaces(
 
     object_server.at(MANAGER_PATH, hdmi_cec).await?;
     object_server.at(MANAGER_PATH, manager2).await?;
-    object_server.at(MANAGER_PATH, storage).await?;
-    object_server.at(MANAGER_PATH, update_bios).await?;
-    object_server.at(MANAGER_PATH, update_dock).await?;
+
+    if config
+        .as_ref()
+        .is_some_and(|config| config.storage.is_some())
+    {
+        object_server.at(MANAGER_PATH, storage).await?;
+    }
+
+    if config
+        .as_ref()
+        .is_some_and(|config| config.update_bios.is_some())
+    {
+        object_server.at(MANAGER_PATH, update_bios).await?;
+    }
+
+    if config
+        .as_ref()
+        .is_some_and(|config| config.update_dock.is_some())
+    {
+        object_server.at(MANAGER_PATH, update_dock).await?;
+    }
+
     object_server.at(MANAGER_PATH, wifi_debug).await?;
     object_server
         .at(MANAGER_PATH, wifi_power_management)
@@ -630,6 +658,7 @@ mod test {
     use crate::daemon::user::UserContext;
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
+    use crate::platform::{PlatformConfig, ScriptConfig, StorageConfig};
     use crate::{power, testing};
 
     use std::time::Duration;
@@ -642,10 +671,21 @@ mod test {
         connection: Connection,
     }
 
-    async fn start() -> Result<TestHandle> {
+    fn all_config() -> Option<PlatformConfig> {
+        Some(PlatformConfig {
+            factory_reset: Some(ScriptConfig::default()),
+            update_bios: Some(ScriptConfig::default()),
+            update_dock: Some(ScriptConfig::default()),
+            storage: Some(StorageConfig::default()),
+        })
+    }
+
+    async fn start(platform_config: Option<PlatformConfig>) -> Result<TestHandle> {
         let mut handle = testing::start();
         let (tx_ctx, _rx_ctx) = channel::<UserContext>();
         let (tx_job, _rx_job) = unbounded_channel::<JobManagerCommand>();
+
+        handle.test.platform_config.replace(platform_config);
         let connection = handle.new_dbus().await?;
         fake_model(HardwareVariant::Jupiter).await?;
         power::test::create_nodes().await?;
@@ -661,7 +701,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches() {
-        let test = start().await.expect("start");
+        let test = start(None).await.expect("start");
 
         let remote = testing::InterfaceIntrospection::from_remote::<SteamOSManager, _>(
             &test.connection,
@@ -689,9 +729,15 @@ mod test {
         Ok(remote.compare(&local))
     }
 
+    async fn test_interface_missing<I: Interface>(connection: &Connection) -> bool {
+        let remote =
+            testing::InterfaceIntrospection::from_remote::<I, _>(connection, MANAGER_PATH).await;
+        return remote.is_err();
+    }
+
     #[tokio::test]
     async fn interface_matches_ambient_light_sensor1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(
             test_interface_matches::<AmbientLightSensor1>(&test.connection)
@@ -702,7 +748,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_cpu_scaling1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<CpuScaling1>(&test.connection)
             .await
@@ -711,7 +757,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_factory_reset1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<FactoryReset1>(&test.connection)
             .await
@@ -719,8 +765,15 @@ mod test {
     }
 
     #[tokio::test]
+    async fn interface_missing_factory_reset1() {
+        let test = start(None).await.expect("start");
+
+        assert!(test_interface_missing::<FactoryReset1>(&test.connection).await);
+    }
+
+    #[tokio::test]
     async fn interface_matches_fan_control1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<FanControl1>(&test.connection)
             .await
@@ -729,7 +782,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_gpu_performance_level1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(
             test_interface_matches::<GpuPerformanceLevel1>(&test.connection)
@@ -740,7 +793,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_gpu_power_profile1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<GpuPowerProfile1>(&test.connection)
             .await
@@ -749,7 +802,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_gpu_tdp_limit1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<GpuTdpLimit1>(&test.connection)
             .await
@@ -758,7 +811,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_hdmi_cec1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<HdmiCec1>(&test.connection)
             .await
@@ -767,7 +820,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_manager2() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<Manager2>(&test.connection)
             .await
@@ -776,7 +829,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_storage1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<Storage1>(&test.connection)
             .await
@@ -784,8 +837,15 @@ mod test {
     }
 
     #[tokio::test]
+    async fn interface_missing_storage1() {
+        let test = start(None).await.expect("start");
+
+        assert!(test_interface_missing::<Storage1>(&test.connection).await);
+    }
+
+    #[tokio::test]
     async fn interface_matches_update_bios1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<UpdateBios1>(&test.connection)
             .await
@@ -793,8 +853,15 @@ mod test {
     }
 
     #[tokio::test]
+    async fn interface_missing_update_bios1() {
+        let test = start(None).await.expect("start");
+
+        assert!(test_interface_missing::<UpdateBios1>(&test.connection).await);
+    }
+
+    #[tokio::test]
     async fn interface_matches_update_dock1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<UpdateDock1>(&test.connection)
             .await
@@ -802,8 +869,15 @@ mod test {
     }
 
     #[tokio::test]
+    async fn interface_missing_update_dock1() {
+        let test = start(None).await.expect("start");
+
+        assert!(test_interface_missing::<UpdateDock1>(&test.connection).await);
+    }
+
+    #[tokio::test]
     async fn interface_matches_wifi_power_management1() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(
             test_interface_matches::<WifiPowerManagement1>(&test.connection)
@@ -814,7 +888,7 @@ mod test {
 
     #[tokio::test]
     async fn interface_matches_wifi_debug() {
-        let test = start().await.expect("start");
+        let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<WifiDebug1>(&test.connection)
             .await

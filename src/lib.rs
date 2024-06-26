@@ -17,6 +17,7 @@ mod ds_inhibit;
 mod error;
 mod job;
 mod manager;
+mod platform;
 mod process;
 mod sls;
 mod systemd;

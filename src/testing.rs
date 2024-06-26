@@ -22,6 +22,8 @@ use zbus::zvariant::ObjectPath;
 use zbus::{Address, Connection, ConnectionBuilder, Interface};
 use zbus_xml::{Method, Node, Property};
 
+use crate::platform::PlatformConfig;
+
 thread_local! {
     static TEST: RefCell<Option<Rc<Test>>> = RefCell::new(None);
 }
@@ -66,6 +68,7 @@ pub fn start() -> TestHandle {
             process_cb: Cell::new(|_, _| Err(anyhow!("No current process_cb"))),
             mock_dbus: Cell::new(None),
             dbus_address: Mutex::new(None),
+            platform_config: RefCell::new(None),
         });
         *lock.borrow_mut() = Some(test.clone());
         TestHandle { test }
@@ -98,6 +101,7 @@ pub struct Test {
     pub process_cb: Cell<fn(&OsStr, &[&OsStr]) -> Result<(i32, String)>>,
     pub mock_dbus: Cell<Option<MockDBus>>,
     pub dbus_address: Mutex<Option<Address>>,
+    pub platform_config: RefCell<Option<PlatformConfig>>,
 }
 
 pub struct TestHandle {
