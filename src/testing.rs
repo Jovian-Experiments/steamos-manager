@@ -89,7 +89,7 @@ pub struct MockDBus {
 
 pub struct Test {
     base: TempDir,
-    pub process_cb: Cell<fn(&str, &[&OsStr]) -> Result<(i32, String)>>,
+    pub process_cb: Cell<fn(&OsStr, &[&OsStr]) -> Result<(i32, String)>>,
     pub mock_dbus: Cell<Option<MockDBus>>,
     pub dbus_address: Mutex<Option<Address>>,
 }
