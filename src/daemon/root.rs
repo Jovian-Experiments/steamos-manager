@@ -23,13 +23,13 @@ use crate::manager::root::SteamOSManager;
 use crate::path;
 use crate::sls::ftrace::Ftrace;
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[derive(Copy, Clone, Default, Deserialize, Debug)]
 #[serde(default)]
 pub(crate) struct RootConfig {
     pub services: RootServicesConfig,
 }
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[derive(Copy, Clone, Default, Deserialize, Debug)]
 pub(crate) struct RootServicesConfig {}
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]

@@ -22,13 +22,13 @@ use crate::manager::user::SteamOSManager;
 use crate::path;
 use crate::udev::UdevMonitor;
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[derive(Copy, Clone, Default, Deserialize, Debug)]
 #[serde(default)]
 pub(crate) struct UserConfig {
     pub services: UserServicesConfig,
 }
 
-#[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
+#[derive(Copy, Clone, Default, Deserialize, Debug)]
 pub(crate) struct UserServicesConfig {}
 
 #[derive(Copy, Clone, Default, Deserialize, Serialize, Debug)]
