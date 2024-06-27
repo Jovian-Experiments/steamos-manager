@@ -12,7 +12,7 @@ use tokio::fs::File;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tracing::error;
-use zbus::zvariant::Fd;
+use zbus::zvariant::{self, Fd};
 use zbus::{fdo, interface, Connection, SignalContext};
 
 use crate::daemon::root::{Command, RootCommand};
@@ -135,14 +135,14 @@ impl SteamOSManager {
         }
     }
 
-    async fn update_bios(&mut self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_bios(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Update the bios as needed
         self.process_manager
             .get_command_object_path("/usr/bin/jupiter-biosupdate", &["--auto"], "updating BIOS")
             .await
     }
 
-    async fn update_dock(&mut self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_dock(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Update the dock firmware as needed
         self.process_manager
             .get_command_object_path(
@@ -153,7 +153,7 @@ impl SteamOSManager {
             .await
     }
 
-    async fn trim_devices(&mut self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn trim_devices(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Run steamos-trim-devices script
         self.process_manager
             .get_command_object_path(
@@ -169,7 +169,7 @@ impl SteamOSManager {
         device: &str,
         label: &str,
         validate: bool,
-    ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    ) -> fdo::Result<zvariant::OwnedObjectPath> {
         let mut args = vec!["--label", label, "--device", device];
         if !validate {
             args.push("--skip-validation");

@@ -9,7 +9,7 @@
 use anyhow::{anyhow, bail, Result};
 use std::path::PathBuf;
 use zbus::zvariant::OwnedObjectPath;
-use zbus::Connection;
+use zbus::{CacheProperties, Connection};
 
 #[zbus::proxy(
     interface = "org.freedesktop.systemd1.Unit",
@@ -88,7 +88,7 @@ impl<'dbus> SystemdUnit<'dbus> {
         let path = String::from(path.to_str().ok_or(anyhow!("Unit name {name} invalid"))?);
         Ok(SystemdUnit {
             proxy: SystemdUnitProxy::builder(&connection)
-                .cache_properties(zbus::CacheProperties::No)
+                .cache_properties(CacheProperties::No)
                 .path(path)?
                 .build()
                 .await?,

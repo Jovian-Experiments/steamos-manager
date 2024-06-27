@@ -15,7 +15,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use tokio::process::{Child, Command};
 use tracing::error;
-use zbus::{fdo, interface};
+use zbus::{fdo, interface, zvariant, Connection};
 
 use crate::error::to_zbus_fdo_error;
 
@@ -25,7 +25,7 @@ pub struct ProcessManager {
     // The thing that manages subprocesses.
     // Keeps a handle to the zbus connection and
     // what the next process id on the bus should be
-    connection: zbus::Connection,
+    connection: Connection,
     next_process: u32,
 }
 
@@ -36,7 +36,7 @@ pub struct Job {
 }
 
 impl ProcessManager {
-    pub fn new(conn: zbus::Connection) -> ProcessManager {
+    pub fn new(conn: Connection) -> ProcessManager {
         ProcessManager {
             connection: conn,
             next_process: 0,
@@ -48,7 +48,7 @@ impl ProcessManager {
         executable: &str,
         args: &[impl AsRef<OsStr>],
         operation_name: &str,
-    ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    ) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Run the given executable and give back an object path
         let path = format!("{}{}", PROCESS_PREFIX, self.next_process);
         self.next_process += 1;
@@ -60,7 +60,7 @@ impl ProcessManager {
             .object_server()
             .at(path.as_str(), pm)
             .await?;
-        zbus::zvariant::OwnedObjectPath::try_from(path).map_err(to_zbus_fdo_error)
+        zvariant::OwnedObjectPath::try_from(path).map_err(to_zbus_fdo_error)
     }
 
     pub async fn run_long_command(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<Job> {

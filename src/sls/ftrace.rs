@@ -7,8 +7,7 @@ use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::unix::pipe;
 use tracing::{error, info};
-use zbus::connection::Connection;
-use zbus::zvariant;
+use zbus::{zvariant, Connection};
 
 use crate::{get_appid, path, read_comm, Service};
 

@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 use tracing::error;
 use zbus::proxy::Builder;
-use zbus::zvariant::Fd;
-use zbus::{fdo, interface, Connection, Proxy, SignalContext};
+use zbus::zvariant::{self, Fd};
+use zbus::{fdo, interface, CacheProperties, Connection, Proxy, SignalContext};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::daemon::user::Command;
@@ -79,7 +79,7 @@ impl SteamOSManager {
                 .destination("com.steampowered.SteamOSManager1")?
                 .path("/com/steampowered/SteamOSManager1")?
                 .interface("com.steampowered.SteamOSManager1.RootManager")?
-                .cache_properties(zbus::CacheProperties::No)
+                .cache_properties(CacheProperties::No)
                 .build()
                 .await?,
             channel,
@@ -170,15 +170,15 @@ impl SteamOSManager {
         }
     }
 
-    async fn update_bios(&self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_bios(&self) -> fdo::Result<zvariant::OwnedObjectPath> {
         method!(self, "UpdateBios")
     }
 
-    async fn update_dock(&self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn update_dock(&self) -> fdo::Result<zvariant::OwnedObjectPath> {
         method!(self, "UpdateDock")
     }
 
-    async fn trim_devices(&self) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    async fn trim_devices(&self) -> fdo::Result<zvariant::OwnedObjectPath> {
         method!(self, "TrimDevices")
     }
 
@@ -187,7 +187,7 @@ impl SteamOSManager {
         device: &str,
         label: &str,
         validate: bool,
-    ) -> fdo::Result<zbus::zvariant::OwnedObjectPath> {
+    ) -> fdo::Result<zvariant::OwnedObjectPath> {
         method!(self, "FormatDevice", device, label, validate)
     }
 
