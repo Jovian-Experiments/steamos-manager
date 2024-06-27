@@ -96,14 +96,15 @@ impl fmt::Display for GPUPowerProfile {
     }
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[strum(serialize_all = "snake_case")]
 #[repr(u32)]
 pub enum GPUPerformanceLevel {
     Auto = 0,
     Low = 1,
     High = 2,
     Manual = 3,
-    ProfilePeak = 4,
+    PeakPerformance = 4,
 }
 
 impl TryFrom<u32> for GPUPerformanceLevel {
@@ -114,36 +115,10 @@ impl TryFrom<u32> for GPUPerformanceLevel {
             x if x == GPUPerformanceLevel::Low as u32 => Ok(GPUPerformanceLevel::Low),
             x if x == GPUPerformanceLevel::High as u32 => Ok(GPUPerformanceLevel::High),
             x if x == GPUPerformanceLevel::Manual as u32 => Ok(GPUPerformanceLevel::Manual),
-            x if x == GPUPerformanceLevel::ProfilePeak as u32 => {
-                Ok(GPUPerformanceLevel::ProfilePeak)
+            x if x == GPUPerformanceLevel::PeakPerformance as u32 => {
+                Ok(GPUPerformanceLevel::PeakPerformance)
             }
             _ => Err("No enum match for value {v}"),
-        }
-    }
-}
-
-impl FromStr for GPUPerformanceLevel {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<GPUPerformanceLevel, Self::Err> {
-        Ok(match input {
-            "auto" => GPUPerformanceLevel::Auto,
-            "low" => GPUPerformanceLevel::Low,
-            "high" => GPUPerformanceLevel::High,
-            "manual" => GPUPerformanceLevel::Manual,
-            "peak_performance" => GPUPerformanceLevel::ProfilePeak,
-            v => bail!("No enum match for value {v}"),
-        })
-    }
-}
-
-impl fmt::Display for GPUPerformanceLevel {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            GPUPerformanceLevel::Auto => write!(f, "auto"),
-            GPUPerformanceLevel::Low => write!(f, "low"),
-            GPUPerformanceLevel::High => write!(f, "high"),
-            GPUPerformanceLevel::Manual => write!(f, "manual"),
-            GPUPerformanceLevel::ProfilePeak => write!(f, "peak_performance"),
         }
     }
 }
@@ -295,7 +270,7 @@ pub(crate) async fn set_gpu_power_profile(value: GPUPowerProfile) -> Result<()> 
 
 pub(crate) async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
     let level = read_gpu_sysfs_contents(GPU_PERFORMANCE_LEVEL_SUFFIX).await?;
-    GPUPerformanceLevel::from_str(level.trim())
+    Ok(GPUPerformanceLevel::from_str(level.trim())?)
 }
 
 pub(crate) async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
@@ -536,7 +511,7 @@ CCLK_RANGE in Core0:
             .expect("write");
         assert_eq!(
             get_gpu_performance_level().await.unwrap(),
-            GPUPerformanceLevel::ProfilePeak
+            GPUPerformanceLevel::PeakPerformance
         );
 
         write(filename.as_path(), "nothing\n").await.expect("write");
@@ -579,7 +554,7 @@ CCLK_RANGE in Core0:
             read_to_string(filename.as_path()).await.unwrap().trim(),
             "manual"
         );
-        set_gpu_performance_level(GPUPerformanceLevel::ProfilePeak)
+        set_gpu_performance_level(GPUPerformanceLevel::PeakPerformance)
             .await
             .expect("set");
         assert_eq!(
@@ -743,12 +718,12 @@ CCLK_RANGE in Core0:
             1: u32 = Low,
             2: u32 = High,
             3: u32 = Manual,
-            4: u32 = ProfilePeak,
+            4: u32 = PeakPerformance,
             "auto": str = Auto,
             "low": str = Low,
             "high": str = High,
             "manual": str = Manual,
-            "peak_performance": str = ProfilePeak,
+            "peak_performance": str = PeakPerformance,
         });
         assert!(GPUPerformanceLevel::try_from(5).is_err());
         assert!(GPUPerformanceLevel::from_str("profile_peak").is_err());
