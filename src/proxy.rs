@@ -135,6 +135,17 @@ trait Manager {
 }
 
 #[proxy(
+    interface = "com.steampowered.SteamOSManager1.UdevEvents",
+    default_service = "com.steampowered.SteamOSManager1",
+    default_path = "/com/steampowered/SteamOSManager1/UdevEvents"
+)]
+trait UdevEvents {
+    /// OverCurrent signal
+    #[zbus(signal)]
+    fn over_current(&self, devpath: &str, port: &str, count: u64) -> zbus::Result<()>;
+}
+
+#[proxy(
     default_service = "com.steampowered.SteamOSManager1",
     interface = "com.steampowered.SteamOSManager1.Job",
     assume_defaults = true
