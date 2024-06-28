@@ -178,7 +178,7 @@ async fn read_cpu_governor_sysfs_available_contents() -> Result<String> {
     let base = path(CPU_PREFIX);
     Ok(fs::read_to_string(
         base.join(CPU0_NAME)
-            .join(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX)
+            .join(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX),
     )
     .await?)
 }
@@ -324,8 +324,11 @@ pub(crate) async fn get_cpu_scaling_governor() -> Result<CPUScalingGovernor> {
     let contents = read_cpu_governor_sysfs_contents().await?;
 
     let contents = contents.trim();
-    CPUScalingGovernor::from_str(contents)
-        .map_err(|message| anyhow!("Error converting CPU scaling governor sysfs file contents to enumeration: {message}"))
+    CPUScalingGovernor::from_str(contents).map_err(|message| {
+        anyhow!(
+            "Error converting CPU scaling governor sysfs file contents to enumeration: {message}"
+        )
+    })
 }
 
 pub(crate) async fn set_cpu_scaling_governor(governor: CPUScalingGovernor) -> Result<()> {
