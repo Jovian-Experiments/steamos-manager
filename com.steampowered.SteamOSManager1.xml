@@ -405,4 +405,12 @@
 
   </interface>
 
+  <interface name="com.steampowered.SteamOSManager1.JobManager">
+
+      <signal name="JobStarted">
+        <arg type="o" name="job"/>
+      </signal>
+
+  </interface>
+
 </node>

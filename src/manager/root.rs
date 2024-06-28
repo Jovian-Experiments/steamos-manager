@@ -55,7 +55,7 @@ impl SteamOSManager {
             fan_control: FanControl::new(connection.clone()),
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
-            job_manager: JobManager::new(connection.clone()),
+            job_manager: JobManager::new(connection.clone()).await?,
             connection,
             channel,
         })

@@ -176,3 +176,14 @@ trait Job {
     /// Wait method
     fn wait(&self) -> zbus::Result<i32>;
 }
+
+#[proxy(
+    default_service = "com.steampowered.SteamOSManager1",
+    default_path = "/com/steampowered/SteamOSManager1/Jobs",
+    interface = "com.steampowered.SteamOSManager1.JobManager"
+)]
+trait JobManager {
+    /// JobStarted signal
+    #[zbus(signal)]
+    fn job_started(&self, job: zbus::zvariant::ObjectPath<'_>) -> zbus::Result<()>;
+}
