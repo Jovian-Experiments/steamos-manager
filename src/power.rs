@@ -8,7 +8,7 @@
 use anyhow::{anyhow, bail, ensure, Error, Result};
 use std::collections::HashMap;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use tokio::fs::{self, File};
@@ -20,8 +20,6 @@ use crate::{path, write_synced};
 
 const GPU_HWMON_PREFIX: &str = "/sys/class/hwmon";
 const GPU_HWMON_NAME: &str = "amdgpu";
-const GPU_DRM_PREFIX: &str = "/sys/class/drm";
-const GPU_VENDOR: &str = "0x1002";
 const CPU_PREFIX: &str = "/sys/devices/system/cpu/cpufreq";
 
 const CPU0_NAME: &str = "policy0";
@@ -161,12 +159,19 @@ pub enum CPUScalingGovernor {
     SchedUtil,
 }
 
-async fn read_gpu_sysfs_contents() -> Result<String> {
-    // check which profile is current and return if possible
-    let base = find_gpu_prefix().await?;
-    fs::read_to_string(base.join(GPU_POWER_PROFILE_SUFFIX))
+async fn read_gpu_sysfs_contents<S: AsRef<Path>>(suffix: S) -> Result<String> {
+    // Read a given suffix for the GPU
+    let base = find_hwmon().await?;
+    fs::read_to_string(base.join(suffix.as_ref()))
         .await
         .map_err(|message| anyhow!("Error opening sysfs file for reading {message}"))
+}
+
+async fn write_gpu_sysfs_contents<S: AsRef<Path>>(suffix: S, data: &[u8]) -> Result<()> {
+    let base = find_hwmon().await?;
+    write_synced(base.join(suffix), data)
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
 
 async fn read_cpu_governor_sysfs_available_contents() -> Result<String> {
@@ -219,7 +224,7 @@ async fn write_cpu_governor_sysfs_contents(contents: String) -> Result<()> {
 
 pub(crate) async fn get_gpu_power_profile() -> Result<GPUPowerProfile> {
     // check which profile is current and return if possible
-    let contents = read_gpu_sysfs_contents().await?;
+    let contents = read_gpu_sysfs_contents(GPU_POWER_PROFILE_SUFFIX).await?;
 
     // NOTE: We don't filter based on is_deck here because the sysfs
     // firmware support setting the value to no-op values.
@@ -249,7 +254,7 @@ pub(crate) async fn get_gpu_power_profile() -> Result<GPUPowerProfile> {
 }
 
 pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
-    let contents = read_gpu_sysfs_contents().await?;
+    let contents = read_gpu_sysfs_contents(GPU_POWER_PROFILE_SUFFIX).await?;
     let deck = is_deck().await?;
 
     let mut map = HashMap::new();
@@ -285,27 +290,17 @@ pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
 
 pub(crate) async fn set_gpu_power_profile(value: GPUPowerProfile) -> Result<()> {
     let profile = (value as u32).to_string();
-    let base = find_gpu_prefix().await?;
-    write_synced(base.join(GPU_POWER_PROFILE_SUFFIX), profile.as_bytes())
-        .await
-        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
+    write_gpu_sysfs_contents(GPU_POWER_PROFILE_SUFFIX, profile.as_bytes()).await
 }
 
 pub(crate) async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
-    let base = find_hwmon().await?;
-    let level = fs::read_to_string(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX))
-        .await
-        .inspect_err(|message| error!("Error opening sysfs file for reading: {message}"))?;
-
+    let level = read_gpu_sysfs_contents(GPU_PERFORMANCE_LEVEL_SUFFIX).await?;
     GPUPerformanceLevel::from_str(level.trim())
 }
 
 pub(crate) async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Result<()> {
     let level: String = level.to_string();
-    let base = find_hwmon().await?;
-    write_synced(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX), level.as_bytes())
-        .await
-        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
+    write_gpu_sysfs_contents(GPU_PERFORMANCE_LEVEL_SUFFIX, level.as_bytes()).await
 }
 
 pub(crate) async fn get_available_cpu_scaling_governors() -> Result<Vec<CPUScalingGovernor>> {
@@ -397,24 +392,6 @@ pub(crate) async fn get_gpu_clocks() -> Result<u32> {
         return Ok(mhz.parse()?);
     }
     Ok(0)
-}
-
-async fn find_gpu_prefix() -> Result<PathBuf> {
-    let mut dir = fs::read_dir(path(GPU_DRM_PREFIX)).await?;
-    loop {
-        let base = match dir.next_entry().await? {
-            Some(entry) => entry.path(),
-            None => bail!("GPU node not found"),
-        };
-        let file_name = base.join("device").join("vendor");
-        let vendor = fs::read_to_string(file_name.as_path())
-            .await?
-            .trim()
-            .to_string();
-        if vendor == GPU_VENDOR {
-            return Ok(base);
-        }
-    }
 }
 
 async fn find_hwmon() -> Result<PathBuf> {
