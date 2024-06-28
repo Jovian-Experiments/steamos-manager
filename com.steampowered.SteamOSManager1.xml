@@ -202,7 +202,7 @@
     <!--
         TdpLimit:
 
-        Controls the system TDP limit.
+        Controls the GPU TDP limit.
 
         Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
 
@@ -281,18 +281,19 @@
     <!--
         GpuPowerProfiles:
 
-        Enumerate the supported gpu power profiles available on the system.
+        Enumerate the supported GPU power profiles available on the system.
 
         A list of supported profiles (a dictionary of values to names)
+
         Version available: 9
     -->
     <property name="GpuPowerProfiles" type="a{us}" access="read"/>
 
     <!--
         GpuPowerProfile:
-      
-        The current gpu power profile. Valid values come from GpuPowerProfiles property.
-      
+
+        The current GPU power profile. Valid values come from GpuPowerProfiles property.
+
         Version available: 9
     -->
     <property name="GpuPowerProfile" type="u" access="readwrite"/>
@@ -305,7 +306,7 @@
         Version available: 9
     -->
     <method name="ReloadConfig"/>
-    
+
   </interface>
 
   <!--
