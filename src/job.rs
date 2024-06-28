@@ -10,6 +10,7 @@ use libc::pid_t;
 use nix::sys::signal;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
@@ -17,7 +18,8 @@ use tokio::process::{Child, Command};
 use tracing::error;
 use zbus::{fdo, interface, zvariant, Connection, Interface, InterfaceRef, SignalContext};
 
-use crate::error::to_zbus_fdo_error;
+use crate::error::{to_zbus_fdo_error, zbus_to_zbus_fdo};
+use crate::proxy::JobProxy;
 
 const JOB_PREFIX: &str = "/com/steampowered/SteamOSManager1/Jobs";
 
@@ -26,6 +28,7 @@ pub struct JobManager {
     // keeps a handle to the zbus connection to expose the name over the bus.
     connection: Connection,
     jm_iface: InterfaceRef<JobManagerInterface>,
+    mirrored_jobs: HashMap<String, zvariant::OwnedObjectPath>,
     next_job: u32,
 }
 
@@ -36,6 +39,10 @@ struct Job {
 }
 
 struct JobManagerInterface {}
+
+struct MirroredJob {
+    job: JobProxy<'static>,
+}
 
 impl JobManager {
     pub async fn new(connection: Connection) -> Result<JobManager> {
@@ -50,6 +57,7 @@ impl JobManager {
         Ok(JobManager {
             connection,
             jm_iface,
+            mirrored_jobs: HashMap::new(),
             next_job: 0,
         })
     }
@@ -81,6 +89,33 @@ impl JobManager {
             .map_err(to_zbus_fdo_error)?;
 
         self.add_job(job).await
+    }
+
+    pub async fn mirror_job<'a, P>(
+        &mut self,
+        connection: &Connection,
+        path: P,
+    ) -> fdo::Result<zvariant::OwnedObjectPath>
+    where
+        P: TryInto<zvariant::ObjectPath<'a>>,
+        P::Error: Into<zbus::Error>,
+    {
+        let path = path.try_into().map_err(Into::into)?.into_owned();
+        let name = format!("{}:{}", connection.server_guid(), path.as_str());
+        if let Some(object_path) = self.mirrored_jobs.get(&name) {
+            return Ok(object_path.clone());
+        }
+
+        let proxy = JobProxy::builder(connection)
+            .destination("com.steampowered.SteamOSManager1")?
+            .path(path)?
+            .build()
+            .await?;
+        let job = MirroredJob { job: proxy };
+
+        let object_path = self.add_job(job).await?;
+        self.mirrored_jobs.insert(name, object_path.to_owned());
+        Ok(object_path)
     }
 }
 
@@ -200,6 +235,25 @@ impl Job {
         };
         self.exit_code = Some(code);
         Ok(code)
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.Job")]
+impl MirroredJob {
+    pub async fn pause(&mut self) -> fdo::Result<()> {
+        self.job.pause().await.map_err(zbus_to_zbus_fdo)
+    }
+
+    pub async fn resume(&mut self) -> fdo::Result<()> {
+        self.job.resume().await.map_err(zbus_to_zbus_fdo)
+    }
+
+    pub async fn cancel(&mut self, force: bool) -> fdo::Result<()> {
+        self.job.cancel(force).await.map_err(zbus_to_zbus_fdo)
+    }
+
+    pub async fn wait(&mut self) -> fdo::Result<i32> {
+        self.job.wait().await.map_err(zbus_to_zbus_fdo)
     }
 }
 
