@@ -19,6 +19,7 @@ use crate::daemon::user::Command;
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
+use crate::job::JobManager;
 use crate::power::{
     get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
     get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
@@ -38,6 +39,21 @@ macro_rules! method {
             .call($method, &())
             .await
             .map_err(zbus_to_zbus_fdo)
+    };
+}
+
+macro_rules! job_method {
+    ($self:expr, $method:expr, $($args:expr),+) => {
+        $self.job_manager.mirror_job::<zvariant::OwnedObjectPath>(
+            $self.proxy.connection(),
+            method!($self, $method, $($args),+)?
+        ).await
+    };
+    ($self:expr, $method:expr) => {
+        $self.job_manager.mirror_job::<zvariant::OwnedObjectPath>(
+            $self.proxy.connection(),
+            method!($self, $method)?
+        ).await
     };
 }
 
@@ -65,6 +81,7 @@ pub struct SteamOSManager {
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
     channel: Sender<Command>,
+    job_manager: JobManager,
 }
 
 impl SteamOSManager {
@@ -82,6 +99,7 @@ impl SteamOSManager {
                 .cache_properties(CacheProperties::No)
                 .build()
                 .await?,
+            job_manager: JobManager::new(connection).await?,
             channel,
         })
     }
@@ -170,25 +188,25 @@ impl SteamOSManager {
         }
     }
 
-    async fn update_bios(&self) -> fdo::Result<zvariant::OwnedObjectPath> {
-        method!(self, "UpdateBios")
+    async fn update_bios(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "UpdateBios")
     }
 
-    async fn update_dock(&self) -> fdo::Result<zvariant::OwnedObjectPath> {
-        method!(self, "UpdateDock")
+    async fn update_dock(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "UpdateDock")
     }
 
-    async fn trim_devices(&self) -> fdo::Result<zvariant::OwnedObjectPath> {
-        method!(self, "TrimDevices")
+    async fn trim_devices(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "TrimDevices")
     }
 
     async fn format_device(
-        &self,
+        &mut self,
         device: &str,
         label: &str,
         validate: bool,
     ) -> fdo::Result<zvariant::OwnedObjectPath> {
-        method!(self, "FormatDevice", device, label, validate)
+        job_method!(self, "FormatDevice", device, label, validate)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
