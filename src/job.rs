@@ -12,11 +12,14 @@ use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::io::Cursor;
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use tokio::process::{Child, Command};
 use tracing::error;
-use zbus::{fdo, interface, zvariant, Connection, Interface, InterfaceRef, SignalContext};
+use zbus::fdo::{self, IntrospectableProxy};
+use zbus::{interface, zvariant, Connection, Interface, InterfaceRef, SignalContext};
+use zbus_xml::Node;
 
 use crate::error::{to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::proxy::JobProxy;
@@ -116,6 +119,24 @@ impl JobManager {
         let object_path = self.add_job(job).await?;
         self.mirrored_jobs.insert(name, object_path.to_owned());
         Ok(object_path)
+    }
+
+    pub async fn mirror_connection(&mut self, connection: &Connection) -> fdo::Result<()> {
+        let proxy = IntrospectableProxy::builder(connection)
+            .destination("com.steampowered.SteamOSManager1")?
+            .path(JOB_PREFIX)?
+            .build()
+            .await?;
+        let introspection = proxy.introspect().await?;
+        let introspection =
+            Node::from_reader(Cursor::new(introspection)).map_err(to_zbus_fdo_error)?;
+        for node in introspection.nodes() {
+            if let Some(name) = node.name() {
+                self.mirror_job(connection, format!("{JOB_PREFIX}/{name}"))
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }
 

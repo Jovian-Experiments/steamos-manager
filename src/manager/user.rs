@@ -9,7 +9,7 @@
 use anyhow::Result;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
-use tracing::error;
+use tracing::{error, warn};
 use zbus::proxy::Builder;
 use zbus::zvariant::{self, Fd};
 use zbus::{fdo, interface, CacheProperties, Connection, Proxy, SignalContext};
@@ -90,8 +90,18 @@ impl SteamOSManager {
         system_conn: &Connection,
         channel: Sender<Command>,
     ) -> Result<Self> {
+        let hdmi_cec = HdmiCecControl::new(&connection).await?;
+        let mut job_manager = JobManager::new(connection).await?;
+        if let Err(e) = job_manager.mirror_connection(system_conn).await {
+            warn!("Could not mirror jobs: {e}");
+            match e {
+                fdo::Error::ServiceUnknown(_) => (),
+                e => Err(e)?,
+            }
+        }
+
         Ok(SteamOSManager {
-            hdmi_cec: HdmiCecControl::new(&connection).await?,
+            hdmi_cec,
             proxy: Builder::new(system_conn)
                 .destination("com.steampowered.SteamOSManager1")?
                 .path("/com/steampowered/SteamOSManager1")?
@@ -99,7 +109,7 @@ impl SteamOSManager {
                 .cache_properties(CacheProperties::No)
                 .build()
                 .await?,
-            job_manager: JobManager::new(connection).await?,
+            job_manager,
             channel,
         })
     }
