@@ -8,8 +8,9 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use tokio::sync::mpsc::Sender;
-use tracing::{error, warn};
+use tokio::sync::mpsc::{Sender, UnboundedSender};
+use tokio::sync::oneshot;
+use tracing::error;
 use zbus::proxy::Builder;
 use zbus::zvariant::{self, Fd};
 use zbus::{fdo, interface, CacheProperties, Connection, Proxy, SignalContext};
@@ -19,7 +20,7 @@ use crate::daemon::user::Command;
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
-use crate::job::JobManager;
+use crate::job::JobManagerCommand;
 use crate::power::{
     get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
     get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
@@ -44,16 +45,26 @@ macro_rules! method {
 
 macro_rules! job_method {
     ($self:expr, $method:expr, $($args:expr),+) => {
-        $self.job_manager.mirror_job::<zvariant::OwnedObjectPath>(
-            $self.proxy.connection(),
-            method!($self, $method, $($args),+)?
-        ).await
+        {
+            let (tx, rx) = oneshot::channel();
+            $self.job_manager.send(JobManagerCommand::MirrorJob {
+                connection: $self.proxy.connection().clone(),
+                path: method!($self, $method, $($args),+)?,
+                reply: tx,
+            }).map_err(to_zbus_fdo_error)?;
+            rx.await.map_err(to_zbus_fdo_error)?
+        }
     };
     ($self:expr, $method:expr) => {
-        $self.job_manager.mirror_job::<zvariant::OwnedObjectPath>(
-            $self.proxy.connection(),
-            method!($self, $method)?
-        ).await
+        {
+            let (tx, rx) = oneshot::channel();
+            $self.job_manager.send(JobManagerCommand::MirrorJob {
+                connection: $self.proxy.connection().clone(),
+                path: method!($self, $method)?,
+                reply: tx,
+            }).map_err(to_zbus_fdo_error)?;
+            rx.await.map_err(to_zbus_fdo_error)?
+        }
     };
 }
 
@@ -81,34 +92,28 @@ pub struct SteamOSManager {
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
     channel: Sender<Command>,
-    job_manager: JobManager,
+    job_manager: UnboundedSender<JobManagerCommand>,
 }
 
 impl SteamOSManager {
     pub async fn new(
         connection: Connection,
-        system_conn: &Connection,
+        system_conn: Connection,
         channel: Sender<Command>,
+        job_manager: UnboundedSender<JobManagerCommand>,
     ) -> Result<Self> {
         let hdmi_cec = HdmiCecControl::new(&connection).await?;
-        let mut job_manager = JobManager::new(connection).await?;
-        if let Err(e) = job_manager.mirror_connection(system_conn).await {
-            warn!("Could not mirror jobs: {e}");
-            match e {
-                fdo::Error::ServiceUnknown(_) => (),
-                e => Err(e)?,
-            }
-        }
-
+        let proxy = Builder::new(&system_conn)
+            .destination("com.steampowered.SteamOSManager1")?
+            .path("/com/steampowered/SteamOSManager1")?
+            .interface("com.steampowered.SteamOSManager1.RootManager")?
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await?;
+        job_manager.send(JobManagerCommand::MirrorConnection(system_conn))?;
         Ok(SteamOSManager {
             hdmi_cec,
-            proxy: Builder::new(system_conn)
-                .destination("com.steampowered.SteamOSManager1")?
-                .path("/com/steampowered/SteamOSManager1")?
-                .interface("com.steampowered.SteamOSManager1.RootManager")?
-                .cache_properties(CacheProperties::No)
-                .build()
-                .await?,
+            proxy,
             job_manager,
             channel,
         })
@@ -395,6 +400,7 @@ mod test {
     use std::iter::zip;
     use std::time::Duration;
     use tokio::fs::read;
+    use tokio::sync::mpsc::unbounded_channel;
     use tokio::time::sleep;
     use zbus::{Connection, Interface};
     use zbus_xml::{Method, Node, Property};
@@ -406,9 +412,11 @@ mod test {
 
     async fn start() -> Result<TestHandle> {
         let mut handle = testing::start();
-        let (tx, _rx) = channel::<UserContext>();
+        let (tx_ctx, _rx_ctx) = channel::<UserContext>();
+        let (tx_job, _rx_job) = unbounded_channel::<JobManagerCommand>();
         let connection = handle.new_dbus().await?;
-        let manager = SteamOSManager::new(connection.clone(), &connection, tx).await?;
+        let manager =
+            SteamOSManager::new(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
         connection
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)

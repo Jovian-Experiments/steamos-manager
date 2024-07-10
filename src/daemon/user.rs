@@ -8,7 +8,7 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{unbounded_channel, Sender};
 use tracing::error;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, Registry};
@@ -18,9 +18,11 @@ use zbus::connection::Connection;
 use zbus::ConnectionBuilder;
 
 use crate::daemon::{channel, Daemon, DaemonCommand, DaemonContext};
+use crate::job::{JobManager, JobManagerService};
 use crate::manager::user::SteamOSManager;
 use crate::path;
 use crate::udev::UdevMonitor;
+use crate::Service;
 
 #[derive(Copy, Clone, Default, Deserialize, Debug)]
 #[serde(default)]
@@ -101,20 +103,25 @@ impl DaemonContext for UserContext {
 
 pub(crate) type Command = DaemonCommand<()>;
 
-async fn create_connections(channel: Sender<Command>) -> Result<(Connection, Connection)> {
+async fn create_connections(
+    channel: Sender<Command>,
+) -> Result<(Connection, Connection, impl Service)> {
     let system = Connection::system().await?;
     let connection = ConnectionBuilder::session()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;
 
-    let manager = SteamOSManager::new(connection.clone(), &system, channel).await?;
+    let (tx, rx) = unbounded_channel();
+    let job_manager = JobManager::new(connection.clone()).await?;
+    let manager = SteamOSManager::new(connection.clone(), system.clone(), channel, tx).await?;
+    let service = JobManagerService::new(job_manager, rx, system.clone());
     connection
         .object_server()
         .at("/com/steampowered/SteamOSManager1", manager)
         .await?;
 
-    Ok((connection, system))
+    Ok((connection, system, service))
 }
 
 pub async fn daemon() -> Result<()> {
@@ -125,7 +132,7 @@ pub async fn daemon() -> Result<()> {
     let subscriber = Registry::default().with(stdout_log);
     let (tx, rx) = channel::<UserContext>();
 
-    let (session, system) = match create_connections(tx).await {
+    let (session, system, mirror_service) = match create_connections(tx).await {
         Ok(c) => c,
         Err(e) => {
             let _guard = tracing::subscriber::set_default(subscriber);
@@ -136,6 +143,8 @@ pub async fn daemon() -> Result<()> {
 
     let context = UserContext { session };
     let mut daemon = Daemon::new(subscriber, system, rx).await?;
+
+    daemon.add_service(mirror_service);
 
     daemon.run(context).await
 }

@@ -5,24 +5,28 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use libc::pid_t;
 use nix::sys::signal;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::collections::HashMap;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::io::Cursor;
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use tokio::process::{Child, Command};
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::oneshot;
+use tokio_stream::StreamExt;
 use tracing::error;
 use zbus::fdo::{self, IntrospectableProxy};
 use zbus::{interface, zvariant, Connection, Interface, InterfaceRef, SignalContext};
 use zbus_xml::Node;
 
 use crate::error::{to_zbus_fdo_error, zbus_to_zbus_fdo};
-use crate::proxy::JobProxy;
+use crate::proxy::{JobManagerProxy, JobProxy};
+use crate::Service;
 
 const JOB_PREFIX: &str = "/com/steampowered/SteamOSManager1/Jobs";
 
@@ -43,8 +47,30 @@ struct Job {
 
 struct JobManagerInterface {}
 
+pub struct JobManagerService {
+    job_manager: JobManager,
+    channel: UnboundedReceiver<JobManagerCommand>,
+    connection: Connection,
+}
+
 struct MirroredJob {
     job: JobProxy<'static>,
+}
+
+pub enum JobManagerCommand {
+    MirrorConnection(Connection),
+    MirrorJob {
+        connection: Connection,
+        path: zvariant::OwnedObjectPath,
+        reply: oneshot::Sender<fdo::Result<zvariant::OwnedObjectPath>>,
+    },
+    #[allow(unused)]
+    RunProcess {
+        executable: String,
+        args: Vec<OsString>,
+        operation_name: String,
+        reply: oneshot::Sender<fdo::Result<zvariant::OwnedObjectPath>>,
+    },
 }
 
 impl JobManager {
@@ -278,15 +304,87 @@ impl MirroredJob {
     }
 }
 
+impl JobManagerService {
+    pub fn new(
+        job_manager: JobManager,
+        channel: UnboundedReceiver<JobManagerCommand>,
+        connection: Connection,
+    ) -> JobManagerService {
+        JobManagerService {
+            job_manager,
+            channel,
+            connection,
+        }
+    }
+
+    async fn handle_command(&mut self, command: JobManagerCommand) -> Result<()> {
+        match command {
+            JobManagerCommand::MirrorConnection(connection) => {
+                self.job_manager.mirror_connection(&connection).await?
+            }
+            JobManagerCommand::MirrorJob {
+                connection,
+                path,
+                reply,
+            } => {
+                let path = self.job_manager.mirror_job(&connection, path).await;
+                reply
+                    .send(path)
+                    .map_err(|e| anyhow!("Failed to send reply {e:?}"))?;
+            }
+            JobManagerCommand::RunProcess {
+                executable,
+                args,
+                operation_name,
+                reply,
+            } => {
+                let path = self
+                    .job_manager
+                    .run_process(&executable, &args, &operation_name)
+                    .await;
+                reply
+                    .send(path)
+                    .map_err(|e| anyhow!("Failed to send reply {e:?}"))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Service for JobManagerService {
+    const NAME: &'static str = "job-manager";
+
+    async fn run(&mut self) -> Result<()> {
+        let jm = JobManagerProxy::new(&self.connection).await?;
+        let mut stream = jm.receive_job_started().await?;
+
+        loop {
+            tokio::select! {
+                Some(job) = stream.next() => {
+                    let path = job.args()?.job;
+                    self.job_manager
+                        .mirror_job(&self.connection, path)
+                        .await?;
+                },
+                message = self.channel.recv() => {
+                    let message = match message {
+                        None => bail!("Job manager service channel broke"),
+                        Some(message) => message,
+                    };
+                    self.handle_command(message).await.inspect_err(|e| error!("Failed to handle command: {e}"))?;
+                },
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use crate::proxy::JobManagerProxy;
     use crate::testing;
     use anyhow::anyhow;
     use nix::sys::signal::Signal;
     use tokio::sync::oneshot;
-    use tokio_stream::StreamExt;
     use zbus::ConnectionBuilder;
 
     #[tokio::test]
