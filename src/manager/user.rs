@@ -481,5 +481,7 @@ mod test {
             assert_eq!(local_property.ty(), remote_property.ty());
             assert_eq!(local_property.access(), remote_property.access());
         }
+
+        test.connection.close().await.unwrap();
     }
 }

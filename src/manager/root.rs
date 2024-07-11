@@ -390,6 +390,8 @@ mod test {
             proxy.prepare_factory_reset().await.unwrap(),
             PrepareFactoryReset::Unknown as u32
         );
+
+        test.connection.close().await.unwrap();
     }
 
     #[zbus::proxy(
@@ -426,6 +428,8 @@ mod test {
             .process_cb
             .set(|_, _| Ok((0, String::from("big\n"))));
         assert_eq!(proxy.als_calibration_gain().await.unwrap(), -1.0);
+
+        test.connection.close().await.unwrap();
     }
 
     #[zbus::proxy(
@@ -453,6 +457,8 @@ mod test {
             get_gpu_performance_level().await.unwrap(),
             GPUPerformanceLevel::Low
         );
+
+        test.connection.close().await.unwrap();
     }
 
     #[zbus::proxy(
@@ -478,6 +484,8 @@ mod test {
 
         assert!(proxy.set_manual_gpu_clock(100).await.is_err());
         assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
+
+        test.connection.close().await.unwrap();
     }
 
     #[zbus::proxy(
@@ -497,5 +505,7 @@ mod test {
             .await
             .unwrap();
         assert_eq!(proxy.version().await, Ok(API_VERSION));
+
+        test.connection.close().await.unwrap();
     }
 }
