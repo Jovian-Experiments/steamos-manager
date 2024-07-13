@@ -1,0 +1,484 @@
+<!DOCTYPE node PUBLIC
+"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+
+<!--
+  Copyright © 2023 Collabora Ltd.
+  Copyright © 2024 Igalia S.L.
+  Copyright © 2024 Valve Corporation.
+  SPDX-License-Identifier: MIT
+-->
+
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+  <!--
+      com.steampowered.SteamOSManager1.AmbientLightSensor1
+      @short_description: Optional interface to interact with the built-in
+      ambient light sensor.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.AmbientLightSensor1">
+
+    <!--
+        AlsCalibrationGain:
+
+        Provides the ALS calibration value.
+
+        Note: Will be -1.0 if ALS calibration is unavailable.
+    -->
+    <property name="AlsCalibrationGain" type="d" access="read"/>
+
+    <!--
+        GetAlsIntegrationTimeFileDescriptor:
+
+        Get the ALS integration time file descriptor.
+
+        @descriptor: A file descriptor that can be written to to set ALS
+        integration time. Will be null if unable to open file or other error
+        occurred.
+    -->
+    <method name="GetAlsIntegrationTimeFileDescriptor">
+      <arg type="h" name="descriptor" direction="out"/>
+    </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.CpuScaling1
+      @short_description: Optional interface for adjusting CPU scaling.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.CpuScaling1">
+
+    <!--
+        CpuGovernors:
+
+        Enumerate the supported CPU governors on the system.
+    -->
+    <property name="AvailableCpuScalingGovernors" type="as" access="read"/>
+
+    <!--
+        CpuGovernor:
+
+        The current governor used for the system's CPUs. Valid values come from
+        the AvailableCpuGovernors property.
+    -->
+    <property name="CpuScalingGovernor" type="s" access="readwrite"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.FactoryReset1
+      @short_description: Optional interface for hardware that has a factory
+      reset functionality.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.FactoryReset1">
+
+    <!--
+        PrepareFactoryReset:
+
+        Perform factory reset of device. Runs steamos-factory-reset script for
+        now.
+
+        @returns: Status of reset operation.
+
+        Valid statuses: 0 = Unknown, 1 = RebootRequired
+    -->
+    <method name="PrepareFactoryReset">
+      <arg type="u" name="status" direction="out"/>
+    </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.FanControl1
+      @short_description: Optional interface for controlling the fans.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.FanControl1">
+
+    <!--
+        FanControlState:
+
+        Controls whether the OS or the BIOS should manage fan speed.
+
+        Valid states: 0 = BIOS, 1 = OS
+    -->
+    <property name="FanControlState" type="u" access="readwrite"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.GpuPerformanceLevel1
+      @short_description: Optional interface for generic GPU properties.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.GpuPerformanceLevel1">
+
+    <!--
+        AvailableGpuPerformanceLevels:
+
+        Enumerate the supported GPU performance levels on the system.
+    -->
+    <property name="AvailableGpuPerformanceLevels" type="as" access="read"/>
+
+    <!--
+        GpuPerformanceLevel:
+
+        The current GPU performance level. Valid values come from
+        the AvailableGpuPerformanceLevels property.
+    -->
+    <property name="GpuPerformanceLevel" type="s" access="readwrite"/>
+
+    <!--
+        ManualGpuClock:
+
+        Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set
+        to manual.
+    -->
+    <property name="ManualGpuClock" type="u" access="readwrite"/>
+
+    <!--
+        ManualGpuClockMin:
+
+        Minimum frequency allowed for GPU clocks.
+    -->
+    <property name="ManualGpuClockMin" type="u" access="read"/>
+
+    <!--
+        ManualGpuClockMax:
+
+        Maximum frequency allowed for GPU clocks.
+    -->
+    <property name="ManualGpuClockMax" type="u" access="read"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.GpuPower1
+      @short_description: Optional interface for GPU power properties.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.GpuPowerProfile1">
+
+    <!--
+        AvailableGpuPowerProfiles:
+
+        Enumerate the supported GPU power profiles available on the system.
+
+        A list of supported profiles, as a dictionary of values to names.
+    -->
+    <property name="AvailableGpuPowerProfiles" type="as" access="read"/>
+
+    <!--
+        GpuPowerProfile:
+
+        The current GPU power profile. Valid values come from the
+        AvailableGpuPowerProfiles property.
+    -->
+    <property name="GpuPowerProfile" type="s" access="readwrite"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.GpuTdpLimit1
+      @short_description: Optional interface for GPU TDP limits.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.GpuTdpLimit1">
+
+    <!--
+        TdpLimit:
+
+        Controls the GPU TDP limit.
+
+        Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
+    -->
+    <property name="TdpLimit" type="u" access="readwrite"/>
+
+    <!--
+        TdpLimitMin:
+
+        Minimum allowed TDP Limit.
+    -->
+    <property name="TdpLimitMin" type="u" access="read"/>
+
+    <!--
+        TdpLimitMax:
+
+        Maximum allowed TDP Limit.
+    -->
+    <property name="TdpLimitMax" type="u" access="read"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.HdmiCec1
+      @short_description: Optional interface for HDMI-CEC.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.HdmiCec1">
+
+    <!--
+        HdmiCecState:
+
+        The current state of HDMI-CEC features on the system.
+
+        Valid states: 0 = Disabled, 1 = Control Only, 2 = Control And Wake
+    -->
+    <property name="HdmiCecState" type="u" access="readwrite"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.Manager2
+      @short_description: Interface for basic manager control.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.Manager2">
+
+    <!--
+        HardwareCurrentlySupported:
+
+        Reports whether the current hardware is supported or not.
+
+        Valid states: 0 = Unknown, 1 = Unsupported Prototype, 2 = Supported
+    -->
+    <property name="HardwareCurrentlySupported" type="u" access="read"/>
+
+    <!--
+        ReloadConfig:
+
+        Reloads the configuration from disk.
+    -->
+    <method name="ReloadConfig"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.Storage1
+      @short_description: Optional interface for managing storage devices
+      and filesystems.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.Storage1">
+
+    <!--
+        FormatDevice:
+
+        Format and optionally validate a storage device to a steam compatible
+        filesystem.
+
+        @device: Which device to format, e.g. /dev/mmcblk0.
+        @label: Filesystem label to assign to the formatted device.
+        @validate: When set runs common checks for conterfeit flash media
+        before formatting, i.e. f3probe.
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
+    -->
+    <method name="FormatDevice">
+      <arg type="s" name="device" direction="in"/>
+      <arg type="s" name="label" direction="in"/>
+      <arg type="b" name="validate" direction="in"/>
+      <arg type="o" name="jobpath" direction="out"/>
+    </method>
+
+    <!--
+        TrimDevices:
+
+        Perform fstrim on relevant disk devices.
+
+        Calling this over fstrim is is important as some devices are not safe
+        to trim unless some kernel quirks are available.
+
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
+    -->
+    <method name="TrimDevices">
+      <arg type="o" name="jobpath" direction="out"/>
+    </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.UpdateBios1
+      @short_description: Optional interface for hardware that can update its
+      BIOS from a running operating system.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.UpdateBios1">
+
+    <!--
+        UpdateBios:
+
+        Perform a BIOS update.
+
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
+    -->
+    <method name="UpdateBios">
+      <arg type="o" name="jobpath" direction="out"/>
+    </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.UpdateBios1
+      @short_description: Optional interface for hardware that can update a
+      dock from a running operating system.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.UpdateDock1">
+
+    <!--
+        UpdateDock:
+
+        Perform a Dock Firmware update.
+
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
+    -->
+    <method name="UpdateDock">
+      <arg type="o" name="jobpath" direction="out"/>
+    </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.WifiDebug1
+      @short_description: Optional interface for debugging Wi-Fi chips.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.WifiDebug1">
+
+    <!--
+        WifiDebugModeState:
+
+        Whether Wi-Fi debug mode is currently enabled.
+
+        Valid states: 0 = Disabled, 1 = Tracing.
+    -->
+    <property name="WifiDebugModeState" type="u" access="read"/>
+
+    <!--
+        SetWifiDebugMode:
+
+        @mode: 0 = Disabled, 1 = Tracing.
+        @options: A dictionary of options for the debug mode.
+            buffer_size (u, optional): The size of the kernel buffer per core,
+                in bytes.
+
+        Enable/Disable Wi-Fi debug mode.
+    -->
+    <method name="SetWifiDebugMode">
+      <arg type="u" name="mode" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+    </method>
+
+    <!--
+        WifiBackend:
+
+        Controls which Wi-Fi backend is used by NetworkManager.
+
+        Valid states: iwd, wpa_supplicant
+    -->
+    <property name="WifiBackend" type="s" access="readwrite"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.WifiPowerManagement1
+      @short_description: Optional interface for Wi-Fi power management.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.WifiPowerManagement1">
+
+    <!--
+        WifiPowerManagementState:
+
+        Controls the Wi-Fi chip's power management features.
+
+        Valid states: 0 = Disabled, 1 = Enabled
+    -->
+    <property name="WifiPowerManagementState" type="u" access="readwrite"/>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.Job
+      @short_description: Interface to control a job
+  -->
+  <interface name="com.steampowered.SteamOSManager1.Job">
+
+      <!--
+        Pause:
+
+        Pauses the job.
+      -->
+      <method name="Pause"/>
+
+      <!--
+        Resume:
+
+        Resumes the job.
+      -->
+      <method name="Resume"/>
+
+      <!--
+        Cancel:
+
+        Cancel the operation.
+
+        @force Use SIGKILL if true, SIGTERM otherwise.
+      -->
+      <method name="Cancel">
+        <arg type="b" name="force" direction="in"/>
+      </method>
+
+      <!--
+        Wait:
+
+        Wait for process to end and get exit code, resuming if paused.
+
+        @result: The exit code, or negative signal number if the process
+        exited via signal.
+      -->
+      <method name="Wait">
+        <arg type="i" name="result" direction="out"/>
+      </method>
+
+      <!--
+        ExitCode:
+
+        Get the exit code of the process if it's already exited.
+
+        @result: The exit code, or negative signal number if the process
+        exited via signal.
+        -->
+      <method name="ExitCode">
+        <arg type="i" name="result" direction="out"/>
+      </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.UdevEvents
+      @short_description: Specific udev events that are monitored to be
+      bubbled up to the desktop interface.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.UdevEvents">
+
+      <!--
+        OverCurrent:
+
+        Signals that a USB port has had an over-current event.
+
+        @devpath: The path in /sys of the USB device.
+        @port: The associated port.
+        @count: The number of times this devices has had an over-current
+        event.
+        -->
+      <signal name="OverCurrent">
+        <arg type="s" name="devpath"/>
+        <arg type="s" name="port"/>
+        <arg type="t" name="count"/>
+      </signal>
+
+  </interface>
+
+  <interface name="com.steampowered.SteamOSManager1.JobManager">
+
+      <signal name="JobStarted">
+        <arg type="o" name="job"/>
+      </signal>
+
+  </interface>
+
+</node>

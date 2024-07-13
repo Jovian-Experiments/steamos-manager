@@ -14,6 +14,9 @@
   <!--
       com.steampowered.SteamOSManager1.Manager
       @short_description: Interface to control various aspects of SteamOS.
+
+      Deprecated: 9: This has been split up into multiple interfaces. This
+      interface will be removed in the future.
   -->
   <interface name="com.steampowered.SteamOSManager1.Manager">
 
@@ -337,100 +340,6 @@
         Since: 9
     -->
     <property name="CpuScalingGovernor" type="s" access="readwrite"/>
-
-  </interface>
-
-  <!--
-      com.steampowered.SteamOSManager1.Job
-      @short_description: Interface to control a job
-
-      Since: 8
-  -->
-  <interface name="com.steampowered.SteamOSManager1.Job">
-
-      <!--
-        Pause:
-
-        Pauses the job.
-      -->
-      <method name="Pause"/>
-
-      <!--
-        Resume:
-
-        Resumes the job.
-      -->
-      <method name="Resume"/>
-
-      <!--
-        Cancel:
-
-        Cancel the operation.
-
-        @force Use SIGKILL if true, SIGTERM otherwise.
-      -->
-      <method name="Cancel">
-        <arg type="b" name="force" direction="in"/>
-      </method>
-
-      <!--
-        Wait:
-
-        Wait for process to end and get exit code, resuming if paused.
-
-        @result: The exit code, or negative signal number if the process
-        exited via signal.
-      -->
-      <method name="Wait">
-        <arg type="i" name="result" direction="out"/>
-      </method>
-
-      <!--
-        ExitCode:
-
-        Get the exit code of the process if it's already exited.
-
-        @result: The exit code, or negative signal number if the process
-        exited via signal.
-        -->
-      <method name="ExitCode">
-        <arg type="i" name="result" direction="out"/>
-      </method>
-
-  </interface>
-
-  <!--
-      com.steampowered.SteamOSManager1.UdevEvents
-      @short_description: Specific udev events that are monitored to be
-      bubbled up to the desktop interface.
-
-      Since: 9
-  -->
-  <interface name="com.steampowered.SteamOSManager1.UdevEvents">
-
-      <!--
-        OverCurrent:
-
-        Signals that a USB port has had an over-current event.
-
-        @devpath: The path in /sys of the USB device.
-        @port: The associated port.
-        @count: The number of times this devices has had an over-current
-        event.
-        -->
-      <signal name="OverCurrent">
-        <arg type="s" name="devpath"/>
-        <arg type="s" name="port"/>
-        <arg type="t" name="count"/>
-      </signal>
-
-  </interface>
-
-  <interface name="com.steampowered.SteamOSManager1.JobManager">
-
-      <signal name="JobStarted">
-        <arg type="o" name="job"/>
-      </signal>
 
   </interface>
 
