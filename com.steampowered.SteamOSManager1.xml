@@ -13,7 +13,7 @@
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
   <!--
       com.steampowered.SteamOSManager1.Manager
-      @short_description: Interface to control various aspects of SteamOS
+      @short_description: Interface to control various aspects of SteamOS.
   -->
   <interface name="com.steampowered.SteamOSManager1.Manager">
 
@@ -22,21 +22,23 @@
 
         The version of this interface implemented by this object.
 
-        The manager may not support the latest version of the API.
-        Each method/property has an associated version number that
-        denotes in which interface version it first became available.
+        The manager may not support the latest version of the API. Each
+        method/property has an associated version number that denotes in which
+        interface version it first became available.
     -->
     <property name="Version" type="u" access="read"/>
 
     <!--
         PrepareFactoryReset:
 
-        Perform factory reset of device.
-        runs steamos-factory-reset script for now.
+        Perform factory reset of device. Runs steamos-factory-reset script for
+        now.
+
+        @returns: Status of reset operation.
 
         Valid statuses: 0 = Unknown, 1 = RebootRequired
 
-        Version available: 7
+        Since: 7
     -->
     <method name="PrepareFactoryReset">
       <arg type="u" name="status" direction="out"/>
@@ -45,22 +47,22 @@
     <!--
         WifiPowerManagementState:
 
-        Controls the wifi chip's power management features.
+        Controls the Wi-Fi chip's power management features.
 
         Valid states: 0 = Disabled, 1 = Enabled
 
-        Version available: 7
+        Since: 7
     -->
     <property name="WifiPowerManagementState" type="u" access="readwrite"/>
 
     <!--
         FanControlState:
 
-        Controls whether the OS or the BIOS should manage fan speed
+        Controls whether the OS or the BIOS should manage fan speed.
 
         Valid states: 0 = BIOS, 1 = OS
 
-        Version available: 7
+        Since: 7
     -->
     <property name="FanControlState" type="u" access="readwrite"/>
 
@@ -71,7 +73,7 @@
 
         Valid states: 0 = Unsupported, 1 = Supported
 
-        Version available: 7
+        Since: 7
     -->
     <property name="HardwareCurrentlySupported" type="u" access="read"/>
 
@@ -82,19 +84,20 @@
 
         Note: Will be -1.0 if ALS calibration is unavailable.
 
-        Version available: 7
+        Since: 7
     -->
     <property name="AlsCalibrationGain" type="d" access="read"/>
 
     <!--
         GetAlsIntegrationTimeFileDescriptor:
 
-        @descriptor: A unix file descriptor that can be written to to set ALS integration time.
-        Will be null if unable to open file or other error occurred.
-
         Get the ALS integration time file descriptor.
 
-        Version available: 7
+        @descriptor: A file descriptor that can be written to to set ALS
+        integration time. Will be null if unable to open file or other error
+        occurred.
+
+        Since: 7
     -->
     <method name="GetAlsIntegrationTimeFileDescriptor">
       <arg type="h" name="descriptor" direction="out"/>
@@ -105,9 +108,10 @@
 
         Perform a BIOS update.
 
-        @jobpath: An object path that can be used to pause/resume/cancel the operation
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
 
-        Version available: 8
+        Since: 8
     -->
     <method name="UpdateBios">
       <arg type="o" name="jobpath" direction="out"/>
@@ -118,9 +122,10 @@
 
         Perform a Dock Firmware update.
 
-        @jobpath: An object path that can be used to pause/resume/cancel the operation
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
 
-        Version available: 8
+        Since: 8
     -->
     <method name="UpdateDock">
       <arg type="o" name="jobpath" direction="out"/>
@@ -129,13 +134,15 @@
     <!--
         TrimDevices:
 
-        Perform fstrim on relevant disk devices. Calling this over fstrim is
-        is important as some devices are not safe to trim unless some kernel
-        quirks are available.
+        Perform fstrim on relevant disk devices.
 
-        @jobpath: An object path that can be used to pause/resume/cancel the operation
+        Calling this over fstrim is is important as some devices are not safe
+        to trim unless some kernel quirks are available.
 
-        Version available: 8
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
+
+        Since: 8
     -->
     <method name="TrimDevices">
       <arg type="o" name="jobpath" direction="out"/>
@@ -144,14 +151,17 @@
     <!--
         FormatDevice:
 
-        @device: Which device to format, e.g. /dev/mmcblk0
-        @label: Filesystem label to assign to the formatted device
-        @validate: When set runs common checks for conterfeit flash media before formatting, e.g. f3probe
-        @jobpath: An object path that can be used to pause/resume/cancel the operation
+        Format and optionally validate a storage device to a steam compatible
+        filesystem.
 
-        Format and optionally validate a storage device to a steam compatible filesystem.
+        @device: Which device to format, e.g. /dev/mmcblk0.
+        @label: Filesystem label to assign to the formatted device.
+        @validate: When set runs common checks for conterfeit flash media
+        before formatting, i.e. f3probe.
+        @jobpath: An object path that can be used to pause/resume/cancel the
+        operation.
 
-        Version available: 8
+        Since: 8
     -->
     <method name="FormatDevice">
       <arg type="s" name="device" direction="in"/>
@@ -167,16 +177,17 @@
 
         Valid states: 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
 
-        Version available: 7
+        Since: 7
     -->
     <property name="GpuPerformanceLevel" type="u" access="readwrite"/>
 
     <!--
         ManualGpuClock:
 
-        Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set to Manual
+        Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set
+        to Manual.
 
-        Version available: 7
+        Since: 7
     -->
     <property name="ManualGpuClock" type="u" access="readwrite"/>
 
@@ -185,7 +196,7 @@
 
         Minimum frequency allowed for GPU clocks.
 
-        Version available: 7
+        Since: 7
     -->
     <property name="ManualGpuClockMin" type="u" access="read"/>
 
@@ -194,7 +205,7 @@
 
         Maximum frequency allowed for GPU clocks.
 
-        Version available: 7
+        Since: 7
     -->
     <property name="ManualGpuClockMax" type="u" access="read"/>
 
@@ -206,25 +217,25 @@
 
         Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
 
-        Version available: 7
+        Since: 7
     -->
     <property name="TdpLimit" type="u" access="readwrite"/>
 
     <!--
         TdpLimitMin:
 
-        Minimum allowed TDP Limit
+        Minimum allowed TDP Limit.
 
-        Version available: 7
+        Since: 7
     -->
     <property name="TdpLimitMin" type="u" access="read"/>
 
     <!--
         TdpLimitMax:
 
-        Maximum allowed TDP Limit
+        Maximum allowed TDP Limit.
 
-        Version available: 7
+        Since: 7
     -->
     <property name="TdpLimitMax" type="u" access="read"/>
 
@@ -232,11 +243,11 @@
     <!--
         WifiDebugModeState:
 
-        Whether wifi debug mode is currently enabled.
+        Whether Wi-Fi debug mode is currently enabled.
 
         Valid states: 0 = Disabled, 1 = Enabled
 
-        Version available: 7
+        Since: 7
     -->
     <property name="WifiDebugModeState" type="u" access="read"/>
 
@@ -244,11 +255,11 @@
         SetWifiDebugMode:
 
         @mode: 0 for off, 1 for on. Uses an integer for flexibility.
-        @buffer_size: The ring buffer size in kilobytes per cpu.
+        @buffer_size: The ring buffer size in kilobytes per CPU.
 
-        Enable/Disable wifi debug mode and configure the capture buffer size.
+        Enable/Disable Wi-Fi debug mode and configure the capture buffer size.
 
-        Version available: 7
+        Since: 7
     -->
     <method name="SetWifiDebugMode">
       <arg type="u" name="mode" direction="in"/>
@@ -258,22 +269,22 @@
     <!--
         WifiBackend:
 
-        Controls which Wifi backend is used by NetworkManager
+        Controls which Wi-Fi backend is used by NetworkManager.
 
         Valid states: 0 = iwd, 1 = wpa_supplicant
 
-        Version available: 7
+        Since: 7
     -->
     <property name="WifiBackend" type="u" access="readwrite"/>
 
     <!--
         HdmiCecState:
 
-        The current state of HDMI-CEC features on the system
+        The current state of HDMI-CEC features on the system.
 
         Valid states: 0 = Disabled, 1 = Control Only, 2 = Control And Wake
 
-        Version available: 8
+        Since: 8
     -->
     <property name="HdmiCecState" type="u" access="readwrite"/>
 
@@ -283,18 +294,19 @@
 
         Enumerate the supported GPU power profiles available on the system.
 
-        A list of supported profiles (a dictionary of values to names)
+        A list of supported profiles, as a dictionary of values to names.
 
-        Version available: 9
+        Since: 9
     -->
     <property name="GpuPowerProfiles" type="a{us}" access="read"/>
 
     <!--
         GpuPowerProfile:
 
-        The current GPU power profile. Valid values come from GpuPowerProfiles property.
+        The current GPU power profile. Valid values come from GpuPowerProfiles
+        property.
 
-        Version available: 9
+        Since: 9
     -->
     <property name="GpuPowerProfile" type="u" access="readwrite"/>
 
@@ -303,28 +315,26 @@
 
         Reloads the configuration from disk.
 
-        Version available: 9
+        Since: 9
     -->
     <method name="ReloadConfig"/>
-    
+
     <!--
         CpuGovernors:
 
-        Enumerate the supported cpu governors on the system.
+        Enumerate the supported CPU governors on the system.
 
-        A list of supported governor names
-        Version available: 9
+        Since: 9
     -->
     <property name="AvailableCpuScalingGovernors" type="as" access="read"/>
 
     <!--
         CpuGovernor:
 
-        The current governor used for the system's CPUs.
+        The current governor used for the system's CPUs. Valid values come from
+        thethe CpuGovernors property.
 
-        A value from the CpuGovernors list
-
-        Version available: 9
+        Since: 9
     -->
     <property name="CpuScalingGovernor" type="s" access="readwrite"/>
 
@@ -334,32 +344,41 @@
       com.steampowered.SteamOSManager1.Job
       @short_description: Interface to control a job
 
-      Version available: 8
+      Since: 8
   -->
   <interface name="com.steampowered.SteamOSManager1.Job">
+
       <!--
-        Pause the operation
+        Pause:
+
+        Pauses the job.
       -->
       <method name="Pause"/>
 
       <!--
-        Resume the operation
+        Resume:
+
+        Resumes the job.
       -->
       <method name="Resume"/>
 
       <!--
-        Cancel the operation
+        Cancel:
 
-        @force Use sigkill if true, sigterm otherwise.
+        Cancel the operation.
+
+        @force Use SIGKILL if true, SIGTERM otherwise.
       -->
       <method name="Cancel">
         <arg type="b" name="force" direction="in"/>
       </method>
 
       <!--
-        Wait for process to end and get exit code, resuming if paused
+        Wait:
 
-        @result The exit code, or negative signal number if the process
+        Wait for process to end and get exit code, resuming if paused.
+
+        @result: The exit code, or negative signal number if the process
         exited via signal.
       -->
       <method name="Wait">
@@ -367,9 +386,11 @@
       </method>
 
       <!--
-        Get the exit code of the process if possible.
+        ExitCode:
 
-        @result The exit code, or negative signal number if the process
+        Get the exit code of the process if it's already exited.
+
+        @result: The exit code, or negative signal number if the process
         exited via signal.
         -->
       <method name="ExitCode">
@@ -381,9 +402,9 @@
   <!--
       com.steampowered.SteamOSManager1.UdevEvents
       @short_description: Specific udev events that are monitored to be
-      bubbled up to the desktop interface
+      bubbled up to the desktop interface.
 
-      Version available: 9
+      Since: 9
   -->
   <interface name="com.steampowered.SteamOSManager1.UdevEvents">
 
