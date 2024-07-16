@@ -375,6 +375,7 @@
       <method name="ExitCode">
         <arg type="i" name="result" direction="out"/>
       </method>
+
   </interface>
 
   <!--
@@ -385,10 +386,23 @@
       Version available: 9
   -->
   <interface name="com.steampowered.SteamOSManager1.UdevEvents">
+
+      <!--
+        OverCurrent:
+
+        Signals that a USB port has had an over-current event.
+
+        @devpath: The path in /sys of the USB device.
+        @port: The associated port.
+        @count: The number of times this devices has had an over-current
+        event.
+        -->
       <signal name="OverCurrent">
         <arg type="s" name="devpath"/>
         <arg type="s" name="port"/>
         <arg type="t" name="count"/>
       </signal>
+
   </interface>
+
 </node>
