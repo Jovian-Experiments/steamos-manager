@@ -323,7 +323,9 @@ mod test {
     use crate::power::{self, get_gpu_performance_level};
     use crate::process::test::{code, exit, ok};
     use crate::testing;
+    use std::time::Duration;
     use tokio::fs::{create_dir_all, write};
+    use tokio::time::sleep;
     use zbus::{Connection, ConnectionBuilder};
 
     struct TestHandle {
@@ -350,6 +352,8 @@ mod test {
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)
             .await?;
+
+        sleep(Duration::from_millis(1)).await;
 
         Ok(TestHandle {
             h: handle,

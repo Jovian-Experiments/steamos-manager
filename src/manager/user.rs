@@ -365,7 +365,9 @@ mod test {
 
     use std::collections::{HashMap, HashSet};
     use std::iter::zip;
+    use std::time::Duration;
     use tokio::fs::read;
+    use tokio::time::sleep;
     use zbus::{Connection, ConnectionBuilder, Interface};
     use zbus_xml::{Method, Node, Property};
 
@@ -383,6 +385,8 @@ mod test {
             .object_server()
             .at("/com/steampowered/SteamOSManager1", manager)
             .await?;
+
+        sleep(Duration::from_millis(1)).await;
 
         Ok(TestHandle {
             _handle: handle,
