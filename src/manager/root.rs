@@ -19,11 +19,12 @@ use crate::daemon::root::{Command, RootCommand};
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
 use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
+use crate::job::JobManager;
 use crate::power::{
     set_cpu_scaling_governor, set_gpu_clocks, set_gpu_performance_level, set_gpu_power_profile,
     set_tdp_limit, CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile,
 };
-use crate::process::{run_script, script_output, ProcessManager};
+use crate::process::{run_script, script_output};
 use crate::wifi::{
     set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state, WifiBackend,
     WifiDebugMode, WifiPowerManagement,
@@ -45,7 +46,7 @@ pub struct SteamOSManager {
     // Whether we should use trace-cmd or not.
     // True on galileo devices, false otherwise
     should_trace: bool,
-    process_manager: ProcessManager,
+    job_manager: JobManager,
 }
 
 impl SteamOSManager {
@@ -54,7 +55,7 @@ impl SteamOSManager {
             fan_control: FanControl::new(connection.clone()),
             wifi_debug_mode: WifiDebugMode::Off,
             should_trace: variant().await? == HardwareVariant::Galileo,
-            process_manager: ProcessManager::new(connection.clone()),
+            job_manager: JobManager::new(connection.clone()),
             connection,
             channel,
         })
@@ -137,15 +138,15 @@ impl SteamOSManager {
 
     async fn update_bios(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Update the bios as needed
-        self.process_manager
-            .get_command_object_path("/usr/bin/jupiter-biosupdate", &["--auto"], "updating BIOS")
+        self.job_manager
+            .run_process("/usr/bin/jupiter-biosupdate", &["--auto"], "updating BIOS")
             .await
     }
 
     async fn update_dock(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Update the dock firmware as needed
-        self.process_manager
-            .get_command_object_path(
+        self.job_manager
+            .run_process(
                 "/usr/lib/jupiter-dock-updater/jupiter-dock-updater.sh",
                 &[] as &[String; 0],
                 "updating dock",
@@ -155,8 +156,8 @@ impl SteamOSManager {
 
     async fn trim_devices(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
         // Run steamos-trim-devices script
-        self.process_manager
-            .get_command_object_path(
+        self.job_manager
+            .run_process(
                 "/usr/lib/hwsupport/trim-devices.sh",
                 &[] as &[String; 0],
                 "trimming devices",
@@ -174,8 +175,8 @@ impl SteamOSManager {
         if !validate {
             args.push("--skip-validation");
         }
-        self.process_manager
-            .get_command_object_path(
+        self.job_manager
+            .run_process(
                 "/usr/lib/hwsupport/format-device.sh",
                 args.as_ref(),
                 format!("formatting {device}").as_str(),

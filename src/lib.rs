@@ -15,6 +15,7 @@ use tracing::{info, warn};
 
 mod ds_inhibit;
 mod error;
+mod job;
 mod manager;
 mod process;
 mod sls;
