@@ -28,7 +28,7 @@ pub struct JobManager {
     next_job: u32,
 }
 
-pub struct Job {
+struct Job {
     process: Child,
     paused: bool,
     exit_code: Option<i32>,
