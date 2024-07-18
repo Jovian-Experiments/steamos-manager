@@ -15,7 +15,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 use tokio::process::{Child, Command};
 use tracing::error;
-use zbus::{fdo, interface, zvariant, Connection, InterfaceRef, SignalContext};
+use zbus::{fdo, interface, zvariant, Connection, Interface, InterfaceRef, SignalContext};
 
 use crate::error::to_zbus_fdo_error;
 
@@ -54,19 +54,9 @@ impl JobManager {
         })
     }
 
-    pub async fn run_process(
-        &mut self,
-        executable: &str,
-        args: &[impl AsRef<OsStr>],
-        operation_name: &str,
-    ) -> fdo::Result<zvariant::OwnedObjectPath> {
-        // Run the given executable and give back an object path
+    async fn add_job<J: Interface>(&mut self, job: J) -> fdo::Result<zvariant::OwnedObjectPath> {
         let path = format!("{}/{}", JOB_PREFIX, self.next_job);
         self.next_job += 1;
-        let job = Job::spawn(executable, args)
-            .await
-            .inspect_err(|message| error!("Error {operation_name}: {message}"))
-            .map_err(to_zbus_fdo_error)?;
         self.connection
             .object_server()
             .at(path.as_str(), job)
@@ -76,6 +66,21 @@ impl JobManager {
         JobManagerInterface::job_started(self.jm_iface.signal_context(), object_path.as_ref())
             .await?;
         Ok(object_path)
+    }
+
+    pub async fn run_process(
+        &mut self,
+        executable: &str,
+        args: &[impl AsRef<OsStr>],
+        operation_name: &str,
+    ) -> fdo::Result<zvariant::OwnedObjectPath> {
+        // Run the given executable and give back an object path
+        let job = Job::spawn(executable, args)
+            .await
+            .inspect_err(|message| error!("Error {operation_name}: {message}"))
+            .map_err(to_zbus_fdo_error)?;
+
+        self.add_job(job).await
     }
 }
 
