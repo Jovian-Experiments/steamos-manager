@@ -368,7 +368,7 @@ mod test {
     use std::time::Duration;
     use tokio::fs::read;
     use tokio::time::sleep;
-    use zbus::{Connection, ConnectionBuilder, Interface};
+    use zbus::{Connection, Interface};
     use zbus_xml::{Method, Node, Property};
 
     struct TestHandle {
@@ -377,9 +377,9 @@ mod test {
     }
 
     async fn start() -> Result<TestHandle> {
-        let handle = testing::start();
+        let mut handle = testing::start();
         let (tx, _rx) = channel::<UserContext>();
-        let connection = ConnectionBuilder::session()?.build().await?;
+        let connection = handle.new_dbus().await?;
         let manager = SteamOSManager::new(connection.clone(), &connection, tx).await?;
         connection
             .object_server()
@@ -485,7 +485,5 @@ mod test {
             assert_eq!(local_property.ty(), remote_property.ty());
             assert_eq!(local_property.access(), remote_property.access());
         }
-
-        test.connection.close().await.unwrap();
     }
 }

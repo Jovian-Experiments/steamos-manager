@@ -200,7 +200,7 @@ mod test {
 
     #[tokio::test]
     async fn ftrace_init() {
-        let _h = testing::start();
+        let mut h = testing::start();
 
         let tracefs = Ftrace::base();
 
@@ -212,7 +212,7 @@ mod test {
             Mode::S_IRUSR | Mode::S_IWUSR,
         )
         .expect("trace_pipe");
-        let dbus = Connection::session().await.expect("dbus");
+        let dbus = h.new_dbus().await.expect("dbus");
         let _ftrace = Ftrace::init(dbus).await.expect("ftrace");
 
         assert_eq!(

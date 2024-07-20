@@ -327,7 +327,7 @@ mod test {
     use std::time::Duration;
     use tokio::fs::{create_dir_all, write};
     use tokio::time::sleep;
-    use zbus::{Connection, ConnectionBuilder};
+    use zbus::Connection;
 
     struct TestHandle {
         h: testing::TestHandle,
@@ -335,7 +335,7 @@ mod test {
     }
 
     async fn start() -> Result<TestHandle> {
-        let handle = testing::start();
+        let mut handle = testing::start();
         create_dir_all(crate::path("/sys/class/dmi/id")).await?;
         write(crate::path("/sys/class/dmi/id/board_vendor"), "Valve\n").await?;
         write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n").await?;
@@ -347,7 +347,7 @@ mod test {
         .await?;
 
         let (tx, _rx) = channel::<RootContext>();
-        let connection = ConnectionBuilder::session()?.build().await?;
+        let connection = handle.new_dbus().await?;
         let manager = SteamOSManager::new(connection.clone(), tx).await?;
         connection
             .object_server()
