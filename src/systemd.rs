@@ -8,6 +8,8 @@
 
 use anyhow::{anyhow, bail, Result};
 use std::path::PathBuf;
+use std::str::FromStr;
+use strum::{Display, EnumString};
 use zbus::zvariant::OwnedObjectPath;
 use zbus::{CacheProperties, Connection};
 
@@ -62,9 +64,10 @@ trait SystemdManager {
     async fn reload(&self) -> Result<()>;
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[strum(serialize_all = "lowercase")]
 pub enum EnableState {
-    Disbled,
+    Disabled,
     Enabled,
     Masked,
     Static,
@@ -149,13 +152,7 @@ impl<'dbus> SystemdUnit<'dbus> {
     }
 
     pub async fn enabled(&self) -> Result<EnableState> {
-        Ok(match self.proxy.unit_file_state().await?.as_str() {
-            "enabled" => EnableState::Enabled,
-            "disabled" => EnableState::Disbled,
-            "masked" => EnableState::Masked,
-            "static" => EnableState::Static,
-            state => bail!("Unknown state {state}"),
-        })
+        Ok(EnableState::from_str(self.proxy.unit_file_state().await?.as_str())?)
     }
 }
 
@@ -175,6 +172,18 @@ pub fn escape(name: &str) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::enum_roundtrip;
+
+    #[test]
+    fn enable_state_roundtrip() {
+        enum_roundtrip!(EnableState {
+            "disabled": str = Disabled,
+            "enabled": str = Enabled,
+            "masked": str = Masked,
+            "static": str = Static,
+        });
+        assert!(EnableState::from_str("loaded").is_err());
+    }
 
     #[test]
     fn test_escape() {
