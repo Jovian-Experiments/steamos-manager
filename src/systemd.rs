@@ -6,7 +6,7 @@
  */
 #![allow(dead_code)]
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use std::str::FromStr;
 use strum::{Display, EnumString};
