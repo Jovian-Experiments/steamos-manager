@@ -172,7 +172,13 @@ pub fn escape(name: &str) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::enum_roundtrip;
+    use crate::error::to_zbus_fdo_error;
+    use crate::{enum_roundtrip, testing};
+    use std::collections::HashMap;
+    use std::time::Duration;
+    use tokio::time::sleep;
+    use zbus::fdo;
+    use zbus::zvariant::ObjectPath;
 
     #[test]
     fn enable_state_roundtrip() {
@@ -189,5 +195,216 @@ mod test {
     fn test_escape() {
         assert_eq!(escape("systemd"), "systemd");
         assert_eq!(escape("system d"), "system_20d");
+    }
+
+    #[derive(Default)]
+    struct MockUnit {
+        active: String,
+        unit_file: String,
+        job: u32,
+    }
+
+    #[derive(Default)]
+    struct MockManager {
+        states: HashMap<String, EnableState>,
+    }
+
+    #[zbus::interface(name = "org.freedesktop.systemd1.Unit")]
+    impl MockUnit {
+        #[zbus(property)]
+        fn active_state(&self) -> fdo::Result<String> {
+            Ok(self.active.clone())
+        }
+
+        #[zbus(property)]
+        fn unit_file_state(&self) -> fdo::Result<String> {
+            Ok(self.unit_file.clone())
+        }
+
+        async fn restart(&mut self, mode: &str) -> fdo::Result<OwnedObjectPath> {
+            if mode != "fail" {
+                return Err(to_zbus_fdo_error("Invalid mode"));
+            }
+            let path = ObjectPath::try_from(format!("/restart/{mode}/{}", self.job))
+                .map_err(to_zbus_fdo_error)?;
+            self.job += 1;
+            Ok(path.into())
+        }
+
+        async fn start(&mut self, mode: &str) -> fdo::Result<OwnedObjectPath> {
+            if mode != "fail" {
+                return Err(to_zbus_fdo_error("Invalid mode"));
+            }
+            let path = ObjectPath::try_from(format!("/start/{mode}/{}", self.job))
+                .map_err(to_zbus_fdo_error)?;
+            self.job += 1;
+            Ok(path.into())
+        }
+
+        async fn stop(&mut self, mode: &str) -> fdo::Result<OwnedObjectPath> {
+            if mode != "fail" {
+                return Err(to_zbus_fdo_error("Invalid mode"));
+            }
+            let path = ObjectPath::try_from(format!("/stop/{mode}/{}", self.job))
+                .map_err(to_zbus_fdo_error)?;
+            self.job += 1;
+            Ok(path.into())
+        }
+    }
+
+    #[zbus::interface(name = "org.freedesktop.systemd1.Manager")]
+    impl MockManager {
+        #[allow(clippy::type_complexity)]
+        async fn enable_unit_files(
+            &mut self,
+            files: Vec<String>,
+            _runtime: bool,
+            _force: bool,
+        ) -> fdo::Result<(bool, Vec<(String, String, String)>)> {
+            let mut res = Vec::new();
+            for file in files {
+                if let Some(state) = self.states.get(&file) {
+                    if *state == EnableState::Disabled {
+                        self.states.insert(file.to_string(), EnableState::Enabled);
+                        res.push((String::default(), String::default(), file.to_string()));
+                    }
+                } else {
+                    self.states.insert(file.to_string(), EnableState::Enabled);
+                    res.push((String::default(), String::default(), file.to_string()));
+                }
+            }
+            Ok((true, res))
+        }
+
+        async fn disable_unit_files(
+            &mut self,
+            files: Vec<String>,
+            _runtime: bool,
+        ) -> fdo::Result<Vec<(String, String, String)>> {
+            let mut res = Vec::new();
+            for file in files {
+                if let Some(state) = self.states.get(&file) {
+                    if *state == EnableState::Enabled {
+                        self.states.insert(file.to_string(), EnableState::Disabled);
+                        res.push((String::default(), String::default(), file.to_string()));
+                    }
+                } else {
+                    self.states.insert(file.to_string(), EnableState::Disabled);
+                    res.push((String::default(), String::default(), file.to_string()));
+                }
+            }
+            Ok(res)
+        }
+
+        async fn mask_unit_files(
+            &mut self,
+            files: Vec<String>,
+            _runtime: bool,
+            _force: bool,
+        ) -> fdo::Result<Vec<(String, String, String)>> {
+            let mut res = Vec::new();
+            for file in files {
+                if let Some(state) = self.states.get(&file) {
+                    if *state != EnableState::Masked {
+                        self.states.insert(file.to_string(), EnableState::Masked);
+                        res.push((String::default(), String::default(), file.to_string()));
+                    }
+                } else {
+                    self.states.insert(file.to_string(), EnableState::Masked);
+                    res.push((String::default(), String::default(), file.to_string()));
+                }
+            }
+            Ok(res)
+        }
+
+        async fn unmask_unit_files(
+            &mut self,
+            files: Vec<String>,
+            _runtime: bool,
+        ) -> fdo::Result<Vec<(String, String, String)>> {
+            let mut res = Vec::new();
+            for file in files {
+                if let Some(state) = self.states.get(&file) {
+                    if *state == EnableState::Masked {
+                        self.states.remove(&file);
+                        res.push((String::default(), String::default(), file.to_string()));
+                    }
+                }
+            }
+            Ok(res)
+        }
+
+        async fn reload(&self) -> fdo::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_unit() {
+        let mut h = testing::start();
+        let mut unit = MockUnit::default();
+        unit.active = String::from("active");
+        unit.unit_file = String::from("enabled");
+        let connection = h.new_dbus().await.expect("dbus");
+        connection
+            .request_name("org.freedesktop.systemd1")
+            .await
+            .expect("request_name");
+        let object_server = connection.object_server();
+        object_server
+            .at("/org/freedesktop/systemd1/unit/test_2eservice", unit)
+            .await
+            .expect("at");
+        object_server
+            .at("/org/freedesktop/systemd1", MockManager::default())
+            .await
+            .expect("at");
+
+        sleep(Duration::from_millis(10)).await;
+
+        let unit = SystemdUnit::new(connection.clone(), "test.service")
+            .await
+            .expect("unit");
+        assert!(unit.start().await.is_ok());
+        assert!(unit.restart().await.is_ok());
+        assert!(unit.stop().await.is_ok());
+
+        assert_eq!(unit.enabled().await.unwrap(), EnableState::Enabled);
+    }
+
+    #[tokio::test]
+    async fn test_manager() {
+        let mut h = testing::start();
+        let mut unit = MockUnit::default();
+        unit.active = String::from("active");
+        unit.unit_file = String::from("enabled");
+        let connection = h.new_dbus().await.expect("dbus");
+        connection
+            .request_name("org.freedesktop.systemd1")
+            .await
+            .expect("request_name");
+        let object_server = connection.object_server();
+        object_server
+            .at("/org/freedesktop/systemd1/unit/test_2eservice", unit)
+            .await
+            .expect("at");
+        object_server
+            .at("/org/freedesktop/systemd1", MockManager::default())
+            .await
+            .expect("at");
+
+        sleep(Duration::from_millis(10)).await;
+
+        let unit = SystemdUnit::new(connection.clone(), "test.service")
+            .await
+            .expect("unit");
+        assert_eq!(unit.enable().await.unwrap(), true);
+        assert_eq!(unit.enable().await.unwrap(), false);
+        assert_eq!(unit.disable().await.unwrap(), true);
+        assert_eq!(unit.disable().await.unwrap(), false);
+        assert_eq!(unit.mask().await.unwrap(), true);
+        assert_eq!(unit.mask().await.unwrap(), false);
+        assert_eq!(unit.unmask().await.unwrap(), true);
+        assert_eq!(unit.unmask().await.unwrap(), false);
     }
 }
