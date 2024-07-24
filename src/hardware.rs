@@ -167,7 +167,12 @@ impl FanControl {
 mod test {
     use super::*;
     use crate::{enum_roundtrip, testing};
+    use crate::error::to_zbus_fdo_error;
+    use std::time::Duration;
     use tokio::fs::{create_dir_all, write};
+    use tokio::time::sleep;
+    use zbus::fdo;
+    use zbus::zvariant::{ObjectPath, OwnedObjectPath};
 
     #[tokio::test]
     async fn board_lookup() {
@@ -237,5 +242,67 @@ mod test {
         );
         assert!(FanControlState::try_from(2).is_err());
         assert!(FanControlState::from_str("on").is_err());
+    }
+
+    #[derive(Default)]
+    struct MockUnit {
+        active: bool,
+    }
+
+    #[zbus::interface(name = "org.freedesktop.systemd1.Unit")]
+    impl MockUnit {
+        #[zbus(property)]
+        fn active_state(&self) -> fdo::Result<String> {
+            if self.active {
+                Ok(String::from("active"))
+            } else {
+                Ok(String::from("inactive"))
+            }
+        }
+
+        async fn start(&mut self, mode: &str) -> fdo::Result<OwnedObjectPath> {
+            if mode != "fail" {
+                return Err(to_zbus_fdo_error("Invalid mode"));
+            }
+            self.active = true;
+            let path = ObjectPath::try_from("/start/0")
+                .map_err(to_zbus_fdo_error)?;
+            Ok(path.into())
+        }
+
+        async fn stop(&mut self, mode: &str) -> fdo::Result<OwnedObjectPath> {
+            if mode != "fail" {
+                return Err(to_zbus_fdo_error("Invalid mode"));
+            }
+            self.active = false;
+            let path = ObjectPath::try_from("/stop/0")
+                .map_err(to_zbus_fdo_error)?;
+            Ok(path.into())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fan_control() {
+        let mut h = testing::start();
+        let unit = MockUnit::default();
+        let connection = h.new_dbus().await.expect("dbus");
+        connection
+            .request_name("org.freedesktop.systemd1")
+            .await
+            .expect("request_name");
+        connection
+            .object_server()
+            .at("/org/freedesktop/systemd1/unit/jupiter_2dfan_2dcontrol_2eservice", unit)
+            .await
+            .expect("at");
+
+        sleep(Duration::from_millis(10)).await;
+
+        let fan_control = FanControl::new(connection);
+        assert_eq!(fan_control.get_state().await.unwrap(), FanControlState::Bios);
+        assert!(fan_control.set_state(FanControlState::Os).await.is_ok());
+        assert_eq!(fan_control.get_state().await.unwrap(), FanControlState::Os);
+        assert!(fan_control.set_state(FanControlState::Bios).await.is_ok());
+        assert_eq!(fan_control.get_state().await.unwrap(), FanControlState::Bios);
     }
 }
