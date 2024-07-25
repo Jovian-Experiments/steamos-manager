@@ -164,15 +164,31 @@ impl FanControl {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
-    use crate::{enum_roundtrip, testing};
     use crate::error::to_zbus_fdo_error;
+    use crate::{enum_roundtrip, testing};
     use std::time::Duration;
     use tokio::fs::{create_dir_all, write};
     use tokio::time::sleep;
     use zbus::fdo;
     use zbus::zvariant::{ObjectPath, OwnedObjectPath};
+
+    pub(crate) async fn fake_model(model: HardwareVariant) -> Result<()> {
+        create_dir_all(crate::path("/sys/class/dmi/id")).await?;
+        match model {
+            HardwareVariant::Unknown => write(crate::path(BOARD_VENDOR_PATH), "LENOVO\n").await?,
+            HardwareVariant::Jupiter => {
+                write(crate::path(BOARD_VENDOR_PATH), "Valve\n").await?;
+                write(crate::path(BOARD_NAME_PATH), "Jupiter\n").await?;
+            }
+            HardwareVariant::Galileo => {
+                write(crate::path(BOARD_VENDOR_PATH), "Valve\n").await?;
+                write(crate::path(BOARD_NAME_PATH), "Galileo\n").await?;
+            }
+        }
+        Ok(())
+    }
 
     #[tokio::test]
     async fn board_lookup() {

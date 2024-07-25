@@ -423,6 +423,8 @@ pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
+    use crate::hardware::test::fake_model;
+    use crate::hardware::HardwareVariant;
     use crate::{enum_roundtrip, testing};
     use anyhow::anyhow;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
@@ -727,5 +729,216 @@ CCLK_RANGE in Core0:
         });
         assert!(GPUPerformanceLevel::try_from(5).is_err());
         assert!(GPUPerformanceLevel::from_str("profile_peak").is_err());
+    }
+
+    #[tokio::test]
+    async fn read_power_profiles() {
+        let _h = testing::start();
+
+        setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        let contents = " 1 3D_FULL_SCREEN
+ 3          VIDEO*
+ 4             VR
+ 5        COMPUTE
+ 6         CUSTOM
+ 8         CAPPED
+ 9       UNCAPPED";
+
+        write(filename.as_path(), contents).await.expect("write");
+
+        fake_model(HardwareVariant::Unknown)
+            .await
+            .expect("fake_model");
+
+        let profiles = get_gpu_power_profiles().await.expect("get");
+        assert_eq!(
+            profiles,
+            HashMap::from([
+                (
+                    GPUPowerProfile::FullScreen as u32,
+                    String::from("3D_FULL_SCREEN")
+                ),
+                (GPUPowerProfile::Video as u32, String::from("VIDEO")),
+                (GPUPowerProfile::VR as u32, String::from("VR")),
+                (GPUPowerProfile::Compute as u32, String::from("COMPUTE")),
+                (GPUPowerProfile::Custom as u32, String::from("CUSTOM")),
+                (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
+                (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
+            ])
+        );
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
+
+        let profiles = get_gpu_power_profiles().await.expect("get");
+        assert_eq!(
+            profiles,
+            HashMap::from([
+                (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
+                (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn read_unknown_power_profiles() {
+        let _h = testing::start();
+
+        setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        let contents = " 1 3D_FULL_SCREEN
+ 2            CGA
+ 3          VIDEO*
+ 4             VR
+ 5        COMPUTE
+ 6         CUSTOM
+ 8         CAPPED
+ 9       UNCAPPED";
+
+        write(filename.as_path(), contents).await.expect("write");
+
+        fake_model(HardwareVariant::Unknown)
+            .await
+            .expect("fake_model");
+
+        let profiles = get_gpu_power_profiles().await.expect("get");
+        assert_eq!(
+            profiles,
+            HashMap::from([
+                (2, String::from("CGA")),
+                (
+                    GPUPowerProfile::FullScreen as u32,
+                    String::from("3D_FULL_SCREEN")
+                ),
+                (GPUPowerProfile::Video as u32, String::from("VIDEO")),
+                (GPUPowerProfile::VR as u32, String::from("VR")),
+                (GPUPowerProfile::Compute as u32, String::from("COMPUTE")),
+                (GPUPowerProfile::Custom as u32, String::from("CUSTOM")),
+                (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
+                (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
+            ])
+        );
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
+
+        let profiles = get_gpu_power_profiles().await.expect("get");
+        assert_eq!(
+            profiles,
+            HashMap::from([
+                (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
+                (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn read_power_profile() {
+        let _h = testing::start();
+
+        setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        let contents = " 1 3D_FULL_SCREEN
+ 3          VIDEO*
+ 4             VR
+ 5        COMPUTE
+ 6         CUSTOM
+ 8         CAPPED
+ 9       UNCAPPED";
+
+        write(filename.as_path(), contents).await.expect("write");
+
+        fake_model(HardwareVariant::Unknown)
+            .await
+            .expect("fake_model");
+        assert_eq!(get_gpu_power_profile().await.expect("get"), GPUPowerProfile::Video);
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
+        assert_eq!(get_gpu_power_profile().await.expect("get"), GPUPowerProfile::Video);
+    }
+
+    #[tokio::test]
+    async fn read_no_power_profile() {
+        let _h = testing::start();
+
+        setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        let contents = " 1 3D_FULL_SCREEN
+ 3          VIDEO
+ 4             VR
+ 5        COMPUTE
+ 6         CUSTOM
+ 8         CAPPED
+ 9       UNCAPPED";
+
+        write(filename.as_path(), contents).await.expect("write");
+
+        fake_model(HardwareVariant::Unknown)
+            .await
+            .expect("fake_model");
+        assert!(get_gpu_power_profile().await.is_err());
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
+        assert!(get_gpu_power_profile().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_unknown_power_profile() {
+        let _h = testing::start();
+
+        setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        let contents = " 1 3D_FULL_SCREEN
+ 2            CGA*
+ 3          VIDEO
+ 4             VR
+ 5        COMPUTE
+ 6         CUSTOM
+ 8         CAPPED
+ 9       UNCAPPED";
+
+        write(filename.as_path(), contents).await.expect("write");
+
+        fake_model(HardwareVariant::Unknown)
+            .await
+            .expect("fake_model");
+        assert!(get_gpu_power_profile().await.is_err());
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
+        assert!(get_gpu_power_profile().await.is_err());
     }
 }
