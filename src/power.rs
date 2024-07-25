@@ -149,20 +149,11 @@ async fn write_gpu_sysfs_contents<S: AsRef<Path>>(suffix: S, data: &[u8]) -> Res
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
 }
 
-async fn read_cpu_governor_sysfs_available_contents() -> Result<String> {
-    let base = path(CPU_PREFIX);
-    Ok(fs::read_to_string(
-        base.join(CPU0_NAME)
-            .join(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX),
-    )
-    .await?)
-}
-
-async fn read_cpu_governor_sysfs_contents() -> Result<String> {
-    // Read contents of policy0 path
-    let base = path(CPU_PREFIX);
-    let full_path = base.join(CPU0_NAME).join(CPU_SCALING_GOVERNOR_SUFFIX);
-    Ok(fs::read_to_string(full_path).await?)
+async fn read_cpu_sysfs_contents<S: AsRef<Path>>(suffix: S) -> Result<String> {
+    let base = path(CPU_PREFIX).join(CPU0_NAME);
+    fs::read_to_string(base.join(suffix.as_ref()))
+        .await
+        .map_err(|message| anyhow!("Error opening sysfs file for reading {message}"))
 }
 
 async fn write_cpu_governor_sysfs_contents(contents: String) -> Result<()> {
@@ -279,7 +270,7 @@ pub(crate) async fn set_gpu_performance_level(level: GPUPerformanceLevel) -> Res
 }
 
 pub(crate) async fn get_available_cpu_scaling_governors() -> Result<Vec<CPUScalingGovernor>> {
-    let contents = read_cpu_governor_sysfs_available_contents().await?;
+    let contents = read_cpu_sysfs_contents(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX).await?;
     // Get the list of supported governors from cpu0
     let mut result = Vec::new();
 
@@ -296,7 +287,7 @@ pub(crate) async fn get_available_cpu_scaling_governors() -> Result<Vec<CPUScali
 
 pub(crate) async fn get_cpu_scaling_governor() -> Result<CPUScalingGovernor> {
     // get the current governor from cpu0 (assume all others are the same)
-    let contents = read_cpu_governor_sysfs_contents().await?;
+    let contents = read_cpu_sysfs_contents(CPU_SCALING_GOVERNOR_SUFFIX).await?;
 
     let contents = contents.trim();
     CPUScalingGovernor::from_str(contents).map_err(|message| {
