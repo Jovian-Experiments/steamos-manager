@@ -152,7 +152,9 @@ impl<'dbus> SystemdUnit<'dbus> {
     }
 
     pub async fn enabled(&self) -> Result<EnableState> {
-        Ok(EnableState::from_str(self.proxy.unit_file_state().await?.as_str())?)
+        Ok(EnableState::from_str(
+            self.proxy.unit_file_state().await?.as_str(),
+        )?)
     }
 }
 

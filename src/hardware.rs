@@ -281,8 +281,7 @@ pub mod test {
                 return Err(to_zbus_fdo_error("Invalid mode"));
             }
             self.active = true;
-            let path = ObjectPath::try_from("/start/0")
-                .map_err(to_zbus_fdo_error)?;
+            let path = ObjectPath::try_from("/start/0").map_err(to_zbus_fdo_error)?;
             Ok(path.into())
         }
 
@@ -291,8 +290,7 @@ pub mod test {
                 return Err(to_zbus_fdo_error("Invalid mode"));
             }
             self.active = false;
-            let path = ObjectPath::try_from("/stop/0")
-                .map_err(to_zbus_fdo_error)?;
+            let path = ObjectPath::try_from("/stop/0").map_err(to_zbus_fdo_error)?;
             Ok(path.into())
         }
     }
@@ -308,17 +306,26 @@ pub mod test {
             .expect("request_name");
         connection
             .object_server()
-            .at("/org/freedesktop/systemd1/unit/jupiter_2dfan_2dcontrol_2eservice", unit)
+            .at(
+                "/org/freedesktop/systemd1/unit/jupiter_2dfan_2dcontrol_2eservice",
+                unit,
+            )
             .await
             .expect("at");
 
         sleep(Duration::from_millis(10)).await;
 
         let fan_control = FanControl::new(connection);
-        assert_eq!(fan_control.get_state().await.unwrap(), FanControlState::Bios);
+        assert_eq!(
+            fan_control.get_state().await.unwrap(),
+            FanControlState::Bios
+        );
         assert!(fan_control.set_state(FanControlState::Os).await.is_ok());
         assert_eq!(fan_control.get_state().await.unwrap(), FanControlState::Os);
         assert!(fan_control.set_state(FanControlState::Bios).await.is_ok());
-        assert_eq!(fan_control.get_state().await.unwrap(), FanControlState::Bios);
+        assert_eq!(
+            fan_control.get_state().await.unwrap(),
+            FanControlState::Bios
+        );
     }
 }
