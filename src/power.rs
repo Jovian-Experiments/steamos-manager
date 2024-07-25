@@ -941,4 +941,88 @@ CCLK_RANGE in Core0:
             .expect("fake_model");
         assert!(get_gpu_power_profile().await.is_err());
     }
+
+    #[tokio::test]
+    async fn read_cpu_available_governors() {
+        let _h = testing::start();
+
+        let base = path(CPU_PREFIX).join(CPU0_NAME);
+        create_dir_all(&base).await.expect("create_dir_all");
+
+        let contents = "conservative ondemand userspace powersave performance schedutil";
+        write(base.join(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX), contents)
+            .await
+            .expect("write");
+
+        assert_eq!(
+            get_available_cpu_scaling_governors().await.unwrap(),
+            vec![
+                CPUScalingGovernor::Conservative,
+                CPUScalingGovernor::OnDemand,
+                CPUScalingGovernor::UserSpace,
+                CPUScalingGovernor::PowerSave,
+                CPUScalingGovernor::Performance,
+                CPUScalingGovernor::SchedUtil
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn read_invalid_cpu_available_governors() {
+        let _h = testing::start();
+
+        let base = path(CPU_PREFIX).join(CPU0_NAME);
+        create_dir_all(&base).await.expect("create_dir_all");
+
+        let contents =
+            "conservative ondemand userspace rescascade powersave performance schedutil\n";
+        write(base.join(CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX), contents)
+            .await
+            .expect("write");
+
+        assert_eq!(
+            get_available_cpu_scaling_governors().await.unwrap(),
+            vec![
+                CPUScalingGovernor::Conservative,
+                CPUScalingGovernor::OnDemand,
+                CPUScalingGovernor::UserSpace,
+                CPUScalingGovernor::PowerSave,
+                CPUScalingGovernor::Performance,
+                CPUScalingGovernor::SchedUtil
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn read_cpu_governor() {
+        let _h = testing::start();
+
+        let base = path(CPU_PREFIX).join(CPU0_NAME);
+        create_dir_all(&base).await.expect("create_dir_all");
+
+        let contents = "ondemand\n";
+        write(base.join(CPU_SCALING_GOVERNOR_SUFFIX), contents)
+            .await
+            .expect("write");
+
+        assert_eq!(
+            get_cpu_scaling_governor().await.unwrap(),
+            CPUScalingGovernor::OnDemand
+        );
+    }
+
+    #[tokio::test]
+    async fn read_invalid_cpu_governor() {
+        let _h = testing::start();
+
+        let base = path(CPU_PREFIX).join(CPU0_NAME);
+        create_dir_all(&base).await.expect("create_dir_all");
+
+        let contents = "rescascade\n";
+        write(base.join(CPU_SCALING_GOVERNOR_SUFFIX), contents)
+            .await
+            .expect("write");
+
+        assert!(get_cpu_scaling_governor().await.is_err());
+    }
 }
