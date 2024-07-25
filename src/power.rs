@@ -869,12 +869,18 @@ CCLK_RANGE in Core0:
         fake_model(HardwareVariant::Unknown)
             .await
             .expect("fake_model");
-        assert_eq!(get_gpu_power_profile().await.expect("get"), GPUPowerProfile::Video);
+        assert_eq!(
+            get_gpu_power_profile().await.expect("get"),
+            GPUPowerProfile::Video
+        );
 
         fake_model(HardwareVariant::Jupiter)
             .await
             .expect("fake_model");
-        assert_eq!(get_gpu_power_profile().await.expect("get"), GPUPowerProfile::Video);
+        assert_eq!(
+            get_gpu_power_profile().await.expect("get"),
+            GPUPowerProfile::Video
+        );
     }
 
     #[tokio::test]
