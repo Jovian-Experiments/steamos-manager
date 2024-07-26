@@ -476,7 +476,7 @@ mod test {
         let remote_properties = collect_properties(remote_interface.properties());
         let remote_property_names: HashSet<&String> = remote_properties.keys().collect();
 
-        let local_interface_string = read("com.steampowered.SteamOSManager1.xml")
+        let local_interface_string = read("com.steampowered.SteamOSManager1.Manager.xml")
             .await
             .expect("read");
         let local_interfaces =
