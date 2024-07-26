@@ -8,11 +8,13 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Stdio;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::time::Duration;
 use tempfile::{tempdir, TempDir};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use zbus::connection::{Builder, Connection};
+use tokio::sync::Mutex;
+use zbus::{Address, Connection, ConnectionBuilder};
 
 thread_local! {
     static TEST: RefCell<Option<Rc<Test>>> = RefCell::new(None);
@@ -57,6 +59,7 @@ pub fn start() -> TestHandle {
             base: tempdir().expect("Couldn't create test directory"),
             process_cb: Cell::new(|_, _| Err(anyhow!("No current process_cb"))),
             mock_dbus: Cell::new(None),
+            dbus_address: Mutex::new(None),
         });
         *lock.borrow_mut() = Some(test.clone());
         TestHandle { test }
@@ -80,6 +83,7 @@ pub fn current() -> Rc<Test> {
 
 pub struct MockDBus {
     pub connection: Connection,
+    address: Address,
     process: Child,
 }
 
@@ -87,6 +91,7 @@ pub struct Test {
     base: TempDir,
     pub process_cb: Cell<fn(&str, &[&OsStr]) -> Result<(i32, String)>>,
     pub mock_dbus: Cell<Option<MockDBus>>,
+    pub dbus_address: Mutex<Option<Address>>,
 }
 
 pub struct TestHandle {
@@ -113,10 +118,12 @@ impl MockDBus {
             .await?
             .ok_or(anyhow!("Failed to read address"))?;
 
-        let connection = Builder::address(address.trim_end())?.build().await?;
+        let address = Address::from_str(address.trim_end())?;
+        let connection = ConnectionBuilder::address(address.clone())?.build().await?;
 
         Ok(MockDBus {
             connection,
+            address,
             process,
         })
     }
@@ -152,8 +159,13 @@ impl TestHandle {
     pub async fn new_dbus(&mut self) -> Result<Connection> {
         let dbus = MockDBus::new().await?;
         let connection = dbus.connection.clone();
+        *self.test.dbus_address.lock().await = Some(dbus.address.clone());
         self.test.mock_dbus.set(Some(dbus));
         Ok(connection)
+    }
+
+    pub async fn dbus_address(&self) -> Option<Address> {
+        (*self.test.dbus_address.lock().await).clone()
     }
 }
 

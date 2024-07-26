@@ -381,10 +381,16 @@ impl Service for JobManagerService {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
+    use crate::proxy::JobProxy;
     use crate::testing;
+
     use anyhow::anyhow;
     use nix::sys::signal::Signal;
-    use tokio::sync::oneshot;
+    use std::time::Duration;
+    use tokio::sync::{mpsc, oneshot};
+    use tokio::task::JoinHandle;
+    use tokio::time::sleep;
+    use zbus::names::BusName;
     use zbus::ConnectionBuilder;
 
     #[tokio::test]
@@ -488,5 +494,105 @@ pub(crate) mod test {
             pause_process.wait().await.unwrap(),
             -(Signal::SIGTERM as i32)
         );
+    }
+
+    struct MockJob {}
+
+    #[zbus::interface(name = "com.steampowered.SteamOSManager1.Job")]
+    impl MockJob {
+        pub async fn pause(&mut self) -> fdo::Result<()> {
+            Err(fdo::Error::Failed(String::from("pause")))
+        }
+
+        pub async fn resume(&mut self) -> fdo::Result<()> {
+            Err(fdo::Error::Failed(String::from("resume")))
+        }
+
+        pub async fn cancel(&mut self, _force: bool) -> fdo::Result<()> {
+            Err(fdo::Error::Failed(String::from("cancel")))
+        }
+
+        pub async fn wait(&mut self) -> fdo::Result<i32> {
+            Ok(-1)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_job_mirror_relay() {
+        let mut handle = testing::start();
+
+        let connection = handle.new_dbus().await.expect("connection");
+        let address = handle.dbus_address().await.unwrap();
+        connection
+            .request_name("com.steampowered.SteamOSManager1")
+            .await
+            .expect("reserve");
+
+        connection
+            .object_server()
+            .at(format!("{JOB_PREFIX}/0"), MockJob {})
+            .await
+            .expect("at");
+
+        //sleep(Duration::from_millis(10)).await;
+
+        let (tx, mut rx) = mpsc::channel(3);
+        let (fin_tx, fin_rx) = oneshot::channel();
+
+        let job: JoinHandle<Result<()>> = tokio::spawn(async move {
+            let connection = ConnectionBuilder::address(address)
+                .expect("address")
+                .build()
+                .await
+                .expect("build");
+            let mut jm = JobManager::new(connection.clone()).await.expect("jm");
+
+            sleep(Duration::from_millis(10)).await;
+
+            let path = jm
+                .mirror_job(&connection, format!("{JOB_PREFIX}/0"))
+                .await
+                .expect("mirror_job");
+            let name = connection.unique_name().unwrap().clone();
+            let proxy = JobProxy::builder(&connection)
+                .destination(BusName::Unique(name.into()))
+                .expect("destination")
+                .path(path)
+                .expect("path")
+                .build()
+                .await
+                .expect("build");
+
+            match proxy.pause().await.unwrap_err() {
+                zbus::Error::MethodError(_, Some(text), _) => tx.send(text).await?,
+                _ => bail!("pause"),
+            };
+            match proxy.resume().await.unwrap_err() {
+                zbus::Error::MethodError(_, Some(text), _) => tx.send(text).await?,
+                _ => bail!("resume"),
+            };
+            match proxy.cancel(false).await.unwrap_err() {
+                zbus::Error::MethodError(_, Some(text), _) => tx.send(text).await?,
+                _ => bail!("cancel"),
+            };
+
+            Ok(fin_rx.await?)
+        });
+
+        assert_eq!(
+            rx.recv().await.expect("rx"),
+            "org.freedesktop.DBus.Error.Failed: pause"
+        );
+        assert_eq!(
+            rx.recv().await.expect("rx"),
+            "org.freedesktop.DBus.Error.Failed: resume"
+        );
+        assert_eq!(
+            rx.recv().await.expect("rx"),
+            "org.freedesktop.DBus.Error.Failed: cancel"
+        );
+
+        fin_tx.send(()).expect("fin");
+        job.await.expect("job").expect("job2");
     }
 }
