@@ -19,7 +19,7 @@ use zbus::ConnectionBuilder;
 
 use crate::daemon::{channel, Daemon, DaemonCommand, DaemonContext};
 use crate::job::{JobManager, JobManagerService};
-use crate::manager::user::SteamOSManager;
+use crate::manager::user::create_interfaces;
 use crate::path;
 use crate::udev::UdevMonitor;
 use crate::Service;
@@ -112,14 +112,10 @@ async fn create_connections(
         .build()
         .await?;
 
-    let (tx, rx) = unbounded_channel();
+    let (jm_tx, rx) = unbounded_channel();
     let job_manager = JobManager::new(connection.clone()).await?;
-    let manager = SteamOSManager::new(connection.clone(), system.clone(), channel, tx).await?;
     let service = JobManagerService::new(job_manager, rx, system.clone());
-    connection
-        .object_server()
-        .at("/com/steampowered/SteamOSManager1", manager)
-        .await?;
+    create_interfaces(connection.clone(), system.clone(), channel, jm_tx).await?;
 
     Ok((connection, system, service))
 }

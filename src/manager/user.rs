@@ -89,7 +89,7 @@ macro_rules! setter {
     };
 }
 
-pub struct SteamOSManager {
+struct SteamOSManager {
     proxy: Proxy<'static>,
     hdmi_cec: HdmiCecControl<'static>,
     channel: Sender<Command>,
@@ -386,6 +386,21 @@ impl SteamOSManager {
             .map_err(to_zbus_fdo_error)?;
         method!(self, "ReloadConfig")
     }
+}
+
+pub(crate) async fn create_interfaces(
+    session: Connection,
+    system: Connection,
+    daemon: Sender<Command>,
+    job_manager: UnboundedSender<JobManagerCommand>,
+) -> Result<()> {
+    let manager = SteamOSManager::new(session.clone(), system.clone(), daemon, job_manager).await?;
+    session
+        .object_server()
+        .at("/com/steampowered/SteamOSManager1", manager)
+        .await?;
+
+    Ok(())
 }
 
 #[cfg(test)]
