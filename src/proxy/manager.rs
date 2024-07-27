@@ -19,54 +19,11 @@ use zbus::proxy;
     assume_defaults = true
 )]
 trait Manager {
-    /// FormatDevice method
-    fn format_device(
-        &self,
-        device: &str,
-        label: &str,
-        validate: bool,
-    ) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
-
-    /// GetAlsIntegrationTimeFileDescriptor method
-    fn get_als_integration_time_file_descriptor(&self) -> zbus::Result<zbus::zvariant::OwnedFd>;
-
-    /// PrepareFactoryReset method
-    fn prepare_factory_reset(&self) -> zbus::Result<u32>;
-
     /// ReloadConfig method
     fn reload_config(&self) -> zbus::Result<()>;
 
     /// SetWifiDebugMode method
     fn set_wifi_debug_mode(&self, mode: u32, buffer_size: u32) -> zbus::Result<()>;
-
-    /// TrimDevices method
-    fn trim_devices(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
-
-    /// UpdateBios method
-    fn update_bios(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
-
-    /// UpdateDock method
-    fn update_dock(&self) -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
-
-    /// AlsCalibrationGain property
-    #[zbus(property)]
-    fn als_calibration_gain(&self) -> zbus::Result<f64>;
-
-    /// AvailableCpuScalingGovernors property
-    #[zbus(property)]
-    fn available_cpu_scaling_governors(&self) -> zbus::Result<Vec<String>>;
-
-    /// CpuScalingGovernor property
-    #[zbus(property)]
-    fn cpu_scaling_governor(&self) -> zbus::Result<String>;
-    #[zbus(property)]
-    fn set_cpu_scaling_governor(&self, value: &str) -> zbus::Result<()>;
-
-    /// FanControlState property
-    #[zbus(property)]
-    fn fan_control_state(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_fan_control_state(&self, value: u32) -> zbus::Result<()>;
 
     /// GpuPerformanceLevel property
     #[zbus(property)]
@@ -87,12 +44,6 @@ trait Manager {
     /// HardwareCurrentlySupported property
     #[zbus(property)]
     fn hardware_currently_supported(&self) -> zbus::Result<u32>;
-
-    /// HdmiCecState property
-    #[zbus(property)]
-    fn hdmi_cec_state(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_hdmi_cec_state(&self, value: u32) -> zbus::Result<()>;
 
     /// ManualGpuClock property
     #[zbus(property)]
@@ -135,10 +86,4 @@ trait Manager {
     /// WifiDebugModeState property
     #[zbus(property)]
     fn wifi_debug_mode_state(&self) -> zbus::Result<u32>;
-
-    /// WifiPowerManagementState property
-    #[zbus(property)]
-    fn wifi_power_management_state(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_wifi_power_management_state(&self, value: u32) -> zbus::Result<()>;
 }

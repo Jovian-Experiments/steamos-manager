@@ -12,7 +12,11 @@ use std::ops::Deref;
 use steamos_manager::cec::HdmiCecState;
 use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
-use steamos_manager::proxy::ManagerProxy;
+use steamos_manager::proxy::{
+    AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
+    HdmiCec1Proxy, ManagerProxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy,
+    WifiPowerManagement1Proxy,
+};
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
 use zbus::names::InterfaceName;
@@ -194,6 +198,7 @@ async fn main() -> Result<()> {
             }
         }
         Commands::GetAlsCalibrationGain => {
+            let proxy = AmbientLightSensor1Proxy::new(&conn).await?;
             let gain = proxy.als_calibration_gain().await?;
             println!("ALS calibration gain: {gain}");
         }
@@ -206,9 +211,11 @@ async fn main() -> Result<()> {
             println!("Version: {version}");
         }
         Commands::SetFanControlState { state } => {
+            let proxy = FanControl1Proxy::new(&conn).await?;
             proxy.set_fan_control_state(*state as u32).await?;
         }
         Commands::GetFanControlState => {
+            let proxy = FanControl1Proxy::new(&conn).await?;
             let state = proxy.fan_control_state().await?;
             match FanControlState::try_from(state) {
                 Ok(s) => println!("Fan control state: {}", s),
@@ -216,6 +223,7 @@ async fn main() -> Result<()> {
             }
         }
         Commands::GetAvailableCpuScalingGovernors => {
+            let proxy = CpuScaling1Proxy::new(&conn).await?;
             let governors = proxy.available_cpu_scaling_governors().await?;
             println!("Governors:\n");
             for name in governors {
@@ -223,6 +231,7 @@ async fn main() -> Result<()> {
             }
         }
         Commands::GetCpuScalingGovernor => {
+            let proxy = CpuScaling1Proxy::new(&conn).await?;
             let governor = proxy.cpu_scaling_governor().await?;
             let governor_type = CPUScalingGovernor::try_from(governor.as_str());
             match governor_type {
@@ -235,6 +244,7 @@ async fn main() -> Result<()> {
             }
         }
         Commands::SetCpuScalingGovernor { governor } => {
+            let proxy = CpuScaling1Proxy::new(&conn).await?;
             proxy
                 .set_cpu_scaling_governor(governor.to_string().as_str())
                 .await?;
@@ -324,9 +334,11 @@ async fn main() -> Result<()> {
             }
         }
         Commands::SetWifiPowerManagementState { state } => {
+            let proxy = WifiPowerManagement1Proxy::new(&conn).await?;
             proxy.set_wifi_power_management_state(*state as u32).await?;
         }
         Commands::GetWifiPowerManagementState => {
+            let proxy = WifiPowerManagement1Proxy::new(&conn).await?;
             let state = proxy.wifi_power_management_state().await?;
             match WifiPowerManagement::try_from(state) {
                 Ok(s) => println!("Wifi power management state: {}", s),
@@ -334,9 +346,11 @@ async fn main() -> Result<()> {
             }
         }
         Commands::SetHdmiCecState { state } => {
+            let proxy = HdmiCec1Proxy::new(&conn).await?;
             proxy.set_hdmi_cec_state(*state as u32).await?;
         }
         Commands::GetHdmiCecState => {
+            let proxy = HdmiCec1Proxy::new(&conn).await?;
             let state = proxy.hdmi_cec_state().await?;
             match HdmiCecState::try_from(state) {
                 Ok(s) => println!("HDMI-CEC state: {}", s.to_human_readable()),
@@ -344,15 +358,19 @@ async fn main() -> Result<()> {
             }
         }
         Commands::UpdateBios => {
+            let proxy = UpdateBios1Proxy::new(&conn).await?;
             let _ = proxy.update_bios().await?;
         }
         Commands::UpdateDock => {
+            let proxy = UpdateDock1Proxy::new(&conn).await?;
             let _ = proxy.update_dock().await?;
         }
         Commands::FactoryReset => {
+            let proxy = FactoryReset1Proxy::new(&conn).await?;
             let _ = proxy.prepare_factory_reset().await?;
         }
         Commands::TrimDevices => {
+            let proxy = Storage1Proxy::new(&conn).await?;
             let _ = proxy.trim_devices().await?;
         }
     }

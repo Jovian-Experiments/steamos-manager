@@ -29,6 +29,8 @@ use crate::power::{
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
 
+const MANAGER_PATH: &str = "/com/steampowered/SteamOSManager1";
+
 macro_rules! method {
     ($self:expr, $method:expr, $($args:expr),+) => {
         $self.proxy
@@ -91,33 +93,57 @@ macro_rules! setter {
 
 struct SteamOSManager {
     proxy: Proxy<'static>,
-    hdmi_cec: HdmiCecControl<'static>,
     channel: Sender<Command>,
+}
+
+struct AmbientLightSensor1 {
+    proxy: Proxy<'static>,
+}
+
+struct CpuScaling1 {
+    proxy: Proxy<'static>,
+}
+
+struct FactoryReset1 {
+    proxy: Proxy<'static>,
+}
+
+struct FanControl1 {
+    proxy: Proxy<'static>,
+}
+
+struct HdmiCec1 {
+    hdmi_cec: HdmiCecControl<'static>,
+}
+
+struct Storage1 {
+    proxy: Proxy<'static>,
     job_manager: UnboundedSender<JobManagerCommand>,
+}
+
+struct UpdateBios1 {
+    proxy: Proxy<'static>,
+    job_manager: UnboundedSender<JobManagerCommand>,
+}
+
+struct UpdateDock1 {
+    proxy: Proxy<'static>,
+    job_manager: UnboundedSender<JobManagerCommand>,
+}
+
+struct WifiPowerManagement1 {
+    proxy: Proxy<'static>,
 }
 
 impl SteamOSManager {
     pub async fn new(
-        connection: Connection,
         system_conn: Connection,
+        proxy: Proxy<'static>,
         channel: Sender<Command>,
         job_manager: UnboundedSender<JobManagerCommand>,
     ) -> Result<Self> {
-        let hdmi_cec = HdmiCecControl::new(&connection).await?;
-        let proxy = Builder::new(&system_conn)
-            .destination("com.steampowered.SteamOSManager1")?
-            .path("/com/steampowered/SteamOSManager1")?
-            .interface("com.steampowered.SteamOSManager1.RootManager")?
-            .cache_properties(CacheProperties::No)
-            .build()
-            .await?;
         job_manager.send(JobManagerCommand::MirrorConnection(system_conn))?;
-        Ok(SteamOSManager {
-            hdmi_cec,
-            proxy,
-            job_manager,
-            channel,
-        })
+        Ok(SteamOSManager { proxy, channel })
     }
 }
 
@@ -128,129 +154,12 @@ impl SteamOSManager {
         API_VERSION
     }
 
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn hdmi_cec_state(&self) -> fdo::Result<u32> {
-        match self.hdmi_cec.get_enabled_state().await {
-            Ok(state) => Ok(state as u32),
-            Err(e) => Err(to_zbus_fdo_error(e)),
-        }
-    }
-
-    #[zbus(property)]
-    async fn set_hdmi_cec_state(&self, state: u32) -> zbus::Result<()> {
-        let state = match HdmiCecState::try_from(state) {
-            Ok(state) => state,
-            Err(err) => return Err(fdo::Error::InvalidArgs(err.to_string()).into()),
-        };
-        self.hdmi_cec
-            .set_enabled_state(state)
-            .await
-            .inspect_err(|message| error!("Error setting CEC state: {message}"))
-            .map_err(to_zbus_error)
-    }
-
-    async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
-        method!(self, "PrepareFactoryReset")
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn wifi_power_management_state(&self) -> fdo::Result<u32> {
-        match get_wifi_power_management_state().await {
-            Ok(state) => Ok(state as u32),
-            Err(e) => Err(to_zbus_fdo_error(e)),
-        }
-    }
-
-    #[zbus(property)]
-    async fn set_wifi_power_management_state(&self, state: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetWifiPowerManagementState", &(state))
-            .await
-            .map_err(to_zbus_error)
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn fan_control_state(&self) -> fdo::Result<u32> {
-        getter!(self, "FanControlState")
-    }
-
-    #[zbus(property)]
-    async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
-        setter!(self, "FanControlState", state)
-    }
-
     #[zbus(property(emits_changed_signal = "const"))]
     async fn hardware_currently_supported(&self) -> fdo::Result<u32> {
         match check_support().await {
             Ok(res) => Ok(res as u32),
             Err(e) => Err(to_zbus_fdo_error(e)),
         }
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn als_calibration_gain(&self) -> fdo::Result<f64> {
-        getter!(self, "AlsCalibrationGain")
-    }
-
-    async fn get_als_integration_time_file_descriptor(&self) -> fdo::Result<Fd> {
-        let m = self
-            .proxy
-            .call_method::<&str, ()>("GetAlsIntegrationTimeFileDescriptor", &())
-            .await
-            .map_err(zbus_to_zbus_fdo)?;
-        match m.body().deserialize::<Fd>() {
-            Ok(fd) => fd.try_to_owned().map_err(to_zbus_fdo_error),
-            Err(e) => Err(zbus_to_zbus_fdo(e)),
-        }
-    }
-
-    async fn update_bios(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
-        job_method!(self, "UpdateBios")
-    }
-
-    async fn update_dock(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
-        job_method!(self, "UpdateDock")
-    }
-
-    async fn trim_devices(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
-        job_method!(self, "TrimDevices")
-    }
-
-    async fn format_device(
-        &mut self,
-        device: &str,
-        label: &str,
-        validate: bool,
-    ) -> fdo::Result<zvariant::OwnedObjectPath> {
-        job_method!(self, "FormatDevice", device, label, validate)
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn available_cpu_scaling_governors(&self) -> fdo::Result<Vec<String>> {
-        let governors = get_available_cpu_scaling_governors()
-            .await
-            .map_err(to_zbus_fdo_error)?;
-        let mut result = Vec::new();
-        for g in governors {
-            result.push(g.to_string());
-        }
-        Ok(result)
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn cpu_scaling_governor(&self) -> fdo::Result<String> {
-        let governor = get_cpu_scaling_governor()
-            .await
-            .map_err(to_zbus_fdo_error)?;
-        Ok(governor.to_string())
-    }
-
-    #[zbus(property)]
-    async fn set_cpu_scaling_governor(&self, governor: String) -> zbus::Result<()> {
-        self.proxy
-            .call("SetCpuScalingGovernor", &(governor))
-            .await
-            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -388,16 +297,215 @@ impl SteamOSManager {
     }
 }
 
+#[interface(name = "com.steampowered.SteamOSManager1.AmbientLightSensor1")]
+impl AmbientLightSensor1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn als_calibration_gain(&self) -> fdo::Result<f64> {
+        getter!(self, "AlsCalibrationGain")
+    }
+
+    async fn get_als_integration_time_file_descriptor(&self) -> fdo::Result<Fd> {
+        let m = self
+            .proxy
+            .call_method::<&str, ()>("GetAlsIntegrationTimeFileDescriptor", &())
+            .await
+            .map_err(zbus_to_zbus_fdo)?;
+        match m.body().deserialize::<Fd>() {
+            Ok(fd) => fd.try_to_owned().map_err(to_zbus_fdo_error),
+            Err(e) => Err(zbus_to_zbus_fdo(e)),
+        }
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.CpuScaling1")]
+impl CpuScaling1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn available_cpu_scaling_governors(&self) -> fdo::Result<Vec<String>> {
+        let governors = get_available_cpu_scaling_governors()
+            .await
+            .map_err(to_zbus_fdo_error)?;
+        let mut result = Vec::new();
+        for g in governors {
+            result.push(g.to_string());
+        }
+        Ok(result)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn cpu_scaling_governor(&self) -> fdo::Result<String> {
+        let governor = get_cpu_scaling_governor()
+            .await
+            .map_err(to_zbus_fdo_error)?;
+        Ok(governor.to_string())
+    }
+
+    #[zbus(property)]
+    async fn set_cpu_scaling_governor(&self, governor: String) -> zbus::Result<()> {
+        self.proxy
+            .call("SetCpuScalingGovernor", &(governor))
+            .await
+            .map_err(to_zbus_error)
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.FactoryReset1")]
+impl FactoryReset1 {
+    async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
+        method!(self, "PrepareFactoryReset")
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.FanControl1")]
+impl FanControl1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn fan_control_state(&self) -> fdo::Result<u32> {
+        getter!(self, "FanControlState")
+    }
+
+    #[zbus(property)]
+    async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
+        setter!(self, "FanControlState", state)
+    }
+}
+
+impl HdmiCec1 {
+    async fn new(connection: &Connection) -> Result<HdmiCec1> {
+        let hdmi_cec = HdmiCecControl::new(connection).await?;
+        Ok(HdmiCec1 { hdmi_cec })
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.HdmiCec1")]
+impl HdmiCec1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn hdmi_cec_state(&self) -> fdo::Result<u32> {
+        match self.hdmi_cec.get_enabled_state().await {
+            Ok(state) => Ok(state as u32),
+            Err(e) => Err(to_zbus_fdo_error(e)),
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_hdmi_cec_state(&self, state: u32) -> zbus::Result<()> {
+        let state = match HdmiCecState::try_from(state) {
+            Ok(state) => state,
+            Err(err) => return Err(fdo::Error::InvalidArgs(err.to_string()).into()),
+        };
+        self.hdmi_cec
+            .set_enabled_state(state)
+            .await
+            .inspect_err(|message| error!("Error setting CEC state: {message}"))
+            .map_err(to_zbus_error)
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.Storage1")]
+impl Storage1 {
+    async fn format_device(
+        &mut self,
+        device: &str,
+        label: &str,
+        validate: bool,
+    ) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "FormatDevice", device, label, validate)
+    }
+
+    async fn trim_devices(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "TrimDevices")
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.UpdateBios1")]
+impl UpdateBios1 {
+    async fn update_bios(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "UpdateBios")
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.UpdateDock1")]
+impl UpdateDock1 {
+    async fn update_dock(&mut self) -> fdo::Result<zvariant::OwnedObjectPath> {
+        job_method!(self, "UpdateDock")
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.WifiPowerManagement1")]
+impl WifiPowerManagement1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn wifi_power_management_state(&self) -> fdo::Result<u32> {
+        match get_wifi_power_management_state().await {
+            Ok(state) => Ok(state as u32),
+            Err(e) => Err(to_zbus_fdo_error(e)),
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_wifi_power_management_state(&self, state: u32) -> zbus::Result<()> {
+        self.proxy
+            .call("SetWifiPowerManagementState", &(state))
+            .await
+            .map_err(to_zbus_error)
+    }
+}
+
 pub(crate) async fn create_interfaces(
     session: Connection,
     system: Connection,
     daemon: Sender<Command>,
     job_manager: UnboundedSender<JobManagerCommand>,
 ) -> Result<()> {
-    let manager = SteamOSManager::new(session.clone(), system.clone(), daemon, job_manager).await?;
-    session
-        .object_server()
-        .at("/com/steampowered/SteamOSManager1", manager)
+    let proxy = Builder::<Proxy>::new(&system)
+        .destination("com.steampowered.SteamOSManager1")?
+        .path("/com/steampowered/SteamOSManager1")?
+        .interface("com.steampowered.SteamOSManager1.RootManager")?
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+
+    let manager =
+        SteamOSManager::new(system.clone(), proxy.clone(), daemon, job_manager.clone()).await?;
+
+    let als = AmbientLightSensor1 {
+        proxy: proxy.clone(),
+    };
+    let cpu_scaling = CpuScaling1 {
+        proxy: proxy.clone(),
+    };
+    let factory_reset = FactoryReset1 {
+        proxy: proxy.clone(),
+    };
+    let fan_control = FanControl1 {
+        proxy: proxy.clone(),
+    };
+    let hdmi_cec = HdmiCec1::new(&session).await?;
+    let storage = Storage1 {
+        proxy: proxy.clone(),
+        job_manager: job_manager.clone(),
+    };
+    let update_bios = UpdateBios1 {
+        proxy: proxy.clone(),
+        job_manager: job_manager.clone(),
+    };
+    let update_dock = UpdateDock1 {
+        proxy: proxy.clone(),
+        job_manager: job_manager.clone(),
+    };
+    let wifi_power_management = WifiPowerManagement1 {
+        proxy: proxy.clone(),
+    };
+
+    let object_server = session.object_server();
+    object_server.at(MANAGER_PATH, manager).await?;
+    object_server.at(MANAGER_PATH, als).await?;
+    object_server.at(MANAGER_PATH, cpu_scaling).await?;
+    object_server.at(MANAGER_PATH, factory_reset).await?;
+    object_server.at(MANAGER_PATH, fan_control).await?;
+    object_server.at(MANAGER_PATH, hdmi_cec).await?;
+    object_server.at(MANAGER_PATH, storage).await?;
+    object_server.at(MANAGER_PATH, update_bios).await?;
+    object_server.at(MANAGER_PATH, update_dock).await?;
+    object_server
+        .at(MANAGER_PATH, wifi_power_management)
         .await?;
 
     Ok(())
@@ -413,7 +521,7 @@ mod test {
     use std::time::Duration;
     use tokio::sync::mpsc::unbounded_channel;
     use tokio::time::sleep;
-    use zbus::Connection;
+    use zbus::{Connection, Interface};
 
     struct TestHandle {
         _handle: testing::TestHandle,
@@ -425,12 +533,7 @@ mod test {
         let (tx_ctx, _rx_ctx) = channel::<UserContext>();
         let (tx_job, _rx_job) = unbounded_channel::<JobManagerCommand>();
         let connection = handle.new_dbus().await?;
-        let manager =
-            SteamOSManager::new(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
-        connection
-            .object_server()
-            .at("/com/steampowered/SteamOSManager1", manager)
-            .await?;
+        create_interfaces(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
 
         sleep(Duration::from_millis(1)).await;
 
@@ -446,7 +549,7 @@ mod test {
 
         let remote = testing::InterfaceIntrospection::from_remote::<SteamOSManager, _>(
             &test.connection,
-            "/com/steampowered/SteamOSManager1",
+            MANAGER_PATH,
         )
         .await
         .expect("remote");
@@ -457,5 +560,101 @@ mod test {
         .await
         .expect("local");
         assert!(remote.compare(&local));
+    }
+
+    async fn test_interface_matches<I: Interface>(connection: &Connection) -> Result<bool> {
+        let remote =
+            testing::InterfaceIntrospection::from_remote::<I, _>(connection, MANAGER_PATH).await?;
+        let local = testing::InterfaceIntrospection::from_local(
+            "com.steampowered.SteamOSManager1.xml",
+            I::name().to_string(),
+        )
+        .await?;
+        Ok(remote.compare(&local))
+    }
+
+    #[tokio::test]
+    async fn interface_matches_ambient_light_sensor1() {
+        let test = start().await.expect("start");
+
+        assert!(
+            test_interface_matches::<AmbientLightSensor1>(&test.connection)
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn interface_matches_cpu_scaling1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<CpuScaling1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_factory_reset1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<FactoryReset1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_fan_control1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<FanControl1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_hdmi_cec1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<HdmiCec1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_storage1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<Storage1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_update_bios1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<UpdateBios1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_update_dock1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<UpdateDock1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_wifi_power_management1() {
+        let test = start().await.expect("start");
+
+        assert!(
+            test_interface_matches::<WifiPowerManagement1>(&test.connection)
+                .await
+                .unwrap()
+        );
     }
 }

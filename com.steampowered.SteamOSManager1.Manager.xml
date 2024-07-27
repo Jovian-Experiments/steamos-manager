@@ -32,44 +32,6 @@
     <property name="Version" type="u" access="read"/>
 
     <!--
-        PrepareFactoryReset:
-
-        Perform factory reset of device. Runs steamos-factory-reset script for
-        now.
-
-        @returns: Status of reset operation.
-
-        Valid statuses: 0 = Unknown, 1 = RebootRequired
-
-        Since: 7
-    -->
-    <method name="PrepareFactoryReset">
-      <arg type="u" name="status" direction="out"/>
-    </method>
-
-    <!--
-        WifiPowerManagementState:
-
-        Controls the Wi-Fi chip's power management features.
-
-        Valid states: 0 = Disabled, 1 = Enabled
-
-        Since: 7
-    -->
-    <property name="WifiPowerManagementState" type="u" access="readwrite"/>
-
-    <!--
-        FanControlState:
-
-        Controls whether the OS or the BIOS should manage fan speed.
-
-        Valid states: 0 = BIOS, 1 = OS
-
-        Since: 7
-    -->
-    <property name="FanControlState" type="u" access="readwrite"/>
-
-    <!--
         HardwareCurrentlySupported:
 
         Reports whether the current hardware is supported or not.
@@ -79,99 +41,6 @@
         Since: 7
     -->
     <property name="HardwareCurrentlySupported" type="u" access="read"/>
-
-    <!--
-        AlsCalibrationGain:
-
-        Provides the ALS calibration value.
-
-        Note: Will be -1.0 if ALS calibration is unavailable.
-
-        Since: 7
-    -->
-    <property name="AlsCalibrationGain" type="d" access="read"/>
-
-    <!--
-        GetAlsIntegrationTimeFileDescriptor:
-
-        Get the ALS integration time file descriptor.
-
-        @descriptor: A file descriptor that can be written to to set ALS
-        integration time. Will be null if unable to open file or other error
-        occurred.
-
-        Since: 7
-    -->
-    <method name="GetAlsIntegrationTimeFileDescriptor">
-      <arg type="h" name="descriptor" direction="out"/>
-    </method>
-
-    <!--
-        UpdateBios:
-
-        Perform a BIOS update.
-
-        @jobpath: An object path that can be used to pause/resume/cancel the
-        operation.
-
-        Since: 8
-    -->
-    <method name="UpdateBios">
-      <arg type="o" name="jobpath" direction="out"/>
-    </method>
-
-    <!--
-        UpdateDock:
-
-        Perform a Dock Firmware update.
-
-        @jobpath: An object path that can be used to pause/resume/cancel the
-        operation.
-
-        Since: 8
-    -->
-    <method name="UpdateDock">
-      <arg type="o" name="jobpath" direction="out"/>
-    </method>
-
-    <!--
-        TrimDevices:
-
-        Perform fstrim on relevant disk devices.
-
-        Calling this over fstrim is is important as some devices are not safe
-        to trim unless some kernel quirks are available.
-
-        @jobpath: An object path that can be used to pause/resume/cancel the
-        operation.
-
-        Since: 8
-    -->
-    <method name="TrimDevices">
-      <arg type="o" name="jobpath" direction="out"/>
-    </method>
-
-    <!--
-        FormatDevice:
-
-        Format and optionally validate a storage device to a steam compatible
-        filesystem.
-
-        @device: Which device to format, e.g. /dev/mmcblk0.
-        @label: Filesystem label to assign to the formatted device.
-        @validate: When set runs common checks for conterfeit flash media
-        before formatting, i.e. f3probe.
-        @jobpath: An object path that can be used to pause/resume/cancel the
-        operation.
-
-        Since: 8
-    -->
-    <method name="FormatDevice">
-      <arg type="s" name="device" direction="in"/>
-      <arg type="s" name="label" direction="in"/>
-      <arg type="b" name="validate" direction="in"/>
-      <arg type="o" name="jobpath" direction="out"/>
-    </method>
 
     <!--
         GpuPerformanceLevel:
@@ -281,18 +150,6 @@
     <property name="WifiBackend" type="u" access="readwrite"/>
 
     <!--
-        HdmiCecState:
-
-        The current state of HDMI-CEC features on the system.
-
-        Valid states: 0 = Disabled, 1 = Control Only, 2 = Control And Wake
-
-        Since: 8
-    -->
-    <property name="HdmiCecState" type="u" access="readwrite"/>
-
-
-    <!--
         GpuPowerProfiles:
 
         Enumerate the supported GPU power profiles available on the system.
@@ -321,25 +178,6 @@
         Since: 9
     -->
     <method name="ReloadConfig"/>
-
-    <!--
-        CpuGovernors:
-
-        Enumerate the supported CPU governors on the system.
-
-        Since: 9
-    -->
-    <property name="AvailableCpuScalingGovernors" type="as" access="read"/>
-
-    <!--
-        CpuGovernor:
-
-        The current governor used for the system's CPUs. Valid values come from
-        thethe CpuGovernors property.
-
-        Since: 9
-    -->
-    <property name="CpuScalingGovernor" type="s" access="readwrite"/>
 
   </interface>
 
