@@ -8,7 +8,6 @@
 use anyhow::{anyhow, bail, ensure, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::{Display, EnumString};
@@ -195,11 +194,11 @@ pub(crate) async fn get_gpu_power_profile() -> Result<GPUPowerProfile> {
     bail!("Unable to determine current GPU power profile");
 }
 
-pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
+pub(crate) async fn get_available_gpu_power_profiles() -> Result<Vec<(u32, String)>> {
     let contents = read_gpu_sysfs_contents(GPU_POWER_PROFILE_SUFFIX).await?;
     let deck = is_deck().await?;
 
-    let mut map = HashMap::new();
+    let mut map = Vec::new();
     let lines = contents.lines();
     for line in lines {
         let caps = GPU_POWER_PROFILE_REGEX.captures(line);
@@ -216,13 +215,13 @@ pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
             // the other profiles aren't correctly tuned for the hardware.
             if value == GPUPowerProfile::Capped as u32 || value == GPUPowerProfile::Uncapped as u32
             {
-                map.insert(value, name.to_string());
+                map.push((value, name.to_string()));
             } else {
                 // Got unsupported value, so don't include it
             }
         } else {
             // Do basic validation to ensure our enum is up to date?
-            map.insert(value, name.to_string());
+            map.push((value, name.to_string()));
         }
     }
     Ok(map)
@@ -774,10 +773,10 @@ CCLK_RANGE in Core0:
             .await
             .expect("fake_model");
 
-        let profiles = get_gpu_power_profiles().await.expect("get");
+        let profiles = get_available_gpu_power_profiles().await.expect("get");
         assert_eq!(
             profiles,
-            HashMap::from([
+            &[
                 (
                     GPUPowerProfile::FullScreen as u32,
                     String::from("3D_FULL_SCREEN")
@@ -788,20 +787,20 @@ CCLK_RANGE in Core0:
                 (GPUPowerProfile::Custom as u32, String::from("CUSTOM")),
                 (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
                 (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
-            ])
+            ]
         );
 
         fake_model(HardwareVariant::Jupiter)
             .await
             .expect("fake_model");
 
-        let profiles = get_gpu_power_profiles().await.expect("get");
+        let profiles = get_available_gpu_power_profiles().await.expect("get");
         assert_eq!(
             profiles,
-            HashMap::from([
+            &[
                 (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
                 (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
-            ])
+            ]
         );
     }
 
@@ -831,35 +830,35 @@ CCLK_RANGE in Core0:
             .await
             .expect("fake_model");
 
-        let profiles = get_gpu_power_profiles().await.expect("get");
+        let profiles = get_available_gpu_power_profiles().await.expect("get");
         assert_eq!(
             profiles,
-            HashMap::from([
-                (2, String::from("CGA")),
+            &[
                 (
                     GPUPowerProfile::FullScreen as u32,
                     String::from("3D_FULL_SCREEN")
                 ),
+                (2, String::from("CGA")),
                 (GPUPowerProfile::Video as u32, String::from("VIDEO")),
                 (GPUPowerProfile::VR as u32, String::from("VR")),
                 (GPUPowerProfile::Compute as u32, String::from("COMPUTE")),
                 (GPUPowerProfile::Custom as u32, String::from("CUSTOM")),
                 (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
                 (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
-            ])
+            ]
         );
 
         fake_model(HardwareVariant::Jupiter)
             .await
             .expect("fake_model");
 
-        let profiles = get_gpu_power_profiles().await.expect("get");
+        let profiles = get_available_gpu_power_profiles().await.expect("get");
         assert_eq!(
             profiles,
-            HashMap::from([
+            &[
                 (GPUPowerProfile::Capped as u32, String::from("CAPPED")),
                 (GPUPowerProfile::Uncapped as u32, String::from("UNCAPPED"))
-            ])
+            ]
         );
     }
 

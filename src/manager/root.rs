@@ -184,7 +184,7 @@ impl SteamOSManager {
             .await
     }
 
-    async fn set_gpu_power_profile(&self, value: u32) -> fdo::Result<()> {
+    async fn set_gpu_power_profile(&self, value: &str) -> fdo::Result<()> {
         let profile = GPUPowerProfile::try_from(value).map_err(to_zbus_fdo_error)?;
         set_gpu_power_profile(profile)
             .await

@@ -28,16 +28,6 @@ trait Manager {
     #[zbus(property)]
     fn set_gpu_performance_level(&self, value: u32) -> zbus::Result<()>;
 
-    /// GpuPowerProfile property
-    #[zbus(property)]
-    fn gpu_power_profile(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_gpu_power_profile(&self, value: u32) -> zbus::Result<()>;
-
-    /// GpuPowerProfiles property
-    #[zbus(property)]
-    fn gpu_power_profiles(&self) -> zbus::Result<std::collections::HashMap<u32, String>>;
-
     /// ManualGpuClock property
     #[zbus(property)]
     fn manual_gpu_clock(&self) -> zbus::Result<u32>;

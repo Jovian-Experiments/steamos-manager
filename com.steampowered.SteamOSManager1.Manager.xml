@@ -138,27 +138,6 @@
     -->
     <property name="WifiBackend" type="u" access="readwrite"/>
 
-    <!--
-        GpuPowerProfiles:
-
-        Enumerate the supported GPU power profiles available on the system.
-
-        A list of supported profiles, as a dictionary of values to names.
-
-        Since: 9
-    -->
-    <property name="GpuPowerProfiles" type="a{us}" access="read"/>
-
-    <!--
-        GpuPowerProfile:
-
-        The current GPU power profile. Valid values come from GpuPowerProfiles
-        property.
-
-        Since: 9
-    -->
-    <property name="GpuPowerProfile" type="u" access="readwrite"/>
-
   </interface>
 
 </node>

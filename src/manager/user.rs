@@ -7,7 +7,6 @@
  */
 
 use anyhow::Result;
-use std::collections::HashMap;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::oneshot;
 use tracing::error;
@@ -22,9 +21,9 @@ use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::{check_support, HardwareCurrentlySupported};
 use crate::job::JobManagerCommand;
 use crate::power::{
-    get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
-    get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles,
-    get_tdp_limit,
+    get_available_cpu_scaling_governors, get_available_gpu_power_profiles,
+    get_cpu_scaling_governor, get_gpu_clocks, get_gpu_clocks_range, get_gpu_performance_level,
+    get_gpu_power_profile, get_tdp_limit,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
@@ -111,6 +110,10 @@ struct FanControl1 {
     proxy: Proxy<'static>,
 }
 
+struct GpuPowerProfile1 {
+    proxy: Proxy<'static>,
+}
+
 struct HdmiCec1 {
     hdmi_cec: HdmiCecControl<'static>,
 }
@@ -155,30 +158,6 @@ impl SteamOSManager {
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
         API_VERSION
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn gpu_power_profiles(&self) -> fdo::Result<HashMap<u32, String>> {
-        get_gpu_power_profiles().await.map_err(to_zbus_fdo_error)
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn gpu_power_profile(&self) -> fdo::Result<u32> {
-        match get_gpu_power_profile().await {
-            Ok(profile) => Ok(profile as u32),
-            Err(e) => {
-                error!("Error getting GPU power profile: {e}");
-                Err(to_zbus_fdo_error(e))
-            }
-        }
-    }
-
-    #[zbus(property)]
-    async fn set_gpu_power_profile(&self, profile: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetGpuPowerProfile", &(profile))
-            .await
-            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -354,6 +333,38 @@ impl FanControl1 {
     }
 }
 
+#[interface(name = "com.steampowered.SteamOSManager1.GpuPowerProfile1")]
+impl GpuPowerProfile1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn available_gpu_power_profiles(&self) -> fdo::Result<Vec<String>> {
+        let (_, names): (Vec<u32>, Vec<String>) = get_available_gpu_power_profiles()
+            .await
+            .map_err(to_zbus_fdo_error)?
+            .into_iter()
+            .unzip();
+        Ok(names)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn gpu_power_profile(&self) -> fdo::Result<String> {
+        match get_gpu_power_profile().await {
+            Ok(profile) => Ok(profile.to_string()),
+            Err(e) => {
+                error!("Error getting GPU power profile: {e}");
+                Err(to_zbus_fdo_error(e))
+            }
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_gpu_power_profile(&self, profile: &str) -> zbus::Result<()> {
+        self.proxy
+            .call("SetGpuPowerProfile", &(profile))
+            .await
+            .map_err(to_zbus_error)
+    }
+}
+
 impl HdmiCec1 {
     async fn new(connection: &Connection) -> Result<HdmiCec1> {
         let hdmi_cec = HdmiCecControl::new(connection).await?;
@@ -482,6 +493,9 @@ pub(crate) async fn create_interfaces(
     let fan_control = FanControl1 {
         proxy: proxy.clone(),
     };
+    let gpu_power_profile = GpuPowerProfile1 {
+        proxy: proxy.clone(),
+    };
     let hdmi_cec = HdmiCec1::new(&session).await?;
     let manager2 = Manager2 {
         proxy: proxy.clone(),
@@ -509,6 +523,7 @@ pub(crate) async fn create_interfaces(
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
     object_server.at(MANAGER_PATH, factory_reset).await?;
     object_server.at(MANAGER_PATH, fan_control).await?;
+    object_server.at(MANAGER_PATH, gpu_power_profile).await?;
     object_server.at(MANAGER_PATH, hdmi_cec).await?;
     object_server.at(MANAGER_PATH, manager2).await?;
     object_server.at(MANAGER_PATH, storage).await?;
@@ -617,6 +632,15 @@ mod test {
         let test = start().await.expect("start");
 
         assert!(test_interface_matches::<FanControl1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_gpu_power_profile1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<GpuPowerProfile1>(&test.connection)
             .await
             .unwrap());
     }

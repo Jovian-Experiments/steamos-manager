@@ -14,8 +14,8 @@ use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
-    HdmiCec1Proxy, Manager2Proxy, ManagerProxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy,
-    WifiPowerManagement1Proxy,
+    GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, ManagerProxy, Storage1Proxy,
+    UpdateBios1Proxy, UpdateDock1Proxy, WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
@@ -62,7 +62,7 @@ enum Commands {
     },
 
     /// Get the GPU power profiles supported on this device
-    GetGPUPowerProfiles,
+    GetAvailableGPUPowerProfiles,
 
     /// Get the current GPU power profile
     GetGPUPowerProfile,
@@ -250,17 +250,18 @@ async fn main() -> Result<()> {
                 .set_cpu_scaling_governor(governor.to_string().as_str())
                 .await?;
         }
-        Commands::GetGPUPowerProfiles => {
-            let profiles = proxy.gpu_power_profiles().await?;
+        Commands::GetAvailableGPUPowerProfiles => {
+            let proxy = GpuPowerProfile1Proxy::new(&conn).await?;
+            let profiles = proxy.available_gpu_power_profiles().await?;
             println!("Profiles:\n");
-            for key in profiles.keys().sorted() {
-                let name = &profiles[key];
-                println!("{key}: {name}");
+            for name in profiles.into_iter().sorted() {
+                println!("- {name}");
             }
         }
         Commands::GetGPUPowerProfile => {
+            let proxy = GpuPowerProfile1Proxy::new(&conn).await?;
             let profile = proxy.gpu_power_profile().await?;
-            let profile_type = GPUPowerProfile::try_from(profile);
+            let profile_type = GPUPowerProfile::try_from(profile.as_str());
             match profile_type {
                 Ok(t) => {
                     let name = t.to_string();
@@ -272,7 +273,10 @@ async fn main() -> Result<()> {
             }
         }
         Commands::SetGPUPowerProfile { profile } => {
-            proxy.set_gpu_power_profile(*profile as u32).await?;
+            let proxy = GpuPowerProfile1Proxy::new(&conn).await?;
+            proxy
+                .set_gpu_power_profile(profile.to_string().as_str())
+                .await?;
         }
         Commands::SetGPUPerformanceLevel { level } => {
             proxy.set_gpu_performance_level(*level as u32).await?;
