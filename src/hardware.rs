@@ -28,8 +28,9 @@ pub(crate) enum HardwareVariant {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
 pub(crate) enum HardwareCurrentlySupported {
-    Unsupported = 0,
-    Supported = 1,
+    Unknown = 0,
+    UnsupportedPrototype = 1,
+    Supported = 2,
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -54,8 +55,11 @@ impl TryFrom<u32> for HardwareCurrentlySupported {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
-            x if x == HardwareCurrentlySupported::Unsupported as u32 => {
-                Ok(HardwareCurrentlySupported::Unsupported)
+            x if x == HardwareCurrentlySupported::Unknown as u32 => {
+                Ok(HardwareCurrentlySupported::Unknown)
+            }
+            x if x == HardwareCurrentlySupported::UnsupportedPrototype as u32 => {
+                Ok(HardwareCurrentlySupported::UnsupportedPrototype)
             }
             x if x == HardwareCurrentlySupported::Supported as u32 => {
                 Ok(HardwareCurrentlySupported::Supported)
@@ -68,7 +72,8 @@ impl TryFrom<u32> for HardwareCurrentlySupported {
 impl fmt::Display for HardwareCurrentlySupported {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            HardwareCurrentlySupported::Unsupported => write!(f, "Unsupported"),
+            HardwareCurrentlySupported::Unknown => write!(f, "Unknown"),
+            HardwareCurrentlySupported::UnsupportedPrototype => write!(f, "Unsupported Prototype"),
             HardwareCurrentlySupported::Supported => write!(f, "Supported"),
         }
     }
@@ -129,7 +134,7 @@ pub(crate) async fn check_support() -> Result<HardwareCurrentlySupported> {
 
     Ok(match res {
         0 => HardwareCurrentlySupported::Supported,
-        _ => HardwareCurrentlySupported::Unsupported,
+        _ => HardwareCurrentlySupported::UnsupportedPrototype,
     })
 }
 
@@ -226,13 +231,15 @@ pub mod test {
     #[test]
     fn hardware_currently_supported_roundtrip() {
         enum_roundtrip!(HardwareCurrentlySupported {
-            0: u32 = Unsupported,
-            1: u32 = Supported,
+            0: u32 = Unknown,
+            1: u32 = UnsupportedPrototype,
+            2: u32 = Supported,
         });
-        assert!(HardwareCurrentlySupported::try_from(2).is_err());
+        assert!(HardwareCurrentlySupported::try_from(3).is_err());
+        assert_eq!(HardwareCurrentlySupported::Unknown.to_string(), "Unknown");
         assert_eq!(
-            HardwareCurrentlySupported::Unsupported.to_string(),
-            "Unsupported"
+            HardwareCurrentlySupported::UnsupportedPrototype.to_string(),
+            "Unsupported Prototype"
         );
         assert_eq!(
             HardwareCurrentlySupported::Supported.to_string(),

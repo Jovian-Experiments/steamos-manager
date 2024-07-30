@@ -32,17 +32,6 @@
     <property name="Version" type="u" access="read"/>
 
     <!--
-        HardwareCurrentlySupported:
-
-        Reports whether the current hardware is supported or not.
-
-        Valid states: 0 = Unsupported, 1 = Supported
-
-        Since: 7
-    -->
-    <property name="HardwareCurrentlySupported" type="u" access="read"/>
-
-    <!--
         GpuPerformanceLevel:
 
         The current GPU performance level.
@@ -169,15 +158,6 @@
         Since: 9
     -->
     <property name="GpuPowerProfile" type="u" access="readwrite"/>
-
-    <!--
-        ReloadConfig:
-
-        Reloads the configuration from disk.
-
-        Since: 9
-    -->
-    <method name="ReloadConfig"/>
 
   </interface>
 

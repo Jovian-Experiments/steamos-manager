@@ -19,9 +19,6 @@ use zbus::proxy;
     assume_defaults = true
 )]
 trait Manager {
-    /// ReloadConfig method
-    fn reload_config(&self) -> zbus::Result<()>;
-
     /// SetWifiDebugMode method
     fn set_wifi_debug_mode(&self, mode: u32, buffer_size: u32) -> zbus::Result<()>;
 
@@ -40,10 +37,6 @@ trait Manager {
     /// GpuPowerProfiles property
     #[zbus(property)]
     fn gpu_power_profiles(&self) -> zbus::Result<std::collections::HashMap<u32, String>>;
-
-    /// HardwareCurrentlySupported property
-    #[zbus(property)]
-    fn hardware_currently_supported(&self) -> zbus::Result<u32>;
 
     /// ManualGpuClock property
     #[zbus(property)]

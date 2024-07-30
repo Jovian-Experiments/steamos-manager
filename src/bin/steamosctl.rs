@@ -14,7 +14,7 @@ use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
-    HdmiCec1Proxy, ManagerProxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy,
+    HdmiCec1Proxy, Manager2Proxy, ManagerProxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy,
     WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
@@ -203,6 +203,7 @@ async fn main() -> Result<()> {
             println!("ALS calibration gain: {gain}");
         }
         Commands::GetHardwareCurrentlySupported => {
+            let proxy = Manager2Proxy::new(&conn).await?;
             let supported = proxy.hardware_currently_supported().await?;
             println!("Hardware currently supported: {supported}");
         }

@@ -19,7 +19,7 @@ use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::daemon::user::Command;
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
-use crate::hardware::check_support;
+use crate::hardware::{check_support, HardwareCurrentlySupported};
 use crate::job::JobManagerCommand;
 use crate::power::{
     get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
@@ -93,7 +93,6 @@ macro_rules! setter {
 
 struct SteamOSManager {
     proxy: Proxy<'static>,
-    channel: Sender<Command>,
 }
 
 struct AmbientLightSensor1 {
@@ -114,6 +113,11 @@ struct FanControl1 {
 
 struct HdmiCec1 {
     hdmi_cec: HdmiCecControl<'static>,
+}
+
+struct Manager2 {
+    proxy: Proxy<'static>,
+    channel: Sender<Command>,
 }
 
 struct Storage1 {
@@ -139,11 +143,10 @@ impl SteamOSManager {
     pub async fn new(
         system_conn: Connection,
         proxy: Proxy<'static>,
-        channel: Sender<Command>,
         job_manager: UnboundedSender<JobManagerCommand>,
     ) -> Result<Self> {
         job_manager.send(JobManagerCommand::MirrorConnection(system_conn))?;
-        Ok(SteamOSManager { proxy, channel })
+        Ok(SteamOSManager { proxy })
     }
 }
 
@@ -152,14 +155,6 @@ impl SteamOSManager {
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
         API_VERSION
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn hardware_currently_supported(&self) -> fdo::Result<u32> {
-        match check_support().await {
-            Ok(res) => Ok(res as u32),
-            Err(e) => Err(to_zbus_fdo_error(e)),
-        }
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -286,15 +281,6 @@ impl SteamOSManager {
             .await
             .map_err(to_zbus_error)
     }
-
-    async fn reload_config(&self) -> fdo::Result<()> {
-        self.channel
-            .send(DaemonCommand::ReadConfig)
-            .await
-            .inspect_err(|message| error!("Error sending ReadConfig command: {message}"))
-            .map_err(to_zbus_fdo_error)?;
-        method!(self, "ReloadConfig")
-    }
 }
 
 #[interface(name = "com.steampowered.SteamOSManager1.AmbientLightSensor1")]
@@ -399,6 +385,26 @@ impl HdmiCec1 {
     }
 }
 
+#[interface(name = "com.steampowered.SteamOSManager1.Manager2")]
+impl Manager2 {
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn hardware_currently_supported(&self) -> u32 {
+        match check_support().await {
+            Ok(res) => res as u32,
+            Err(_) => HardwareCurrentlySupported::Unknown as u32,
+        }
+    }
+
+    async fn reload_config(&self) -> fdo::Result<()> {
+        self.channel
+            .send(DaemonCommand::ReadConfig)
+            .await
+            .inspect_err(|message| error!("Error sending ReadConfig command: {message}"))
+            .map_err(to_zbus_fdo_error)?;
+        method!(self, "ReloadConfig")
+    }
+}
+
 #[interface(name = "com.steampowered.SteamOSManager1.Storage1")]
 impl Storage1 {
     async fn format_device(
@@ -462,8 +468,7 @@ pub(crate) async fn create_interfaces(
         .build()
         .await?;
 
-    let manager =
-        SteamOSManager::new(system.clone(), proxy.clone(), daemon, job_manager.clone()).await?;
+    let manager = SteamOSManager::new(system.clone(), proxy.clone(), job_manager.clone()).await?;
 
     let als = AmbientLightSensor1 {
         proxy: proxy.clone(),
@@ -478,6 +483,10 @@ pub(crate) async fn create_interfaces(
         proxy: proxy.clone(),
     };
     let hdmi_cec = HdmiCec1::new(&session).await?;
+    let manager2 = Manager2 {
+        proxy: proxy.clone(),
+        channel: daemon,
+    };
     let storage = Storage1 {
         proxy: proxy.clone(),
         job_manager: job_manager.clone(),
@@ -501,6 +510,7 @@ pub(crate) async fn create_interfaces(
     object_server.at(MANAGER_PATH, factory_reset).await?;
     object_server.at(MANAGER_PATH, fan_control).await?;
     object_server.at(MANAGER_PATH, hdmi_cec).await?;
+    object_server.at(MANAGER_PATH, manager2).await?;
     object_server.at(MANAGER_PATH, storage).await?;
     object_server.at(MANAGER_PATH, update_bios).await?;
     object_server.at(MANAGER_PATH, update_dock).await?;
@@ -616,6 +626,15 @@ mod test {
         let test = start().await.expect("start");
 
         assert!(test_interface_matches::<HdmiCec1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_manager2() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<Manager2>(&test.connection)
             .await
             .unwrap());
     }
