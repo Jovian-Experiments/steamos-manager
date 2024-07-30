@@ -200,7 +200,7 @@ impl SteamOSManager {
             .map_err(to_zbus_fdo_error)
     }
 
-    async fn set_gpu_performance_level(&self, level: u32) -> fdo::Result<()> {
+    async fn set_gpu_performance_level(&self, level: &str) -> fdo::Result<()> {
         let level = match GPUPerformanceLevel::try_from(level) {
             Ok(level) => level,
             Err(e) => return Err(to_zbus_fdo_error(e)),
@@ -442,7 +442,7 @@ mod test {
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait GpuPerformanceLevel {
-        fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()>;
+        fn set_gpu_performance_level(&self, level: String) -> zbus::Result<()>;
     }
 
     #[tokio::test]
@@ -455,7 +455,7 @@ mod test {
             .await
             .unwrap();
         proxy
-            .set_gpu_performance_level(GPUPerformanceLevel::Low as u32)
+            .set_gpu_performance_level(GPUPerformanceLevel::Low.to_string())
             .await
             .expect("proxy_set");
         assert_eq!(

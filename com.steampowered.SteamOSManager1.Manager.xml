@@ -32,46 +32,6 @@
     <property name="Version" type="u" access="read"/>
 
     <!--
-        GpuPerformanceLevel:
-
-        The current GPU performance level.
-
-        Valid states: 0 = Auto, 1 = Low, 2 = High, 3 = Manual, 4 = Profile Peak
-
-        Since: 7
-    -->
-    <property name="GpuPerformanceLevel" type="u" access="readwrite"/>
-
-    <!--
-        ManualGpuClock:
-
-        Controls the GPU clock frequency in MHz when GPUPerformanceLevel is set
-        to Manual.
-
-        Since: 7
-    -->
-    <property name="ManualGpuClock" type="u" access="readwrite"/>
-
-    <!--
-        ManualGpuClockMin:
-
-        Minimum frequency allowed for GPU clocks.
-
-        Since: 7
-    -->
-    <property name="ManualGpuClockMin" type="u" access="read"/>
-
-    <!--
-        ManualGpuClockMax:
-
-        Maximum frequency allowed for GPU clocks.
-
-        Since: 7
-    -->
-    <property name="ManualGpuClockMax" type="u" access="read"/>
-
-
-    <!--
         TdpLimit:
 
         Controls the GPU TDP limit.

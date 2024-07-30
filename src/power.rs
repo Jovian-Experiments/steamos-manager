@@ -11,7 +11,7 @@ use regex::Regex;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::{Display, EnumString};
-use tokio::fs::{self, File};
+use tokio::fs::{self, try_exists, File};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, warn};
 
@@ -77,29 +77,12 @@ impl TryFrom<u32> for GPUPowerProfile {
 
 #[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
 #[strum(serialize_all = "snake_case")]
-#[repr(u32)]
 pub enum GPUPerformanceLevel {
-    Auto = 0,
-    Low = 1,
-    High = 2,
-    Manual = 3,
-    ProfilePeak = 4,
-}
-
-impl TryFrom<u32> for GPUPerformanceLevel {
-    type Error = &'static str;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == GPUPerformanceLevel::Auto as u32 => Ok(GPUPerformanceLevel::Auto),
-            x if x == GPUPerformanceLevel::Low as u32 => Ok(GPUPerformanceLevel::Low),
-            x if x == GPUPerformanceLevel::High as u32 => Ok(GPUPerformanceLevel::High),
-            x if x == GPUPerformanceLevel::Manual as u32 => Ok(GPUPerformanceLevel::Manual),
-            x if x == GPUPerformanceLevel::ProfilePeak as u32 => {
-                Ok(GPUPerformanceLevel::ProfilePeak)
-            }
-            _ => Err("No enum match for value {v}"),
-        }
-    }
+    Auto,
+    Low,
+    High,
+    Manual,
+    ProfilePeak,
 }
 
 #[derive(Display, EnumString, Hash, Eq, PartialEq, Debug, Copy, Clone)]
@@ -230,6 +213,21 @@ pub(crate) async fn get_available_gpu_power_profiles() -> Result<Vec<(u32, Strin
 pub(crate) async fn set_gpu_power_profile(value: GPUPowerProfile) -> Result<()> {
     let profile = (value as u32).to_string();
     write_gpu_sysfs_contents(GPU_POWER_PROFILE_SUFFIX, profile.as_bytes()).await
+}
+
+pub(crate) async fn get_available_gpu_performance_levels() -> Result<Vec<GPUPerformanceLevel>> {
+    let base = find_hwmon().await?;
+    if !try_exists(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX)).await? {
+        Ok(Vec::new())
+    } else {
+        Ok(vec![
+            GPUPerformanceLevel::Auto,
+            GPUPerformanceLevel::Low,
+            GPUPerformanceLevel::High,
+            GPUPerformanceLevel::Manual,
+            GPUPerformanceLevel::ProfilePeak,
+        ])
+    }
 }
 
 pub(crate) async fn get_gpu_performance_level() -> Result<GPUPerformanceLevel> {
@@ -733,18 +731,12 @@ CCLK_RANGE in Core0:
     #[test]
     fn gpu_performance_level_roundtrip() {
         enum_roundtrip!(GPUPerformanceLevel {
-            0: u32 = Auto,
-            1: u32 = Low,
-            2: u32 = High,
-            3: u32 = Manual,
-            4: u32 = ProfilePeak,
             "auto": str = Auto,
             "low": str = Low,
             "high": str = High,
             "manual": str = Manual,
             "profile_peak": str = ProfilePeak,
         });
-        assert!(GPUPerformanceLevel::try_from(9).is_err());
         assert!(GPUPerformanceLevel::from_str("peak_performance").is_err());
     }
 

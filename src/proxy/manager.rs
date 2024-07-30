@@ -22,26 +22,6 @@ trait Manager {
     /// SetWifiDebugMode method
     fn set_wifi_debug_mode(&self, mode: u32, buffer_size: u32) -> zbus::Result<()>;
 
-    /// GpuPerformanceLevel property
-    #[zbus(property)]
-    fn gpu_performance_level(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_gpu_performance_level(&self, value: u32) -> zbus::Result<()>;
-
-    /// ManualGpuClock property
-    #[zbus(property)]
-    fn manual_gpu_clock(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_manual_gpu_clock(&self, value: u32) -> zbus::Result<()>;
-
-    /// ManualGpuClockMax property
-    #[zbus(property)]
-    fn manual_gpu_clock_max(&self) -> zbus::Result<u32>;
-
-    /// ManualGpuClockMin property
-    #[zbus(property)]
-    fn manual_gpu_clock_min(&self) -> zbus::Result<u32>;
-
     /// TdpLimit property
     #[zbus(property)]
     fn tdp_limit(&self) -> zbus::Result<u32>;

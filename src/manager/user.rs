@@ -21,9 +21,9 @@ use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::{check_support, HardwareCurrentlySupported};
 use crate::job::JobManagerCommand;
 use crate::power::{
-    get_available_cpu_scaling_governors, get_available_gpu_power_profiles,
-    get_cpu_scaling_governor, get_gpu_clocks, get_gpu_clocks_range, get_gpu_performance_level,
-    get_gpu_power_profile, get_tdp_limit,
+    get_available_cpu_scaling_governors, get_available_gpu_performance_levels,
+    get_available_gpu_power_profiles, get_cpu_scaling_governor, get_gpu_clocks,
+    get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_tdp_limit,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
@@ -110,6 +110,10 @@ struct FanControl1 {
     proxy: Proxy<'static>,
 }
 
+struct GpuPerformanceLevel1 {
+    proxy: Proxy<'static>,
+}
+
 struct GpuPowerProfile1 {
     proxy: Proxy<'static>,
 }
@@ -158,48 +162,6 @@ impl SteamOSManager {
     #[zbus(property(emits_changed_signal = "const"))]
     async fn version(&self) -> u32 {
         API_VERSION
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn gpu_performance_level(&self) -> fdo::Result<u32> {
-        match get_gpu_performance_level().await {
-            Ok(level) => Ok(level as u32),
-            Err(e) => {
-                error!("Error getting GPU performance level: {e}");
-                Err(to_zbus_fdo_error(e))
-            }
-        }
-    }
-
-    #[zbus(property)]
-    async fn set_gpu_performance_level(&self, level: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetGpuPerformanceLevel", &(level))
-            .await
-            .map_err(to_zbus_error)
-    }
-
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn manual_gpu_clock(&self) -> fdo::Result<u32> {
-        get_gpu_clocks()
-            .await
-            .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
-            .map_err(to_zbus_fdo_error)
-    }
-
-    #[zbus(property)]
-    async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
-        setter!(self, "SetManualGpuClock", clocks)
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_min(&self) -> fdo::Result<u32> {
-        Ok(get_gpu_clocks_range().await.map_err(to_zbus_fdo_error)?.0)
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_max(&self) -> fdo::Result<u32> {
-        Ok(get_gpu_clocks_range().await.map_err(to_zbus_fdo_error)?.1)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -330,6 +292,60 @@ impl FanControl1 {
     #[zbus(property)]
     async fn set_fan_control_state(&self, state: u32) -> zbus::Result<()> {
         setter!(self, "FanControlState", state)
+    }
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.GpuPerformanceLevel1")]
+impl GpuPerformanceLevel1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn available_gpu_performance_levels(&self) -> fdo::Result<Vec<String>> {
+        get_available_gpu_performance_levels()
+            .await
+            .inspect_err(|message| error!("Error getting GPU performance levels: {message}"))
+            .map(|levels| levels.into_iter().map(|level| level.to_string()).collect())
+            .map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn gpu_performance_level(&self) -> fdo::Result<String> {
+        match get_gpu_performance_level().await {
+            Ok(level) => Ok(level.to_string()),
+            Err(e) => {
+                error!("Error getting GPU performance level: {e}");
+                Err(to_zbus_fdo_error(e))
+            }
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_gpu_performance_level(&self, level: &str) -> zbus::Result<()> {
+        self.proxy
+            .call("SetGpuPerformanceLevel", &(level))
+            .await
+            .map_err(to_zbus_error)
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn manual_gpu_clock(&self) -> fdo::Result<u32> {
+        get_gpu_clocks()
+            .await
+            .inspect_err(|message| error!("Error getting manual GPU clock: {message}"))
+            .map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property)]
+    async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
+        setter!(self, "SetManualGpuClock", clocks)
+    }
+
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn manual_gpu_clock_min(&self) -> fdo::Result<u32> {
+        Ok(get_gpu_clocks_range().await.map_err(to_zbus_fdo_error)?.0)
+    }
+
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn manual_gpu_clock_max(&self) -> fdo::Result<u32> {
+        Ok(get_gpu_clocks_range().await.map_err(to_zbus_fdo_error)?.1)
     }
 }
 
@@ -493,6 +509,9 @@ pub(crate) async fn create_interfaces(
     let fan_control = FanControl1 {
         proxy: proxy.clone(),
     };
+    let gpu_performance_level = GpuPerformanceLevel1 {
+        proxy: proxy.clone(),
+    };
     let gpu_power_profile = GpuPowerProfile1 {
         proxy: proxy.clone(),
     };
@@ -523,6 +542,9 @@ pub(crate) async fn create_interfaces(
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
     object_server.at(MANAGER_PATH, factory_reset).await?;
     object_server.at(MANAGER_PATH, fan_control).await?;
+    object_server
+        .at(MANAGER_PATH, gpu_performance_level)
+        .await?;
     object_server.at(MANAGER_PATH, gpu_power_profile).await?;
     object_server.at(MANAGER_PATH, hdmi_cec).await?;
     object_server.at(MANAGER_PATH, manager2).await?;
@@ -634,6 +656,17 @@ mod test {
         assert!(test_interface_matches::<FanControl1>(&test.connection)
             .await
             .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_gpu_performance_level1() {
+        let test = start().await.expect("start");
+
+        assert!(
+            test_interface_matches::<GpuPerformanceLevel1>(&test.connection)
+                .await
+                .unwrap()
+        );
     }
 
     #[tokio::test]

@@ -14,8 +14,8 @@ use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
-    GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, ManagerProxy, Storage1Proxy,
-    UpdateBios1Proxy, UpdateDock1Proxy, WifiPowerManagement1Proxy,
+    GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, ManagerProxy,
+    Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
@@ -75,7 +75,7 @@ enum Commands {
 
     /// Set the GPU performance level
     SetGPUPerformanceLevel {
-        /// Valid levels are auto, low, high, manual, peak_performance
+        /// Valid levels are auto, low, high, manual, profile_peak
         level: GPUPerformanceLevel,
     },
 
@@ -279,27 +279,35 @@ async fn main() -> Result<()> {
                 .await?;
         }
         Commands::SetGPUPerformanceLevel { level } => {
-            proxy.set_gpu_performance_level(*level as u32).await?;
+            let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
+            proxy
+                .set_gpu_performance_level(level.to_string().as_str())
+                .await?;
         }
         Commands::GetGPUPerformanceLevel => {
+            let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
             let level = proxy.gpu_performance_level().await?;
-            match GPUPerformanceLevel::try_from(level) {
+            match GPUPerformanceLevel::try_from(level.as_str()) {
                 Ok(l) => println!("GPU performance level: {}", l),
                 Err(_) => println!("Got unknown value {level} from backend"),
             }
         }
         Commands::SetManualGPUClock { freq } => {
+            let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
             proxy.set_manual_gpu_clock(*freq).await?;
         }
         Commands::GetManualGPUClock => {
+            let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
             let clock = proxy.manual_gpu_clock().await?;
             println!("Manual GPU Clock: {clock}");
         }
         Commands::GetManualGPUClockMax => {
+            let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
             let value = proxy.manual_gpu_clock_max().await?;
             println!("Manual GPU Clock Max: {value}");
         }
         Commands::GetManualGPUClockMin => {
+            let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
             let value = proxy.manual_gpu_clock_min().await?;
             println!("Manual GPU Clock Min: {value}");
         }
