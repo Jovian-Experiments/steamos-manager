@@ -487,9 +487,6 @@ mod test {
         proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
         assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
 
-        assert!(proxy.set_manual_gpu_clock(100).await.is_err());
-        assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
-
         test.connection.close().await.unwrap();
     }
 

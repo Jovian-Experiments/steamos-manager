@@ -275,10 +275,8 @@ pub(crate) async fn set_cpu_scaling_governor(governor: CPUScalingGovernor) -> Re
 }
 
 pub(crate) async fn set_gpu_clocks(clocks: u32) -> Result<()> {
-    // Set GPU clocks to given value valid between 200 - 1600
+    // Set GPU clocks to given value valid
     // Only used when GPU Performance Level is manual, but write whenever called.
-    ensure!((200..=1600).contains(&clocks), "Invalid clocks");
-
     let base = find_hwmon().await?;
     let mut myfile = File::create(base.join(GPU_CLOCKS_SUFFIX))
         .await
@@ -626,9 +624,6 @@ CCLK_RANGE in Core0:
 
         assert!(set_gpu_clocks(1600).await.is_err());
         setup().await;
-
-        assert!(set_gpu_clocks(100).await.is_err());
-        assert!(set_gpu_clocks(2000).await.is_err());
 
         assert!(set_gpu_clocks(200).await.is_ok());
 
