@@ -104,7 +104,7 @@ pub enum GPUPerformanceLevel {
     Low = 1,
     High = 2,
     Manual = 3,
-    PeakPerformance = 4,
+    ProfilePeak = 4,
 }
 
 impl TryFrom<u32> for GPUPerformanceLevel {
@@ -115,8 +115,8 @@ impl TryFrom<u32> for GPUPerformanceLevel {
             x if x == GPUPerformanceLevel::Low as u32 => Ok(GPUPerformanceLevel::Low),
             x if x == GPUPerformanceLevel::High as u32 => Ok(GPUPerformanceLevel::High),
             x if x == GPUPerformanceLevel::Manual as u32 => Ok(GPUPerformanceLevel::Manual),
-            x if x == GPUPerformanceLevel::PeakPerformance as u32 => {
-                Ok(GPUPerformanceLevel::PeakPerformance)
+            x if x == GPUPerformanceLevel::ProfilePeak as u32 => {
+                Ok(GPUPerformanceLevel::ProfilePeak)
             }
             _ => Err("No enum match for value {v}"),
         }
@@ -499,12 +499,12 @@ CCLK_RANGE in Core0:
             GPUPerformanceLevel::Manual
         );
 
-        write(filename.as_path(), "peak_performance\n")
+        write(filename.as_path(), "profile_peak\n")
             .await
             .expect("write");
         assert_eq!(
             get_gpu_performance_level().await.unwrap(),
-            GPUPerformanceLevel::PeakPerformance
+            GPUPerformanceLevel::ProfilePeak
         );
 
         write(filename.as_path(), "nothing\n").await.expect("write");
@@ -547,12 +547,12 @@ CCLK_RANGE in Core0:
             read_to_string(filename.as_path()).await.unwrap().trim(),
             "manual"
         );
-        set_gpu_performance_level(GPUPerformanceLevel::PeakPerformance)
+        set_gpu_performance_level(GPUPerformanceLevel::ProfilePeak)
             .await
             .expect("set");
         assert_eq!(
             read_to_string(filename.as_path()).await.unwrap().trim(),
-            "peak_performance"
+            "profile_peak"
         );
     }
 
@@ -711,15 +711,15 @@ CCLK_RANGE in Core0:
             1: u32 = Low,
             2: u32 = High,
             3: u32 = Manual,
-            4: u32 = PeakPerformance,
+            4: u32 = ProfilePeak,
             "auto": str = Auto,
             "low": str = Low,
             "high": str = High,
             "manual": str = Manual,
-            "peak_performance": str = PeakPerformance,
+            "profile_peak": str = ProfilePeak,
         });
-        assert!(GPUPerformanceLevel::try_from(5).is_err());
-        assert!(GPUPerformanceLevel::from_str("profile_peak").is_err());
+        assert!(GPUPerformanceLevel::try_from(9).is_err());
+        assert!(GPUPerformanceLevel::from_str("peak_performance").is_err());
     }
 
     #[tokio::test]
