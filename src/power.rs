@@ -6,6 +6,8 @@
  */
 
 use anyhow::{anyhow, bail, ensure, Result};
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -33,9 +35,13 @@ const CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX: &str = "scaling_available_governor
 const TDP_LIMIT1: &str = "power1_cap";
 const TDP_LIMIT2: &str = "power2_cap";
 
+lazy_static! {
+    static ref GPU_POWER_PROFILE_REGEX: Regex =
+        Regex::new(r"^\s*(?<value>[0-9]+)\s+(?<name>[0-9A-Za-z_]+)(?<active>\*)?").unwrap();
+}
+
 #[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
 #[strum(serialize_all = "snake_case")]
-#[repr(u32)]
 pub enum GPUPowerProfile {
     // Currently firmware exposes these values, though
     // deck doesn't support them yet
@@ -167,27 +173,23 @@ pub(crate) async fn get_gpu_power_profile() -> Result<GPUPowerProfile> {
     // firmware support setting the value to no-op values.
     let lines = contents.lines();
     for line in lines {
-        let mut words = line.split_whitespace();
-        let value: u32 = match words.next() {
-            Some(v) => v
-                .parse()
-                .map_err(|message| anyhow!("Unable to parse value from sysfs {message}"))?,
-            None => bail!("Unable to get value from sysfs"),
+        let caps = GPU_POWER_PROFILE_REGEX.captures(line);
+        let caps = match caps {
+            Some(caps) => caps,
+            None => continue,
         };
-        let name = match words.next() {
-            Some(v) => v.to_string(),
-            None => bail!("Unable to get name from sysfs"),
-        };
-        if name.ends_with('*') {
-            match GPUPowerProfile::try_from(value) {
+
+        let name = &caps["name"].to_lowercase();
+        if caps.name("active").is_some() {
+            match GPUPowerProfile::from_str(name.as_str()) {
                 Ok(v) => {
                     return Ok(v);
                 }
-                Err(e) => bail!("Unable to parse value for gpu power profile {e}"),
+                Err(e) => bail!("Unable to parse value for GPU power profile: {e}"),
             }
         }
     }
-    bail!("Unable to determine current gpu power profile");
+    bail!("Unable to determine current GPU power profile");
 }
 
 pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
@@ -197,29 +199,27 @@ pub(crate) async fn get_gpu_power_profiles() -> Result<HashMap<u32, String>> {
     let mut map = HashMap::new();
     let lines = contents.lines();
     for line in lines {
-        let mut words = line.split_whitespace();
-        let value: u32 = match words.next() {
-            Some(v) => v
-                .parse()
-                .map_err(|message| anyhow!("Unable to parse value from sysfs {message}"))?,
-            None => bail!("Unable to get value from sysfs"),
+        let caps = GPU_POWER_PROFILE_REGEX.captures(line);
+        let caps = match caps {
+            Some(caps) => caps,
+            None => continue,
         };
-        let name = match words.next() {
-            Some(v) => v.to_string().replace('*', ""),
-            None => bail!("Unable to get name from sysfs"),
-        };
+        let value: u32 = caps["value"]
+            .parse()
+            .map_err(|message| anyhow!("Unable to parse value for GPU power profile: {message}"))?;
+        let name = &caps["name"];
         if deck {
             // Deck is designed to operate in one of the CAPPED or UNCAPPED power profiles,
             // the other profiles aren't correctly tuned for the hardware.
             if value == GPUPowerProfile::Capped as u32 || value == GPUPowerProfile::Uncapped as u32
             {
-                map.insert(value, name);
+                map.insert(value, name.to_string());
             } else {
                 // Got unsupported value, so don't include it
             }
         } else {
             // Do basic validation to ensure our enum is up to date?
-            map.insert(value, name);
+            map.insert(value, name.to_string());
         }
     }
     Ok(map)
