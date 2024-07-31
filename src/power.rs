@@ -29,6 +29,7 @@ const CPU_POLICY_NAME: &str = "policy";
 const GPU_POWER_PROFILE_SUFFIX: &str = "device/pp_power_profile_mode";
 const GPU_PERFORMANCE_LEVEL_SUFFIX: &str = "device/power_dpm_force_performance_level";
 const GPU_CLOCKS_SUFFIX: &str = "device/pp_od_clk_voltage";
+const GPU_CLOCK_LEVELS_SUFFIX: &str = "device/pp_dpm_sclk";
 const CPU_SCALING_GOVERNOR_SUFFIX: &str = "scaling_governor";
 const CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX: &str = "scaling_available_governors";
 
@@ -38,6 +39,8 @@ const TDP_LIMIT2: &str = "power2_cap";
 lazy_static! {
     static ref GPU_POWER_PROFILE_REGEX: Regex =
         Regex::new(r"^\s*(?<value>[0-9]+)\s+(?<name>[0-9A-Za-z_]+)(?<active>\*)?").unwrap();
+    static ref GPU_CLOCK_LEVELS_REGEX: Regex =
+        Regex::new(r"^\s*(?<index>[0-9]+): (?<value>[0-9]+)Mhz").unwrap();
 }
 
 #[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
@@ -272,6 +275,33 @@ pub(crate) async fn set_cpu_scaling_governor(governor: CPUScalingGovernor) -> Re
     // Set the given governor on all cpus
     let name = governor.to_string();
     write_cpu_governor_sysfs_contents(name).await
+}
+
+pub(crate) async fn get_gpu_clocks_range() -> Result<(u32, u32)> {
+    let contents = read_gpu_sysfs_contents(GPU_CLOCK_LEVELS_SUFFIX).await?;
+    let lines = contents.lines();
+    let mut min = 1000000;
+    let mut max = 0;
+
+    for line in lines {
+        let caps = GPU_CLOCK_LEVELS_REGEX.captures(line);
+        let caps = match caps {
+            Some(caps) => caps,
+            None => continue,
+        };
+        let value: u32 = caps["value"]
+            .parse()
+            .map_err(|message| anyhow!("Unable to parse value for GPU power profile: {message}"))?;
+        if value < min {
+            min = value;
+        }
+        if value > max {
+            max = value;
+        }
+    }
+
+    ensure!(min <= max, "Could not read any clocks");
+    Ok((min, max))
 }
 
 pub(crate) async fn set_gpu_clocks(clocks: u32) -> Result<()> {
@@ -631,6 +661,35 @@ CCLK_RANGE in Core0:
 
         assert!(set_gpu_clocks(1600).await.is_ok());
         assert_eq!(read_clocks().await.unwrap(), format_clocks(1600));
+    }
+
+    #[tokio::test]
+    async fn test_get_gpu_clocks_range() {
+        let _h = testing::start();
+
+        setup().await;
+        let base = find_hwmon().await.unwrap();
+        let filename = base.join(GPU_CLOCK_LEVELS_SUFFIX);
+        create_dir_all(filename.parent().unwrap())
+            .await
+            .expect("create_dir_all");
+
+        assert!(get_gpu_clocks_range().await.is_err());
+
+        write(filename.as_path(), &[] as &[u8; 0]).await.expect("write");
+        assert!(get_gpu_clocks_range().await.is_err());
+
+        let contents = "0: 200Mhz *
+1: 1100Mhz
+2: 1600Mhz";
+        write(filename.as_path(), contents).await.expect("write");
+        assert_eq!(get_gpu_clocks_range().await.unwrap(), (200, 1600));
+
+        let contents = "0: 1600Mhz *
+1: 200Mhz
+2: 1100Mhz";
+        write(filename.as_path(), contents).await.expect("write");
+        assert_eq!(get_gpu_clocks_range().await.unwrap(), (200, 1600));
     }
 
     #[test]

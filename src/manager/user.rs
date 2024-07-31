@@ -22,7 +22,7 @@ use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
 use crate::job::JobManagerCommand;
 use crate::power::{
-    get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
+    get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks, get_gpu_clocks_range,
     get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
@@ -309,15 +309,13 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_min(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        200
+    async fn manual_gpu_clock_min(&self) -> fdo::Result<u32> {
+        Ok(get_gpu_clocks_range().await.map_err(to_zbus_fdo_error)?.0)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
-    async fn manual_gpu_clock_max(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        1600
+    async fn manual_gpu_clock_max(&self) -> fdo::Result<u32> {
+        Ok(get_gpu_clocks_range().await.map_err(to_zbus_fdo_error)?.1)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
