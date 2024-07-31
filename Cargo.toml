@@ -17,8 +17,8 @@ clap = { version = "4.5", default-features = false, features = ["derive", "help"
 config = { version = "0.14", default-features = false, features = ["async", "toml"] }
 inotify = { version = "0.10", default-features = false, features = ["stream"] }
 libc = "0.2"
-itertools = "0.12"
-nix = { version = "0.28", default-features = false, features = ["fs", "poll", "signal"] }
+itertools = "0.13"
+nix = { version = "0.29", default-features = false, features = ["fs", "poll", "signal"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 tokio = { version = "1", default-features = false, features = ["fs", "io-std", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync"] }
 tokio-stream = { version = "0.1", default-features = false }
@@ -26,7 +26,7 @@ tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt"] }
-udev = "0.8"
+udev = "0.9"
 xdg = "2.5"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 zbus_xml = "4"
