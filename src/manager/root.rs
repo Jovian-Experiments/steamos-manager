@@ -7,6 +7,7 @@
  */
 
 use anyhow::Result;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use tokio::fs::File;
 use tokio::sync::mpsc::Sender;
@@ -231,7 +232,7 @@ impl SteamOSManager {
     async fn set_wifi_debug_mode(
         &mut self,
         mode: u32,
-        buffer_size: u32,
+        options: HashMap<&str, zvariant::Value<'_>>,
         #[zbus(signal_context)] ctx: SignalContext<'_>,
     ) -> fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
@@ -239,6 +240,11 @@ impl SteamOSManager {
         let wanted_mode = match WifiDebugMode::try_from(mode) {
             Ok(mode) => mode,
             Err(e) => return Err(fdo::Error::InvalidArgs(e.to_string())),
+        };
+        let buffer_size = match options.get("buffer_size").map(|v| v.downcast_ref::<u32>()) {
+            Some(Ok(v)) => v,
+            None => 20000,
+            Some(Err(e)) => return Err(fdo::Error::InvalidArgs(e.to_string())),
         };
         match set_wifi_debug_mode(
             wanted_mode,

@@ -7,6 +7,7 @@
  */
 
 use anyhow::Result;
+use std::collections::HashMap;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::oneshot;
 use tracing::error;
@@ -140,6 +141,10 @@ struct UpdateBios1 {
 struct UpdateDock1 {
     proxy: Proxy<'static>,
     job_manager: UnboundedSender<JobManagerCommand>,
+}
+
+struct WifiDebug1 {
+    proxy: Proxy<'static>,
 }
 
 struct WifiPowerManagement1 {
@@ -462,6 +467,43 @@ impl UpdateDock1 {
     }
 }
 
+#[interface(name = "com.steampowered.SteamOSManager1.WifiDebug1")]
+impl WifiDebug1 {
+    #[zbus(property)]
+    async fn wifi_debug_mode_state(&self) -> fdo::Result<u32> {
+        getter!(self, "WifiDebugModeState")
+    }
+
+    async fn set_wifi_debug_mode(
+        &self,
+        mode: u32,
+        options: HashMap<&str, zvariant::Value<'_>>,
+        #[zbus(signal_context)] ctx: SignalContext<'_>,
+    ) -> fdo::Result<()> {
+        method!(self, "SetWifiDebugMode", mode, options)?;
+        self.wifi_debug_mode_state_changed(&ctx)
+            .await
+            .map_err(zbus_to_zbus_fdo)?;
+        Ok(())
+    }
+
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn wifi_backend(&self) -> fdo::Result<String> {
+        match get_wifi_backend().await {
+            Ok(backend) => Ok(backend.to_string()),
+            Err(e) => Err(to_zbus_fdo_error(e)),
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_wifi_backend(&self, backend: &str) -> zbus::Result<()> {
+        self.proxy
+            .call("SetWifiBackend", &(backend))
+            .await
+            .map_err(to_zbus_error)
+    }
+}
+
 #[interface(name = "com.steampowered.SteamOSManager1.WifiPowerManagement1")]
 impl WifiPowerManagement1 {
     #[zbus(property(emits_changed_signal = "false"))]
@@ -532,6 +574,9 @@ pub(crate) async fn create_interfaces(
         proxy: proxy.clone(),
         job_manager: job_manager.clone(),
     };
+    let wifi_debug = WifiDebug1 {
+        proxy: proxy.clone(),
+    };
     let wifi_power_management = WifiPowerManagement1 {
         proxy: proxy.clone(),
     };
@@ -551,6 +596,7 @@ pub(crate) async fn create_interfaces(
     object_server.at(MANAGER_PATH, storage).await?;
     object_server.at(MANAGER_PATH, update_bios).await?;
     object_server.at(MANAGER_PATH, update_dock).await?;
+    object_server.at(MANAGER_PATH, wifi_debug).await?;
     object_server
         .at(MANAGER_PATH, wifi_power_management)
         .await?;
@@ -732,5 +778,14 @@ mod test {
                 .await
                 .unwrap()
         );
+    }
+
+    #[tokio::test]
+    async fn interface_matches_wifi_debug() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<WifiDebug1>(&test.connection)
+            .await
+            .unwrap());
     }
 }

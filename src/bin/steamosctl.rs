@@ -8,6 +8,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use itertools::Itertools;
+use std::collections::HashMap;
 use std::ops::Deref;
 use steamos_manager::cec::HdmiCecState;
 use steamos_manager::hardware::FanControlState;
@@ -15,7 +16,7 @@ use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerPr
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
     GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, ManagerProxy,
-    Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiPowerManagement1Proxy,
+    Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy, WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
@@ -129,8 +130,7 @@ enum Commands {
         /// Valid modes are on, off
         mode: WifiDebugMode,
         /// The size of the debug buffer, in bytes
-        #[arg(default_value_t = 20000)]
-        buffer: u32,
+        buffer: Option<u32>,
     },
 
     /// Get wifi debug mode
@@ -327,19 +327,29 @@ async fn main() -> Result<()> {
             println!("TDP limit min: {value}");
         }
         Commands::SetWifiBackend { backend } => {
-            proxy.set_wifi_backend(*backend as u32).await?;
+            let proxy = WifiDebug1Proxy::new(&conn).await?;
+            proxy.set_wifi_backend(backend.to_string().as_str()).await?;
         }
         Commands::GetWifiBackend => {
+            let proxy = WifiDebug1Proxy::new(&conn).await?;
             let backend = proxy.wifi_backend().await?;
-            match WifiBackend::try_from(backend) {
+            match WifiBackend::try_from(backend.as_str()) {
                 Ok(be) => println!("Wifi backend: {}", be),
                 Err(_) => println!("Got unknown value {backend} from backend"),
             }
         }
         Commands::SetWifiDebugMode { mode, buffer } => {
-            proxy.set_wifi_debug_mode(*mode as u32, *buffer).await?;
+            let proxy = WifiDebug1Proxy::new(&conn).await?;
+            let mut options = HashMap::<&str, &zvariant::Value<'_>>::new();
+            let buffer_size;
+            if let Some(size) = buffer {
+                buffer_size = Some(zvariant::Value::U32(*size));
+                options.insert("buffer_size", buffer_size.as_ref().unwrap());
+            }
+            proxy.set_wifi_debug_mode(*mode as u32, options).await?;
         }
         Commands::GetWifiDebugMode => {
+            let proxy = WifiDebug1Proxy::new(&conn).await?;
             let mode = proxy.wifi_debug_mode_state().await?;
             match WifiDebugMode::try_from(mode) {
                 Ok(m) => println!("Wifi debug mode: {}", m),
