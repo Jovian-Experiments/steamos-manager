@@ -5,9 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, ensure, Error, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use std::collections::HashMap;
-use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::{Display, EnumString};
@@ -34,12 +33,14 @@ const CPU_SCALING_AVAILABLE_GOVERNORS_SUFFIX: &str = "scaling_available_governor
 const TDP_LIMIT1: &str = "power1_cap";
 const TDP_LIMIT2: &str = "power2_cap";
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[strum(serialize_all = "snake_case")]
 #[repr(u32)]
 pub enum GPUPowerProfile {
     // Currently firmware exposes these values, though
     // deck doesn't support them yet
-    FullScreen = 1, // 3D_FULL_SCREEN
+    #[strum(serialize = "3d_full_screen")]
+    FullScreen = 1,
     Video = 3,
     VR = 4,
     Compute = 5,
@@ -62,36 +63,6 @@ impl TryFrom<u32> for GPUPowerProfile {
             x if x == GPUPowerProfile::Capped as u32 => Ok(GPUPowerProfile::Capped),
             x if x == GPUPowerProfile::Uncapped as u32 => Ok(GPUPowerProfile::Uncapped),
             _ => Err("No GPUPowerProfile for value"),
-        }
-    }
-}
-
-impl FromStr for GPUPowerProfile {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<GPUPowerProfile, Self::Err> {
-        Ok(match input.to_lowercase().as_str() {
-            "3d_full_screen" => GPUPowerProfile::FullScreen,
-            "video" => GPUPowerProfile::Video,
-            "vr" => GPUPowerProfile::VR,
-            "compute" => GPUPowerProfile::Compute,
-            "custom" => GPUPowerProfile::Custom,
-            "capped" => GPUPowerProfile::Capped,
-            "uncapped" => GPUPowerProfile::Uncapped,
-            _ => bail!("No match for value {input}"),
-        })
-    }
-}
-
-impl fmt::Display for GPUPowerProfile {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            GPUPowerProfile::FullScreen => write!(f, "3d_full_screen"),
-            GPUPowerProfile::Video => write!(f, "video"),
-            GPUPowerProfile::VR => write!(f, "vr"),
-            GPUPowerProfile::Compute => write!(f, "compute"),
-            GPUPowerProfile::Custom => write!(f, "custom"),
-            GPUPowerProfile::Capped => write!(f, "capped"),
-            GPUPowerProfile::Uncapped => write!(f, "uncapped"),
         }
     }
 }
