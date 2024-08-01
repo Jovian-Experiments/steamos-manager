@@ -235,7 +235,9 @@ async fn main() -> Result<()> {
             }
         }
         Commands::SetCpuScalingGovernor { governor } => {
-            proxy.set_cpu_scaling_governor(governor.to_string()).await?;
+            proxy
+                .set_cpu_scaling_governor(governor.to_string().as_str())
+                .await?;
         }
         Commands::GetGPUPowerProfiles => {
             let profiles = proxy.gpu_power_profiles().await?;
