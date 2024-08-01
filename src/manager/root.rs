@@ -261,9 +261,9 @@ impl SteamOSManager {
     }
 
     async fn set_wifi_backend(&mut self, backend: u32) -> fdo::Result<()> {
-        if self.wifi_debug_mode == WifiDebugMode::On {
+        if self.wifi_debug_mode == WifiDebugMode::Tracing {
             return Err(fdo::Error::Failed(String::from(
-                "operation not supported when wifi_debug_mode=on",
+                "operation not supported when wifi_debug_mode=tracing",
             )));
         }
         let backend = match WifiBackend::try_from(backend) {

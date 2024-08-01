@@ -5,9 +5,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, ensure, Error, Result};
-use std::fmt;
+use anyhow::{bail, ensure, Result};
 use std::str::FromStr;
+use strum::{Display, EnumString};
 use tokio::fs;
 use tracing::error;
 use zbus::Connection;
@@ -32,21 +32,42 @@ const MIN_BUFFER_SIZE: u32 = 100;
 
 const WIFI_BACKEND_PATH: &str = "/etc/NetworkManager/conf.d/wifi_backend.conf";
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 #[repr(u32)]
 pub enum WifiDebugMode {
+    #[strum(
+        to_string = "off",
+        serialize = "disable",
+        serialize = "disabled",
+        serialize = "0"
+    )]
     Off = 0,
-    On = 1,
+    Tracing = 1,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[strum(ascii_case_insensitive)]
 #[repr(u32)]
 pub enum WifiPowerManagement {
+    #[strum(
+        to_string = "disabled",
+        serialize = "off",
+        serialize = "disable",
+        serialize = "0"
+    )]
     Disabled = 0,
+    #[strum(
+        to_string = "enabled",
+        serialize = "on",
+        serialize = "enable",
+        serialize = "1"
+    )]
     Enabled = 1,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 #[repr(u32)]
 pub enum WifiBackend {
     Iwd = 0,
@@ -58,28 +79,8 @@ impl TryFrom<u32> for WifiDebugMode {
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
-            x if x == WifiDebugMode::On as u32 => Ok(WifiDebugMode::On),
+            x if x == WifiDebugMode::Tracing as u32 => Ok(WifiDebugMode::Tracing),
             _ => Err("No enum match for value {v}"),
-        }
-    }
-}
-
-impl FromStr for WifiDebugMode {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<WifiDebugMode, Self::Err> {
-        Ok(match input.to_lowercase().as_str() {
-            "enable" | "enabled" | "on" | "1" => WifiDebugMode::On,
-            "disable" | "disabled" | "off" | "0" => WifiDebugMode::Off,
-            v => bail!("No enum match for value {v}"),
-        })
-    }
-}
-
-impl fmt::Display for WifiDebugMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WifiDebugMode::Off => write!(f, "Off"),
-            WifiDebugMode::On => write!(f, "On"),
         }
     }
 }
@@ -95,26 +96,6 @@ impl TryFrom<u32> for WifiPowerManagement {
     }
 }
 
-impl FromStr for WifiPowerManagement {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<WifiPowerManagement, Self::Err> {
-        Ok(match input.to_lowercase().as_str() {
-            "enable" | "enabled" | "on" | "1" => WifiPowerManagement::Enabled,
-            "disable" | "disabled" | "off" | "0" => WifiPowerManagement::Disabled,
-            v => bail!("No enum match for value {v}"),
-        })
-    }
-}
-
-impl fmt::Display for WifiPowerManagement {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WifiPowerManagement::Disabled => write!(f, "Disabled"),
-            WifiPowerManagement::Enabled => write!(f, "Enabled"),
-        }
-    }
-}
-
 impl TryFrom<u32> for WifiBackend {
     type Error = &'static str;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
@@ -122,26 +103,6 @@ impl TryFrom<u32> for WifiBackend {
             x if x == WifiBackend::Iwd as u32 => Ok(WifiBackend::Iwd),
             x if x == WifiBackend::WPASupplicant as u32 => Ok(WifiBackend::WPASupplicant),
             _ => Err("No enum match for WifiBackend value {v}"),
-        }
-    }
-}
-
-impl FromStr for WifiBackend {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<WifiBackend, Self::Err> {
-        Ok(match input {
-            "iwd" => WifiBackend::Iwd,
-            "wpa_supplicant" => WifiBackend::WPASupplicant,
-            _ => bail!("Unknown backend"),
-        })
-    }
-}
-
-impl fmt::Display for WifiBackend {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            WifiBackend::Iwd => write!(f, "iwd"),
-            WifiBackend::WPASupplicant => write!(f, "wpa_supplicant"),
         }
     }
 }
@@ -226,7 +187,7 @@ pub(crate) async fn set_wifi_debug_mode(
                 bail!("restart_iwd got an error: {message}");
             };
         }
-        WifiDebugMode::On => {
+        WifiDebugMode::Tracing => {
             ensure!(buffer_size > MIN_BUFFER_SIZE, "Buffer size too small");
 
             if let Err(message) = setup_iwd_config(true).await {
@@ -255,7 +216,7 @@ pub(crate) async fn get_wifi_backend() -> Result<WifiBackend> {
     for line in wifi_backend_contents.lines() {
         if line.starts_with("wifi.backend=") {
             let backend = line.trim_start_matches("wifi.backend=").trim();
-            return WifiBackend::from_str(backend);
+            return Ok(WifiBackend::from_str(backend)?);
         }
     }
 
@@ -384,11 +345,10 @@ mod test {
     fn wifi_debug_mode_roundtrip() {
         enum_roundtrip!(WifiDebugMode {
             0: u32 = Off,
-            1: u32 = On,
-            "Off": str = Off,
-            "On": str = On,
+            1: u32 = Tracing,
+            "off": str = Off,
+            "tracing": str = Tracing,
         });
-        enum_on_off!(WifiDebugMode => (On, Off));
         assert!(WifiDebugMode::try_from(2).is_err());
         assert!(WifiDebugMode::from_str("onf").is_err());
     }
@@ -398,8 +358,8 @@ mod test {
         enum_roundtrip!(WifiPowerManagement {
             0: u32 = Disabled,
             1: u32 = Enabled,
-            "Disabled": str = Disabled,
-            "Enabled": str = Enabled,
+            "disabled": str = Disabled,
+            "enabled": str = Enabled,
         });
         enum_on_off!(WifiPowerManagement => (Enabled, Disabled));
         assert!(WifiPowerManagement::try_from(2).is_err());
