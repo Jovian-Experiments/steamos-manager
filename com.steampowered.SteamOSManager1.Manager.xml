@@ -32,34 +32,13 @@
     <property name="Version" type="u" access="read"/>
 
     <!--
-        TdpLimit:
-
-        Controls the GPU TDP limit.
-
-        Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
-
-        Since: 7
-    -->
-    <property name="TdpLimit" type="u" access="readwrite"/>
-
-    <!--
         TdpLimitMin:
 
-        Minimum allowed TDP Limit.
+        This is a dummy function. Use the GpuTdpLimit1 interface instead.
 
         Since: 7
     -->
     <property name="TdpLimitMin" type="u" access="read"/>
-
-    <!--
-        TdpLimitMax:
-
-        Maximum allowed TDP Limit.
-
-        Since: 7
-    -->
-    <property name="TdpLimitMax" type="u" access="read"/>
-
 
     <!--
         WifiDebugModeState:

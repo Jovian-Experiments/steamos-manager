@@ -119,6 +119,10 @@ struct GpuPowerProfile1 {
     proxy: Proxy<'static>,
 }
 
+struct GpuTdpLimit1 {
+    proxy: Proxy<'static>,
+}
+
 struct HdmiCec1 {
     hdmi_cec: HdmiCecControl<'static>,
 }
@@ -169,29 +173,9 @@ impl SteamOSManager {
         API_VERSION
     }
 
-    #[zbus(property(emits_changed_signal = "false"))]
-    async fn tdp_limit(&self) -> fdo::Result<u32> {
-        get_tdp_limit().await.map_err(to_zbus_fdo_error)
-    }
-
-    #[zbus(property)]
-    async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetTdpLimit", &(limit))
-            .await
-            .map_err(to_zbus_error)
-    }
-
     #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_min(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        3
-    }
-
-    #[zbus(property(emits_changed_signal = "const"))]
-    async fn tdp_limit_max(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        15
+        0
     }
 
     #[zbus(property)]
@@ -386,6 +370,34 @@ impl GpuPowerProfile1 {
     }
 }
 
+#[interface(name = "com.steampowered.SteamOSManager1.GpuTdpLimit1")]
+impl GpuTdpLimit1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn tdp_limit(&self) -> fdo::Result<u32> {
+        get_tdp_limit().await.map_err(to_zbus_fdo_error)
+    }
+
+    #[zbus(property)]
+    async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
+        self.proxy
+            .call("SetTdpLimit", &(limit))
+            .await
+            .map_err(to_zbus_error)
+    }
+
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn tdp_limit_min(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        3
+    }
+
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn tdp_limit_max(&self) -> u32 {
+        // TODO: Can this be queried from somewhere?
+        15
+    }
+}
+
 impl HdmiCec1 {
     async fn new(connection: &Connection) -> Result<HdmiCec1> {
         let hdmi_cec = HdmiCecControl::new(connection).await?;
@@ -557,6 +569,9 @@ pub(crate) async fn create_interfaces(
     let gpu_power_profile = GpuPowerProfile1 {
         proxy: proxy.clone(),
     };
+    let gpu_tdp_limit = GpuTdpLimit1 {
+        proxy: proxy.clone(),
+    };
     let hdmi_cec = HdmiCec1::new(&session).await?;
     let manager2 = Manager2 {
         proxy: proxy.clone(),
@@ -591,6 +606,7 @@ pub(crate) async fn create_interfaces(
         .at(MANAGER_PATH, gpu_performance_level)
         .await?;
     object_server.at(MANAGER_PATH, gpu_power_profile).await?;
+    object_server.at(MANAGER_PATH, gpu_tdp_limit).await?;
     object_server.at(MANAGER_PATH, hdmi_cec).await?;
     object_server.at(MANAGER_PATH, manager2).await?;
     object_server.at(MANAGER_PATH, storage).await?;
@@ -720,6 +736,15 @@ mod test {
         let test = start().await.expect("start");
 
         assert!(test_interface_matches::<GpuPowerProfile1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_gpu_tdp_limit1() {
+        let test = start().await.expect("start");
+
+        assert!(test_interface_matches::<GpuTdpLimit1>(&test.connection)
             .await
             .unwrap());
     }

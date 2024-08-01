@@ -22,16 +22,6 @@ trait Manager {
     /// SetWifiDebugMode method
     fn set_wifi_debug_mode(&self, mode: u32, buffer_size: u32) -> zbus::Result<()>;
 
-    /// TdpLimit property
-    #[zbus(property)]
-    fn tdp_limit(&self) -> zbus::Result<u32>;
-    #[zbus(property)]
-    fn set_tdp_limit(&self, value: u32) -> zbus::Result<()>;
-
-    /// TdpLimitMax property
-    #[zbus(property)]
-    fn tdp_limit_max(&self) -> zbus::Result<u32>;
-
     /// TdpLimitMin property
     #[zbus(property)]
     fn tdp_limit_min(&self) -> zbus::Result<u32>;
