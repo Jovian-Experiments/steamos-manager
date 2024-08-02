@@ -4,17 +4,23 @@ use nix::sys::signal;
 use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
+use std::iter::zip;
 use std::path::Path;
 use std::process::Stdio;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Duration;
 use tempfile::{tempdir, TempDir};
+use tokio::fs::read;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
-use zbus::{Address, Connection, ConnectionBuilder};
+use tracing::error;
+use zbus::zvariant::ObjectPath;
+use zbus::{Address, Connection, ConnectionBuilder, Interface};
+use zbus_xml::{Method, Node, Property};
 
 thread_local! {
     static TEST: RefCell<Option<Rc<Test>>> = RefCell::new(None);
@@ -172,5 +178,172 @@ impl TestHandle {
 impl Drop for TestHandle {
     fn drop(&mut self) {
         stop();
+    }
+}
+
+pub struct InterfaceIntrospection<'a> {
+    interface: zbus_xml::Interface<'a>,
+}
+
+impl<'a> InterfaceIntrospection<'a> {
+    pub async fn from_remote<'p, I, P>(connection: &Connection, path: P) -> Result<Self>
+    where
+        I: Interface,
+        P: TryInto<ObjectPath<'p>>,
+        P::Error: Into<zbus::Error>,
+    {
+        let iface_ref = connection.object_server().interface::<_, I>(path).await?;
+        let iface = iface_ref.get().await;
+        let mut remote_interface_string = String::from(
+            "<node name=\"/\" xmlns:doc=\"http://www.freedesktop.org/dbus/1.0/doc.dtd\">",
+        );
+        iface.introspect_to_writer(&mut remote_interface_string, 0);
+        remote_interface_string.push_str("</node>");
+        Self::from_xml(remote_interface_string.as_bytes(), I::name().to_string())
+    }
+
+    pub async fn from_local<'p, P: AsRef<Path>, S: AsRef<str>>(
+        path: P,
+        interface: S,
+    ) -> Result<Self> {
+        let local_interface_string = read(path.as_ref()).await?;
+        Self::from_xml(local_interface_string.as_ref(), interface)
+    }
+
+    fn from_xml<S: AsRef<str>>(xml: &[u8], iface_name: S) -> Result<Self> {
+        let node = Node::from_reader(xml)?;
+        let interfaces = node.interfaces();
+        let mut interface = None;
+        for iface in interfaces {
+            if iface.name() == iface_name.as_ref() {
+                interface = Some(iface.clone());
+                break;
+            }
+        }
+        Ok(if let Some(interface) = interface {
+            InterfaceIntrospection { interface }
+        } else {
+            bail!("No interface found");
+        })
+    }
+
+    fn collect_methods(&self) -> HashMap<String, &Method<'_>> {
+        let mut map = HashMap::new();
+        for method in self.interface.methods().iter() {
+            map.insert(method.name().to_string(), method);
+        }
+        map
+    }
+
+    fn collect_properties(&self) -> HashMap<String, &Property<'_>> {
+        let mut map = HashMap::new();
+        for prop in self.interface.properties().iter() {
+            map.insert(prop.name().to_string(), prop);
+        }
+        map
+    }
+
+    fn compare_methods(&self, other: &InterfaceIntrospection<'_>) -> u32 {
+        let local_methods = self.collect_methods();
+        let local_method_names: HashSet<&String> = local_methods.keys().collect();
+        let other_methods = other.collect_methods();
+        let other_method_names: HashSet<&String> = other_methods.keys().collect();
+
+        let mut issues = 0;
+
+        for key in local_method_names.union(&other_method_names) {
+            let local_method = match local_methods.get(*key) {
+                None => {
+                    error!("Method {key} missing on self");
+                    issues += 1;
+                    continue;
+                }
+                Some(method) => method,
+            };
+
+            let other_method = match other_methods.get(*key) {
+                None => {
+                    error!("Method {key} missing on other");
+                    issues += 1;
+                    continue;
+                }
+                Some(method) => method,
+            };
+
+            if local_method.args().len() != other_method.args().len() {
+                error!("Different arguments between {local_method:?} and {other_method:?}");
+                issues += 1;
+                continue;
+            }
+
+            for (local_arg, other_arg) in
+                zip(local_method.args().iter(), other_method.args().iter())
+            {
+                if local_arg.direction() != other_arg.direction() {
+                    error!("Arguments {local_arg:?} and {other_arg:?} differ in direction");
+                    issues += 1;
+                    continue;
+                }
+                if local_arg.ty() != other_arg.ty() {
+                    error!("Arguments {local_arg:?} and {other_arg:?} differ in type");
+                    issues += 1;
+                    continue;
+                }
+            }
+        }
+
+        issues
+    }
+
+    fn compare_properties(&self, other: &InterfaceIntrospection<'_>) -> u32 {
+        let local_properties = self.collect_properties();
+        let local_property_names: HashSet<&String> = local_properties.keys().collect();
+
+        let other_properties = other.collect_properties();
+        let other_property_names: HashSet<&String> = other_properties.keys().collect();
+
+        let mut issues = 0;
+
+        for key in local_property_names.union(&other_property_names) {
+            let local_property = match local_properties.get(*key) {
+                None => {
+                    error!("Property {key} missing on self");
+                    issues += 1;
+                    continue;
+                }
+                Some(prop) => prop,
+            };
+
+            let other_property = match other_properties.get(*key) {
+                None => {
+                    error!("Property {key} missing on other");
+                    issues += 1;
+                    continue;
+                }
+                Some(prop) => prop,
+            };
+
+            if local_property.ty() != other_property.ty() {
+                error!("Properties {local_property:?} and {other_property:?} differ in type");
+                issues += 1;
+                continue;
+            }
+
+            if local_property.access() != other_property.access() {
+                error!("Properties {local_property:?} and {other_property:?} differ in access");
+                issues += 1;
+                continue;
+            }
+        }
+
+        issues
+    }
+
+    pub fn compare(&self, other: &InterfaceIntrospection<'_>) -> bool {
+        let mut issues = 0;
+        issues += self.compare_methods(other);
+        issues += self.compare_properties(other);
+
+        issues == 0
     }
 }
