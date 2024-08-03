@@ -16,8 +16,8 @@ use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerPr
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
     GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, GpuTdpLimit1Proxy, HdmiCec1Proxy,
-    Manager2Proxy, ManagerProxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy,
-    WifiDebug1Proxy, WifiPowerManagement1Proxy,
+    Manager2Proxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy,
+    WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::PropertiesProxy;
@@ -114,9 +114,6 @@ enum Commands {
     /// Get the minimum allowed TDP limit
     GetTDPLimitMin,
 
-    /// Get the current API version
-    GetVersion,
-
     /// Set the wifi backend if possible
     SetWifiBackend {
         /// Supported backends are iwd, wpa_supplicant
@@ -177,7 +174,6 @@ async fn main() -> Result<()> {
 
     // Then get a connection to the service
     let conn = Connection::session().await?;
-    let proxy = ManagerProxy::builder(&conn).build().await?;
 
     // Then process arguments
     match &args.command {
@@ -207,10 +203,6 @@ async fn main() -> Result<()> {
             let proxy = Manager2Proxy::new(&conn).await?;
             let supported = proxy.hardware_currently_supported().await?;
             println!("Hardware currently supported: {supported}");
-        }
-        Commands::GetVersion => {
-            let version = proxy.version().await?;
-            println!("Version: {version}");
         }
         Commands::SetFanControlState { state } => {
             let proxy = FanControl1Proxy::new(&conn).await?;
