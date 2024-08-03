@@ -676,7 +676,9 @@ CCLK_RANGE in Core0:
 
         assert!(get_gpu_clocks_range().await.is_err());
 
-        write(filename.as_path(), &[] as &[u8; 0]).await.expect("write");
+        write(filename.as_path(), &[] as &[u8; 0])
+            .await
+            .expect("write");
         assert!(get_gpu_clocks_range().await.is_err());
 
         let contents = "0: 200Mhz *

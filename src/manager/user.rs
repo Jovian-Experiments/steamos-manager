@@ -22,8 +22,9 @@ use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
 use crate::hardware::check_support;
 use crate::job::JobManagerCommand;
 use crate::power::{
-    get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks, get_gpu_clocks_range,
-    get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles, get_tdp_limit,
+    get_available_cpu_scaling_governors, get_cpu_scaling_governor, get_gpu_clocks,
+    get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_gpu_power_profiles,
+    get_tdp_limit,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
 use crate::API_VERSION;
