@@ -5,7 +5,6 @@ edition = "2021"
 
 [dev-dependencies]
 tempfile = "3"
-zbus_xml = "4"
 
 [profile.release]
 strip="symbols"
