@@ -8,14 +8,20 @@
 use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 #[cfg(not(test))]
+use std::process::Stdio;
+#[cfg(not(test))]
 use tokio::process::Command;
 
 #[cfg(not(test))]
 pub async fn script_exit_code(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<i32> {
     // Run given script and return the exit code
-    let mut child = Command::new(executable).args(args).spawn()?;
-    let status = child.wait().await?;
-    status.code().ok_or(anyhow!("Killed by signal"))
+    let output = Command::new(executable)
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .await?;
+    output.status.code().ok_or(anyhow!("Killed by signal"))
 }
 
 #[cfg(test)]
