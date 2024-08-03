@@ -9,6 +9,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::ops::Deref;
 use steamos_manager::cec::HdmiCecState;
 use steamos_manager::hardware::FanControlState;
@@ -20,9 +21,9 @@ use steamos_manager::proxy::{
     WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
-use zbus::fdo::PropertiesProxy;
-use zbus::names::InterfaceName;
+use zbus::fdo::{IntrospectableProxy, PropertiesProxy};
 use zbus::{zvariant, Connection};
+use zbus_xml::Node;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -178,16 +179,38 @@ async fn main() -> Result<()> {
     // Then process arguments
     match &args.command {
         Commands::GetAllProperties => {
+            let proxy = IntrospectableProxy::builder(&conn)
+                .destination("com.steampowered.SteamOSManager1")?
+                .path("/com/steampowered/SteamOSManager1")?
+                .build()
+                .await?;
+            let introspection = proxy.introspect().await?;
+            let introspection = Node::from_reader(Cursor::new(introspection))?;
+
             let properties_proxy = PropertiesProxy::new(
                 &conn,
                 "com.steampowered.SteamOSManager1",
                 "/com/steampowered/SteamOSManager1",
             )
             .await?;
-            let name = InterfaceName::try_from("com.steampowered.SteamOSManager1.Manager")?;
-            let properties = properties_proxy
-                .get_all(zvariant::Optional::from(Some(name)))
-                .await?;
+
+            let mut properties = HashMap::new();
+            for interface in introspection.interfaces() {
+                let name = match interface.name() {
+                    name if name
+                        .as_str()
+                        .starts_with("com.steampowered.SteamOSManager1") =>
+                    {
+                        name
+                    }
+                    _ => continue,
+                };
+                properties.extend(
+                    properties_proxy
+                        .get_all(zvariant::Optional::from(Some(name)))
+                        .await?,
+                );
+            }
             for key in properties.keys().sorted() {
                 let value = &properties[key];
                 let val = value.deref();
