@@ -416,19 +416,18 @@ pub(crate) mod test {
     use anyhow::anyhow;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
 
-    pub async fn setup() {
+    pub async fn setup() -> Result<()> {
         // Use hwmon5 just as a test. We needed a subfolder of GPU_HWMON_PREFIX
         // and this is as good as any.
         let base = path(GPU_HWMON_PREFIX).join("hwmon5");
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         // Creates hwmon path, including device subpath
         create_dir_all(filename.parent().unwrap())
-            .await
-            .expect("create_dir_all");
+            .await?;
         // Writes name file as addgpu so find_hwmon() will find it.
         write_synced(base.join("name"), GPU_HWMON_NAME.as_bytes())
-            .await
-            .expect("write_synced");
+            .await?;
+        Ok(())
     }
 
     pub async fn write_clocks(mhz: u32) {
@@ -466,7 +465,7 @@ CCLK_RANGE in Core0:
     async fn test_get_gpu_performance_level() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         assert!(get_gpu_performance_level().await.is_err());
@@ -511,7 +510,7 @@ CCLK_RANGE in Core0:
     async fn test_set_gpu_performance_level() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
 
@@ -556,7 +555,7 @@ CCLK_RANGE in Core0:
     async fn test_get_tdp_limit() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let hwmon = path(GPU_HWMON_PREFIX);
 
         assert!(get_tdp_limit().await.is_err());
@@ -587,7 +586,7 @@ CCLK_RANGE in Core0:
             anyhow!("No such file or directory (os error 2)").to_string()
         );
 
-        setup().await;
+        setup().await.expect("setup");
         let hwmon = hwmon.join("hwmon5");
         create_dir_all(hwmon.join(TDP_LIMIT1))
             .await
@@ -630,7 +629,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         assert!(get_gpu_clocks().await.is_err());
-        setup().await;
+        setup().await.expect("setup");
 
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_CLOCKS_SUFFIX);
@@ -650,7 +649,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         assert!(set_gpu_clocks(1600).await.is_err());
-        setup().await;
+        setup().await.expect("setup");
 
         assert!(set_gpu_clocks(200).await.is_ok());
 
@@ -664,7 +663,7 @@ CCLK_RANGE in Core0:
     async fn test_get_gpu_clocks_range() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_CLOCK_LEVELS_SUFFIX);
         create_dir_all(filename.parent().unwrap())
@@ -744,7 +743,7 @@ CCLK_RANGE in Core0:
     async fn read_power_profiles() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
@@ -800,7 +799,7 @@ CCLK_RANGE in Core0:
     async fn read_unknown_power_profiles() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
@@ -858,7 +857,7 @@ CCLK_RANGE in Core0:
     async fn read_power_profile() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
@@ -896,7 +895,7 @@ CCLK_RANGE in Core0:
     async fn read_no_power_profile() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
@@ -928,7 +927,7 @@ CCLK_RANGE in Core0:
     async fn read_unknown_power_profile() {
         let _h = testing::start();
 
-        setup().await;
+        setup().await.expect("setup");
         let base = find_hwmon().await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())

@@ -454,7 +454,7 @@ mod test {
     #[tokio::test]
     async fn gpu_performance_level() {
         let test = start().await.expect("start");
-        power::test::setup().await;
+        power::test::setup().await.expect("setup");
 
         let name = test.connection.unique_name().unwrap();
         let proxy = GpuPerformanceLevelProxy::new(&test.connection, name.clone())
@@ -489,7 +489,7 @@ mod test {
             .await
             .unwrap();
 
-        power::test::setup().await;
+        power::test::setup().await.expect("setup");
         proxy.set_manual_gpu_clock(200).await.expect("proxy_set");
         assert_eq!(read_clocks().await.unwrap(), format_clocks(200));
 

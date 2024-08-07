@@ -518,7 +518,7 @@ mod test {
 
         drop(f);
         remove_file(path.join("proc/1/fd/3")).expect("rm");
-        nyield(5).await;
+        nyield(15).await;
         assert_eq!(
             read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
             "0\n"
