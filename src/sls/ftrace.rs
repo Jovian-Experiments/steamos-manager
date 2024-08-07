@@ -3,7 +3,7 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use tokio::fs;
+use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::unix::pipe;
 use tracing::{error, info};
@@ -32,10 +32,28 @@ where
     proxy: TraceHelperProxy<'static>,
 }
 
-async fn setup_traces(path: &Path) -> Result<()> {
-    fs::write(path.join("events/oom/mark_victim/enable"), "1").await?;
-    fs::write(path.join("set_ftrace_filter"), "split_lock_warn").await?;
-    fs::write(path.join("current_tracer"), "function").await?;
+async fn setup_traces(base: &Path) -> Result<()> {
+    fs::write(base.join("events/oom/mark_victim/enable"), "1").await?;
+
+    let file = File::open(path("/proc/cpuinfo")).await?;
+    let mut reader = BufReader::new(file);
+    loop {
+        let mut string = String::new();
+        if reader.read_line(&mut string).await? == 0 {
+            break;
+        }
+        if !string.starts_with("flags") {
+            continue;
+        }
+        if let Some((_, rest)) = string.split_once(":") {
+            let mut flags = rest.split_whitespace();
+            if flags.find(|flag| *flag == "split_lock_detect").is_some() {
+                fs::write(base.join("set_ftrace_filter"), "split_lock_warn").await?;
+                fs::write(base.join("current_tracer"), "function").await?;
+                break;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -116,7 +134,7 @@ mod test {
     use crate::testing;
     use nix::sys::stat::Mode;
     use nix::unistd;
-    use tokio::fs::{create_dir_all, read_to_string, write};
+    use tokio::fs::{create_dir_all, read_to_string, try_exists, write};
     use tokio::sync::mpsc::{error, unbounded_channel, UnboundedSender};
     use zbus::fdo;
 
@@ -204,6 +222,8 @@ mod test {
 
         let tracefs = Ftrace::base();
 
+        create_dir_all(path("proc")).await.expect("create_dir_all");
+        write(path("proc/cpuinfo"), &[]).await.expect("write");
         create_dir_all(tracefs.join("events/oom/mark_victim"))
             .await
             .expect("create_dir_all");
@@ -220,6 +240,49 @@ mod test {
                 .await
                 .unwrap(),
             "1"
+        );
+        assert!(!try_exists(tracefs.join("set_ftrace_filter")).await.unwrap());
+        assert!(!try_exists(tracefs.join("current_tracer")).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn ftrace_init_split_lock() {
+        let mut h = testing::start();
+
+        let tracefs = Ftrace::base();
+
+        create_dir_all(path("proc")).await.expect("create_dir_all");
+        write(path("proc/cpuinfo"), "flags           : split_lock_detect")
+            .await
+            .expect("write");
+        create_dir_all(tracefs.join("events/oom/mark_victim"))
+            .await
+            .expect("create_dir_all");
+        unistd::mkfifo(
+            tracefs.join("trace_pipe").as_path(),
+            Mode::S_IRUSR | Mode::S_IWUSR,
+        )
+        .expect("trace_pipe");
+        let dbus = h.new_dbus().await.expect("dbus");
+        let _ftrace = Ftrace::init(dbus).await.expect("ftrace");
+
+        assert_eq!(
+            read_to_string(tracefs.join("events/oom/mark_victim/enable"))
+                .await
+                .unwrap(),
+            "1"
+        );
+        assert_eq!(
+            read_to_string(tracefs.join("set_ftrace_filter"))
+                .await
+                .unwrap(),
+            "split_lock_warn"
+        );
+        assert_eq!(
+            read_to_string(tracefs.join("current_tracer"))
+                .await
+                .unwrap(),
+            "function"
         );
     }
 
@@ -238,6 +301,10 @@ mod test {
         )
         .expect("trace_pipe");
 
+        create_dir_all(path("proc")).await.expect("create_dir_all");
+        write(path("proc/cpuinfo"), &[])
+            .await
+            .expect("write cpuinfo");
         create_dir_all(path("/proc/14351"))
             .await
             .expect("create_dir_all");
