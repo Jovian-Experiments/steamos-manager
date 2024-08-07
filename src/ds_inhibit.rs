@@ -220,7 +220,7 @@ impl Inhibitor {
         }
         info!("Adding {} to watchlist", path.display());
         let watch = self.inotify.watches().add(
-            &node.hidraw(),
+            node.hidraw(),
             WatchMask::DELETE_SELF
                 | WatchMask::OPEN
                 | WatchMask::CLOSE_NOWRITE

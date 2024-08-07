@@ -47,7 +47,7 @@ async fn setup_traces(base: &Path) -> Result<()> {
         }
         if let Some((_, rest)) = string.split_once(":") {
             let mut flags = rest.split_whitespace();
-            if flags.find(|flag| *flag == "split_lock_detect").is_some() {
+            if flags.any(|flag| flag == "split_lock_detect") {
                 fs::write(base.join("set_ftrace_filter"), "split_lock_warn").await?;
                 fs::write(base.join("current_tracer"), "function").await?;
                 break;
