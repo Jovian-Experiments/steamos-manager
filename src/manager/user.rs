@@ -587,11 +587,29 @@ pub(crate) async fn create_interfaces(
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
     object_server.at(MANAGER_PATH, factory_reset).await?;
     object_server.at(MANAGER_PATH, fan_control).await?;
-    object_server
-        .at(MANAGER_PATH, gpu_performance_level)
-        .await?;
-    object_server.at(MANAGER_PATH, gpu_power_profile).await?;
-    object_server.at(MANAGER_PATH, gpu_tdp_limit).await?;
+
+    if !get_available_gpu_performance_levels()
+        .await
+        .unwrap_or_default()
+        .is_empty()
+    {
+        object_server
+            .at(MANAGER_PATH, gpu_performance_level)
+            .await?;
+    }
+
+    if !get_available_gpu_power_profiles()
+        .await
+        .unwrap_or_default()
+        .is_empty()
+    {
+        object_server.at(MANAGER_PATH, gpu_power_profile).await?;
+    }
+
+    if get_tdp_limit().await.is_ok() {
+        object_server.at(MANAGER_PATH, gpu_tdp_limit).await?;
+    }
+
     object_server.at(MANAGER_PATH, hdmi_cec).await?;
     object_server.at(MANAGER_PATH, manager2).await?;
     object_server.at(MANAGER_PATH, storage).await?;
@@ -612,7 +630,7 @@ mod test {
     use crate::daemon::user::UserContext;
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
-    use crate::testing;
+    use crate::{power, testing};
 
     use std::time::Duration;
     use tokio::sync::mpsc::unbounded_channel;
@@ -630,6 +648,7 @@ mod test {
         let (tx_job, _rx_job) = unbounded_channel::<JobManagerCommand>();
         let connection = handle.new_dbus().await?;
         fake_model(HardwareVariant::Jupiter).await?;
+        power::test::create_nodes().await?;
         create_interfaces(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
 
         sleep(Duration::from_millis(1)).await;

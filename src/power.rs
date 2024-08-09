@@ -422,11 +422,32 @@ pub(crate) mod test {
         let base = path(GPU_HWMON_PREFIX).join("hwmon5");
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         // Creates hwmon path, including device subpath
-        create_dir_all(filename.parent().unwrap())
-            .await?;
+        create_dir_all(filename.parent().unwrap()).await?;
         // Writes name file as addgpu so find_hwmon() will find it.
-        write_synced(base.join("name"), GPU_HWMON_NAME.as_bytes())
-            .await?;
+        write_synced(base.join("name"), GPU_HWMON_NAME.as_bytes()).await?;
+        Ok(())
+    }
+
+    pub async fn create_nodes() -> Result<()> {
+        setup().await?;
+        let base = find_hwmon().await?;
+
+        let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
+        write(filename.as_path(), "auto\n").await?;
+
+        let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
+        let contents = " 1 3D_FULL_SCREEN
+ 3          VIDEO*
+ 4             VR
+ 5        COMPUTE
+ 6         CUSTOM
+ 8         CAPPED
+ 9       UNCAPPED";
+        write(filename.as_path(), contents).await?;
+
+        let filename = base.join(TDP_LIMIT1);
+        write(filename.as_path(), "15000000\n").await?;
+
         Ok(())
     }
 
