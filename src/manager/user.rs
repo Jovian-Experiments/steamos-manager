@@ -206,9 +206,7 @@ impl SteamOSManager {
 
     #[zbus(property)]
     async fn set_wifi_backend(&self, backend: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetWifiBackend", &(backend))
-            .await
+        self.proxy.call("SetWifiBackend", &(backend)).await
     }
 }
 
@@ -256,9 +254,7 @@ impl CpuScaling1 {
 
     #[zbus(property)]
     async fn set_cpu_scaling_governor(&self, governor: String) -> zbus::Result<()> {
-        self.proxy
-            .call("SetCpuScalingGovernor", &(governor))
-            .await
+        self.proxy.call("SetCpuScalingGovernor", &(governor)).await
     }
 }
 
@@ -306,9 +302,7 @@ impl GpuPerformanceLevel1 {
 
     #[zbus(property)]
     async fn set_gpu_performance_level(&self, level: &str) -> zbus::Result<()> {
-        self.proxy
-            .call("SetGpuPerformanceLevel", &(level))
-            .await
+        self.proxy.call("SetGpuPerformanceLevel", &(level)).await
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -321,9 +315,7 @@ impl GpuPerformanceLevel1 {
 
     #[zbus(property)]
     async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetManualGpuClock", &(clocks))
-            .await
+        self.proxy.call("SetManualGpuClock", &(clocks)).await
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
@@ -362,9 +354,7 @@ impl GpuPowerProfile1 {
 
     #[zbus(property)]
     async fn set_gpu_power_profile(&self, profile: &str) -> zbus::Result<()> {
-        self.proxy
-            .call("SetGpuPowerProfile", &(profile))
-            .await
+        self.proxy.call("SetGpuPowerProfile", &(profile)).await
     }
 }
 
@@ -377,9 +367,7 @@ impl GpuTdpLimit1 {
 
     #[zbus(property)]
     async fn set_tdp_limit(&self, limit: u32) -> zbus::Result<()> {
-        self.proxy
-            .call("SetTdpLimit", &(limit))
-            .await
+        self.proxy.call("SetTdpLimit", &(limit)).await
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
@@ -506,9 +494,7 @@ impl WifiDebug1 {
 
     #[zbus(property)]
     async fn set_wifi_backend(&self, backend: &str) -> zbus::Result<()> {
-        self.proxy
-            .call("SetWifiBackend", &(backend))
-            .await
+        self.proxy.call("SetWifiBackend", &(backend)).await
     }
 }
 
