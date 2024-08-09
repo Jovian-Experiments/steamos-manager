@@ -324,7 +324,10 @@ impl GpuPerformanceLevel1 {
 
     #[zbus(property)]
     async fn set_manual_gpu_clock(&self, clocks: u32) -> zbus::Result<()> {
-        setter!(self, "SetManualGpuClock", clocks)
+        self.proxy
+            .call("SetManualGpuClock", &(clocks))
+            .await
+            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
