@@ -21,13 +21,13 @@ pub enum HdmiCecState {
 }
 
 impl TryFrom<u32> for HdmiCecState {
-    type Error = &'static str;
+    type Error = String;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == HdmiCecState::Disabled as u32 => Ok(HdmiCecState::Disabled),
             x if x == HdmiCecState::ControlOnly as u32 => Ok(HdmiCecState::ControlOnly),
             x if x == HdmiCecState::ControlAndWake as u32 => Ok(HdmiCecState::ControlAndWake),
-            _ => Err("No enum match for value {v}"),
+            _ => Err(format!("No enum match for value {v}")),
         }
     }
 }

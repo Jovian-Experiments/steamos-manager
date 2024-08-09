@@ -75,34 +75,34 @@ pub enum WifiBackend {
 }
 
 impl TryFrom<u32> for WifiDebugMode {
-    type Error = &'static str;
+    type Error = String;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
             x if x == WifiDebugMode::Tracing as u32 => Ok(WifiDebugMode::Tracing),
-            _ => Err("No enum match for value {v}"),
+            _ => Err(format!("No enum match for value {v}")),
         }
     }
 }
 
 impl TryFrom<u32> for WifiPowerManagement {
-    type Error = &'static str;
+    type Error = String;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == WifiPowerManagement::Disabled as u32 => Ok(WifiPowerManagement::Disabled),
             x if x == WifiPowerManagement::Enabled as u32 => Ok(WifiPowerManagement::Enabled),
-            _ => Err("No enum match for value {v}"),
+            _ => Err(format!("No enum match for value {v}")),
         }
     }
 }
 
 impl TryFrom<u32> for WifiBackend {
-    type Error = &'static str;
+    type Error = String;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == WifiBackend::Iwd as u32 => Ok(WifiBackend::Iwd),
             x if x == WifiBackend::WPASupplicant as u32 => Ok(WifiBackend::WPASupplicant),
-            _ => Err("No enum match for WifiBackend value {v}"),
+            _ => Err(format!("No enum match for WifiBackend value {v}")),
         }
     }
 }
