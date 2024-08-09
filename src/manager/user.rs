@@ -209,7 +209,6 @@ impl SteamOSManager {
         self.proxy
             .call("SetWifiBackend", &(backend))
             .await
-            .map_err(to_zbus_error)
     }
 }
 
@@ -260,7 +259,6 @@ impl CpuScaling1 {
         self.proxy
             .call("SetCpuScalingGovernor", &(governor))
             .await
-            .map_err(to_zbus_error)
     }
 }
 
@@ -311,7 +309,6 @@ impl GpuPerformanceLevel1 {
         self.proxy
             .call("SetGpuPerformanceLevel", &(level))
             .await
-            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
@@ -327,7 +324,6 @@ impl GpuPerformanceLevel1 {
         self.proxy
             .call("SetManualGpuClock", &(clocks))
             .await
-            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
@@ -369,7 +365,6 @@ impl GpuPowerProfile1 {
         self.proxy
             .call("SetGpuPowerProfile", &(profile))
             .await
-            .map_err(to_zbus_error)
     }
 }
 
@@ -385,7 +380,6 @@ impl GpuTdpLimit1 {
         self.proxy
             .call("SetTdpLimit", &(limit))
             .await
-            .map_err(to_zbus_error)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
@@ -515,7 +509,6 @@ impl WifiDebug1 {
         self.proxy
             .call("SetWifiBackend", &(backend))
             .await
-            .map_err(to_zbus_error)
     }
 }
 
@@ -534,7 +527,6 @@ impl WifiPowerManagement1 {
         self.proxy
             .call("SetWifiPowerManagementState", &(state))
             .await
-            .map_err(to_zbus_error)
     }
 }
 
