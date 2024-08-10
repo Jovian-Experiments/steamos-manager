@@ -227,16 +227,32 @@ pub(crate) async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
     run_script("/usr/bin/steamos-wifi-set-backend", &[backend.to_string()]).await
 }
 
+pub(crate) async fn list_wifi_interfaces() -> Result<Vec<String>> {
+    let output = script_output("/usr/bin/iw", &["dev"]).await?;
+    Ok(output
+        .lines()
+        .filter_map(|line| match line.trim().split_once(' ') {
+            Some(("Interface", name)) => Some(name.to_string()),
+            _ => None,
+        })
+        .collect())
+}
+
 pub(crate) async fn get_wifi_power_management_state() -> Result<WifiPowerManagement> {
-    let output = script_output("/usr/bin/iwconfig", &["wlan0"]).await?;
-    for line in output.lines() {
-        return Ok(match line.trim() {
-            "Power Management:on" => WifiPowerManagement::Enabled,
-            "Power Management:off" => WifiPowerManagement::Disabled,
-            _ => continue,
-        });
+    let mut found_any = false;
+    for iface in list_wifi_interfaces().await? {
+        let output =
+            script_output("/usr/bin/iw", &["dev", iface.as_str(), "get", "power_save"]).await?;
+        for line in output.lines() {
+            match line.trim() {
+                "Power save: on" => return Ok(WifiPowerManagement::Enabled),
+                "Power save: off" => found_any = true,
+                _ => continue,
+            }
+        }
     }
-    bail!("Failed to query power management state")
+    ensure!(found_any, "No interfaces found");
+    Ok(WifiPowerManagement::Disabled)
 }
 
 pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) -> Result<()> {
@@ -245,9 +261,15 @@ pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) 
         WifiPowerManagement::Enabled => "on",
     };
 
-    run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
+    for iface in list_wifi_interfaces().await? {
+        run_script(
+            "/usr/bin/iw",
+            &["dev", iface.as_str(), "set", "power_save", state],
+        )
         .await
-        .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
+        .inspect_err(|message| error!("Error setting wifi power management state: {message}"))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
