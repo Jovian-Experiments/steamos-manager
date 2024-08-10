@@ -165,7 +165,7 @@ pub(crate) async fn set_wifi_debug_mode(
 ) -> Result<()> {
     match get_wifi_backend().await {
         Ok(WifiBackend::Iwd) => (),
-        Ok(backend) => bail!("Setting wifi debug mode not supported when backend is {backend}"),
+        Ok(backend) => bail!("Setting Wi-Fi debug mode not supported with backend {backend}"),
         Err(e) => return Err(e),
     }
 
@@ -220,7 +220,7 @@ pub(crate) async fn get_wifi_backend() -> Result<WifiBackend> {
         }
     }
 
-    bail!("WiFi backend not found in config");
+    bail!("Wi-Fi backend not found in config");
 }
 
 pub(crate) async fn set_wifi_backend(backend: WifiBackend) -> Result<()> {
@@ -267,7 +267,7 @@ pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) 
             &["dev", iface.as_str(), "set", "power_save", state],
         )
         .await
-        .inspect_err(|message| error!("Error setting wifi power management state: {message}"))?;
+        .inspect_err(|message| error!("Error setting Wi-Fi power management state: {message}"))?;
     }
     Ok(())
 }
