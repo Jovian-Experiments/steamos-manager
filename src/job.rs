@@ -107,7 +107,7 @@ impl JobManager {
 
     pub async fn run_process(
         &mut self,
-        executable: &str,
+        executable: impl AsRef<OsStr>,
         args: &[impl AsRef<OsStr>],
         operation_name: &str,
     ) -> fdo::Result<zvariant::OwnedObjectPath> {
@@ -176,7 +176,7 @@ impl JobManagerInterface {
 }
 
 impl Job {
-    async fn spawn(executable: &str, args: &[impl AsRef<OsStr>]) -> Result<Job> {
+    async fn spawn(executable: impl AsRef<OsStr>, args: &[impl AsRef<OsStr>]) -> Result<Job> {
         let child = Command::new(executable).args(args).spawn()?;
         Ok(Job {
             process: child,
