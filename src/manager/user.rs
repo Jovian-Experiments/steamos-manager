@@ -19,7 +19,7 @@ use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::daemon::user::Command;
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
-use crate::hardware::{check_support, HardwareCurrentlySupported};
+use crate::hardware::{check_support, is_deck, HardwareCurrentlySupported};
 use crate::job::JobManagerCommand;
 use crate::power::{
     get_available_cpu_scaling_governors, get_available_gpu_performance_levels,
@@ -579,7 +579,11 @@ pub(crate) async fn create_interfaces(
 
     let object_server = session.object_server();
     object_server.at(MANAGER_PATH, manager).await?;
-    object_server.at(MANAGER_PATH, als).await?;
+
+    if is_deck().await? {
+        object_server.at(MANAGER_PATH, als).await?;
+    }
+
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
     object_server.at(MANAGER_PATH, factory_reset).await?;
     object_server.at(MANAGER_PATH, fan_control).await?;
@@ -606,6 +610,8 @@ mod test {
     use super::*;
     use crate::daemon::channel;
     use crate::daemon::user::UserContext;
+    use crate::hardware::test::fake_model;
+    use crate::hardware::HardwareVariant;
     use crate::testing;
 
     use std::time::Duration;
@@ -623,6 +629,7 @@ mod test {
         let (tx_ctx, _rx_ctx) = channel::<UserContext>();
         let (tx_job, _rx_job) = unbounded_channel::<JobManagerCommand>();
         let connection = handle.new_dbus().await?;
+        fake_model(HardwareVariant::Jupiter).await?;
         create_interfaces(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
 
         sleep(Duration::from_millis(1)).await;
