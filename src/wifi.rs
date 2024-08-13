@@ -21,7 +21,7 @@ ExecStart=
 ExecStart=/usr/lib/iwd/iwd -d
 ";
 const OVERRIDE_FOLDER: &str = "/etc/systemd/system/iwd.service.d";
-const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/override.conf";
+const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/99-valve-override.conf";
 
 // Only use one path for output for now. If needed we can add a timestamp later
 // to have multiple files, etc.
@@ -30,7 +30,7 @@ const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
 
 const MIN_BUFFER_SIZE: u32 = 100;
 
-const WIFI_BACKEND_PATH: &str = "/etc/NetworkManager/conf.d/wifi_backend.conf";
+const WIFI_BACKEND_PATH: &str = "/etc/NetworkManager/conf.d/99-valve-wifi-backend.conf";
 
 #[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
