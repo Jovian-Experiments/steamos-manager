@@ -347,7 +347,7 @@ mod test {
         write(crate::path("/sys/class/dmi/id/board_name"), "Jupiter\n").await?;
         create_dir_all(crate::path("/etc/NetworkManager/conf.d")).await?;
         write(
-            crate::path("/etc/NetworkManager/conf.d/wifi_backend.conf"),
+            crate::path("/etc/NetworkManager/conf.d/99-valve-wifi-backend.conf"),
             "wifi.backend=iwd\n",
         )
         .await?;
