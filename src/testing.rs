@@ -34,7 +34,7 @@ macro_rules! enum_roundtrip {
     };
     ($enum:ident => $value:literal : $ty:ty = $variant:ident) => {
         assert_eq!($enum::$variant as $ty, $value);
-        assert_eq!($enum::try_from($value), Ok($enum::$variant));
+        assert_eq!($enum::try_from($value).unwrap(), $enum::$variant);
     };
 
     ($enum:ident { $($value:literal : $ty:ident = $variant:ident,)+ }) => {

@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use std::fmt;
 use std::str::FromStr;
 use zbus::Connection;
@@ -21,13 +21,13 @@ pub enum HdmiCecState {
 }
 
 impl TryFrom<u32> for HdmiCecState {
-    type Error = String;
+    type Error = Error;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == HdmiCecState::Disabled as u32 => Ok(HdmiCecState::Disabled),
             x if x == HdmiCecState::ControlOnly as u32 => Ok(HdmiCecState::ControlOnly),
             x if x == HdmiCecState::ControlAndWake as u32 => Ok(HdmiCecState::ControlAndWake),
-            _ => Err(format!("No enum match for value {v}")),
+            _ => Err(anyhow!("No enum match for value {v}")),
         }
     }
 }

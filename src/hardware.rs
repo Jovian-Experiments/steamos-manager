@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
@@ -52,7 +52,7 @@ impl FromStr for HardwareVariant {
 }
 
 impl TryFrom<u32> for HardwareCurrentlySupported {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == HardwareCurrentlySupported::Unknown as u32 => {
@@ -64,7 +64,7 @@ impl TryFrom<u32> for HardwareCurrentlySupported {
             x if x == HardwareCurrentlySupported::Supported as u32 => {
                 Ok(HardwareCurrentlySupported::Supported)
             }
-            _ => Err(format!("No enum match for value {v}")),
+            _ => Err(anyhow!("No enum match for value {v}")),
         }
     }
 }
@@ -80,12 +80,12 @@ impl fmt::Display for HardwareCurrentlySupported {
 }
 
 impl TryFrom<u32> for FanControlState {
-    type Error = String;
+    type Error = Error;
     fn try_from(v: u32) -> Result<Self, Self::Error> {
         match v {
             x if x == FanControlState::Bios as u32 => Ok(FanControlState::Bios),
             x if x == FanControlState::Os as u32 => Ok(FanControlState::Os),
-            _ => Err(format!("No enum match for value {v}")),
+            _ => Err(anyhow!("No enum match for value {v}")),
         }
     }
 }
