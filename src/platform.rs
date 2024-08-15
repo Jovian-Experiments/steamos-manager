@@ -25,6 +25,7 @@ pub(crate) struct PlatformConfig {
     pub update_bios: Option<ScriptConfig>,
     pub update_dock: Option<ScriptConfig>,
     pub storage: Option<StorageConfig>,
+    pub fan_control: Option<ServiceConfig>,
 }
 
 #[derive(Clone, Default, Deserialize, Debug)]
@@ -32,6 +33,18 @@ pub(crate) struct ScriptConfig {
     pub script: PathBuf,
     #[serde(default)]
     pub script_args: Vec<String>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub(crate) enum ServiceConfig {
+    #[serde(rename = "systemd")]
+    Systemd(String),
+    #[serde(rename = "script")]
+    Script {
+        start: ScriptConfig,
+        stop: ScriptConfig,
+        status: ScriptConfig,
+    },
 }
 
 #[derive(Clone, Default, Deserialize, Debug)]

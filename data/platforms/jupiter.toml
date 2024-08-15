@@ -16,3 +16,6 @@ script = "/usr/lib/hwsupport/format-device.sh"
 label_flag = "--label"
 device_flag = "--device"
 no_validate_flag = "--skip-validation"
+
+[fan_control]
+systemd = "jupiter-fan-control.service"

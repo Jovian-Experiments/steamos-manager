@@ -5,14 +5,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{anyhow, bail, ensure, Error, Result};
 use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
 use zbus::Connection;
 
 use crate::path;
-use crate::process::script_exit_code;
+use crate::platform::{platform_config, ServiceConfig};
+use crate::process::{run_script, script_exit_code};
 use crate::systemd::SystemdUnit;
 
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
@@ -148,22 +149,57 @@ impl FanControl {
     }
 
     pub async fn get_state(&self) -> Result<FanControlState> {
-        let jupiter_fan_control =
-            SystemdUnit::new(self.connection.clone(), "jupiter-fan-control.service").await?;
-        let active = jupiter_fan_control.active().await?;
-        Ok(match active {
-            true => FanControlState::Os,
-            false => FanControlState::Bios,
-        })
+        let config = platform_config().await?;
+        match config
+            .as_ref()
+            .and_then(|config| config.fan_control.as_ref())
+        {
+            Some(ServiceConfig::Systemd(service)) => {
+                let jupiter_fan_control =
+                    SystemdUnit::new(self.connection.clone(), service).await?;
+                let active = jupiter_fan_control.active().await?;
+                Ok(match active {
+                    true => FanControlState::Os,
+                    false => FanControlState::Bios,
+                })
+            }
+            Some(ServiceConfig::Script {
+                start: _,
+                stop: _,
+                status,
+            }) => {
+                let res = script_exit_code(&status.script, &status.script_args).await?;
+                ensure!(res >= 0, "Script exited abnormally");
+                FanControlState::try_from(res as u32)
+            }
+            None => bail!("Fan control not configured"),
+        }
     }
 
     pub async fn set_state(&self, state: FanControlState) -> Result<()> {
         // Run what steamos-polkit-helpers/jupiter-fan-control does
-        let jupiter_fan_control =
-            SystemdUnit::new(self.connection.clone(), "jupiter-fan-control.service").await?;
-        match state {
-            FanControlState::Os => jupiter_fan_control.start().await,
-            FanControlState::Bios => jupiter_fan_control.stop().await,
+        let config = platform_config().await?;
+        match config
+            .as_ref()
+            .and_then(|config| config.fan_control.as_ref())
+        {
+            Some(ServiceConfig::Systemd(service)) => {
+                let jupiter_fan_control =
+                    SystemdUnit::new(self.connection.clone(), service).await?;
+                match state {
+                    FanControlState::Os => jupiter_fan_control.start().await,
+                    FanControlState::Bios => jupiter_fan_control.stop().await,
+                }
+            }
+            Some(ServiceConfig::Script {
+                start,
+                stop,
+                status: _,
+            }) => match state {
+                FanControlState::Os => run_script(&start.script, &start.script_args).await,
+                FanControlState::Bios => run_script(&stop.script, &stop.script_args).await,
+            },
+            None => bail!("Fan control not configured"),
         }
     }
 }
@@ -172,6 +208,7 @@ impl FanControl {
 pub mod test {
     use super::*;
     use crate::error::to_zbus_fdo_error;
+    use crate::platform::{PlatformConfig, ServiceConfig};
     use crate::{enum_roundtrip, testing};
     use std::time::Duration;
     use tokio::fs::{create_dir_all, write};
@@ -321,6 +358,16 @@ pub mod test {
             .expect("at");
 
         sleep(Duration::from_millis(10)).await;
+
+        h.test.platform_config.replace(Some(PlatformConfig {
+            factory_reset: None,
+            update_bios: None,
+            update_dock: None,
+            storage: None,
+            fan_control: Some(ServiceConfig::Systemd(String::from(
+                "jupiter-fan-control.service",
+            ))),
+        }));
 
         let fan_control = FanControl::new(connection);
         assert_eq!(

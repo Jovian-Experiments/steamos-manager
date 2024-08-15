@@ -582,7 +582,12 @@ pub(crate) async fn create_interfaces(
         object_server.at(MANAGER_PATH, factory_reset).await?;
     }
 
-    object_server.at(MANAGER_PATH, fan_control).await?;
+    if config
+        .as_ref()
+        .is_some_and(|config| config.fan_control.is_some())
+    {
+        object_server.at(MANAGER_PATH, fan_control).await?;
+    }
 
     if !get_available_gpu_performance_levels()
         .await
@@ -645,7 +650,7 @@ mod test {
     use crate::daemon::user::UserContext;
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
-    use crate::platform::{PlatformConfig, ScriptConfig, StorageConfig};
+    use crate::platform::{PlatformConfig, ScriptConfig, ServiceConfig, StorageConfig};
     use crate::{power, testing};
 
     use std::time::Duration;
@@ -664,6 +669,9 @@ mod test {
             update_bios: Some(ScriptConfig::default()),
             update_dock: Some(ScriptConfig::default()),
             storage: Some(StorageConfig::default()),
+            fan_control: Some(ServiceConfig::Systemd(String::from(
+                "jupiter-fan-control.service",
+            ))),
         })
     }
 
@@ -765,6 +773,13 @@ mod test {
         assert!(test_interface_matches::<FanControl1>(&test.connection)
             .await
             .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_missing_fan_control1() {
+        let test = start(None).await.expect("start");
+
+        assert!(test_interface_missing::<FanControl1>(&test.connection).await);
     }
 
     #[tokio::test]
