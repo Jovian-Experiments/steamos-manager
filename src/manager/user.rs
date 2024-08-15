@@ -611,7 +611,10 @@ pub(crate) async fn create_interfaces(
         object_server.at(MANAGER_PATH, gpu_tdp_limit).await?;
     }
 
-    object_server.at(MANAGER_PATH, hdmi_cec).await?;
+    if hdmi_cec.hdmi_cec.get_enabled_state().await.is_ok() {
+        object_server.at(MANAGER_PATH, hdmi_cec).await?;
+    }
+
     object_server.at(MANAGER_PATH, manager2).await?;
 
     if config
@@ -651,6 +654,7 @@ mod test {
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
     use crate::platform::{PlatformConfig, ScriptConfig, ServiceConfig, StorageConfig};
+    use crate::systemd::test::{MockManager, MockUnit};
     use crate::{power, testing};
 
     use std::time::Duration;
@@ -682,6 +686,23 @@ mod test {
 
         handle.test.platform_config.replace(platform_config);
         let connection = handle.new_dbus().await?;
+        connection.request_name("org.freedesktop.systemd1").await?;
+        {
+            let object_server = connection.object_server();
+            object_server
+                .at("/org/freedesktop/systemd1", MockManager::default())
+                .await?;
+
+            let mut prc = MockUnit::default();
+            prc.unit_file = String::from("disabled");
+            object_server
+                .at(
+                    "/org/freedesktop/systemd1/unit/plasma_2dremotecontrollers_2eservice",
+                    prc,
+                )
+                .await?;
+        }
+
         fake_model(HardwareVariant::Jupiter).await?;
         power::test::create_nodes().await?;
         create_interfaces(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;

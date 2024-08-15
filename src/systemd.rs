@@ -173,7 +173,7 @@ pub fn escape(name: &str) -> String {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use crate::error::to_zbus_fdo_error;
     use crate::{enum_roundtrip, testing};
@@ -201,14 +201,14 @@ mod test {
     }
 
     #[derive(Default)]
-    struct MockUnit {
-        active: String,
-        unit_file: String,
+    pub struct MockUnit {
+        pub active: String,
+        pub unit_file: String,
         job: u32,
     }
 
     #[derive(Default)]
-    struct MockManager {
+    pub struct MockManager {
         states: HashMap<String, EnableState>,
     }
 
