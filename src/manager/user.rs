@@ -28,7 +28,7 @@ use crate::power::{
     get_available_gpu_power_profiles, get_cpu_scaling_governor, get_gpu_clocks,
     get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_tdp_limit,
 };
-use crate::wifi::{get_wifi_backend, get_wifi_power_management_state};
+use crate::wifi::{get_wifi_backend, get_wifi_power_management_state, list_wifi_interfaces};
 use crate::API_VERSION;
 
 const MANAGER_PATH: &str = "/com/steampowered/SteamOSManager1";
@@ -644,9 +644,11 @@ pub(crate) async fn create_interfaces(
         object_server.at(MANAGER_PATH, wifi_debug).await?;
     }
 
-    object_server
-        .at(MANAGER_PATH, wifi_power_management)
-        .await?;
+    if !list_wifi_interfaces().await.unwrap_or_default().is_empty() {
+        object_server
+            .at(MANAGER_PATH, wifi_power_management)
+            .await?;
+    }
 
     Ok(())
 }
@@ -709,6 +711,10 @@ mod test {
         }
 
         fake_model(HardwareVariant::Galileo).await?;
+        handle
+            .test
+            .process_cb
+            .set(|_, _| Ok((0, String::from("Interface wlan0"))));
         power::test::create_nodes().await?;
         create_interfaces(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
 
