@@ -19,8 +19,9 @@ use crate::systemd::SystemdUnit;
 const BOARD_VENDOR_PATH: &str = "/sys/class/dmi/id/board_vendor";
 const BOARD_NAME_PATH: &str = "/sys/class/dmi/id/board_name";
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Default, Copy, Clone)]
 pub(crate) enum HardwareVariant {
+    #[default]
     Unknown,
     Jupiter,
     Galileo,

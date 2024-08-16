@@ -18,7 +18,9 @@ use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::daemon::user::Command;
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error, zbus_to_zbus_fdo};
-use crate::hardware::{check_support, is_deck, HardwareCurrentlySupported};
+use crate::hardware::{
+    check_support, is_deck, variant, HardwareCurrentlySupported, HardwareVariant,
+};
 use crate::job::JobManagerCommand;
 use crate::platform::platform_config;
 use crate::power::{
@@ -638,7 +640,10 @@ pub(crate) async fn create_interfaces(
         object_server.at(MANAGER_PATH, update_dock).await?;
     }
 
-    object_server.at(MANAGER_PATH, wifi_debug).await?;
+    if variant().await.unwrap_or_default() == HardwareVariant::Galileo {
+        object_server.at(MANAGER_PATH, wifi_debug).await?;
+    }
+
     object_server
         .at(MANAGER_PATH, wifi_power_management)
         .await?;
@@ -703,7 +708,7 @@ mod test {
                 .await?;
         }
 
-        fake_model(HardwareVariant::Jupiter).await?;
+        fake_model(HardwareVariant::Galileo).await?;
         power::test::create_nodes().await?;
         create_interfaces(connection.clone(), connection.clone(), tx_ctx, tx_job).await?;
 
