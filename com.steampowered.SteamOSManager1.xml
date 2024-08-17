@@ -25,7 +25,7 @@
 
         Note: Will be -1.0 if ALS calibration is unavailable.
     -->
-    <property name="AlsCalibrationGain" type="d" access="read"/>
+    <property name="AlsCalibrationGain" type="ad" access="read"/>
 
     <!--
         GetAlsIntegrationTimeFileDescriptor:
@@ -37,6 +37,7 @@
         occurred.
     -->
     <method name="GetAlsIntegrationTimeFileDescriptor">
+      <arg type="u" name="index" direction="in"/>
       <arg type="h" name="descriptor" direction="out"/>
     </method>
 

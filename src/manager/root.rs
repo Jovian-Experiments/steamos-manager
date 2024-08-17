@@ -31,7 +31,7 @@ use crate::wifi::{
     set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state, WifiBackend,
     WifiDebugMode, WifiPowerManagement,
 };
-use crate::API_VERSION;
+use crate::{path, API_VERSION};
 
 macro_rules! with_platform_config {
     ($config:ident = $field:ident ($name:literal) => $eval:expr) => {
@@ -83,8 +83,6 @@ impl SteamOSManager {
     }
 }
 
-const ALS_INTEGRATION_PATH: &str = "/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:01/iio:device0/in_illuminance_integration_time";
-
 #[interface(name = "com.steampowered.SteamOSManager1.RootManager")]
 impl SteamOSManager {
     async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
@@ -133,25 +131,44 @@ impl SteamOSManager {
     }
 
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn als_calibration_gain(&self) -> f64 {
+    async fn als_calibration_gain(&self) -> Vec<f64> {
         // Run script to get calibration value
-        let result = script_output(
-            "/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain",
-            &[] as &[String; 0],
-        )
-        .await;
-        match result {
-            Ok(as_string) => as_string.trim().parse().unwrap_or(-1.0),
-            Err(message) => {
-                error!("Unable to run als calibration script: {}", message);
-                -1.0
-            }
+        let mut gains = Vec::new();
+        let indices: &[&str] = match variant().await {
+            Ok(HardwareVariant::Jupiter) => &["2"],
+            Ok(HardwareVariant::Galileo) => &["2", "4"],
+            _ => return Vec::new(),
+        };
+        for index in indices {
+            let result = script_output(
+                "/usr/bin/steamos-polkit-helpers/jupiter-get-als-gain",
+                &["-s", index],
+            )
+            .await;
+            gains.push(match result {
+                Ok(as_string) => as_string.trim().parse().unwrap_or(-1.0),
+                Err(message) => {
+                    error!("Unable to run als calibration script: {}", message);
+                    -1.0
+                }
+            });
         }
+
+        gains
     }
 
-    async fn get_als_integration_time_file_descriptor(&self) -> fdo::Result<Fd> {
+    async fn get_als_integration_time_file_descriptor(&self, index: u32) -> fdo::Result<Fd> {
         // Get the file descriptor for the als integration time sysfs path
-        let result = File::create(ALS_INTEGRATION_PATH).await;
+        let i0 = match variant().await.map_err(to_zbus_fdo_error)? {
+            HardwareVariant::Jupiter => 1,
+            HardwareVariant::Galileo => index,
+            HardwareVariant::Unknown => {
+                return Err(fdo::Error::Failed(String::from("Unknown model")))
+            }
+        };
+        let als_path = path(format!("/sys/devices/platform/AMDI0010:00/i2c-0/i2c-PRP0001:0{i0}/iio:device{index}/in_illuminance_integration_time"));
+        let result = File::create(als_path).await;
+
         match result {
             Ok(f) => Ok(Fd::Owned(std::os::fd::OwnedFd::from(f.into_std().await))),
             Err(message) => {
@@ -370,6 +387,7 @@ mod test {
     use super::*;
     use crate::daemon::channel;
     use crate::daemon::root::RootContext;
+    use crate::hardware::test::fake_model;
     use crate::platform::{PlatformConfig, ScriptConfig};
     use crate::power::test::{format_clocks, read_clocks};
     use crate::power::{self, get_gpu_performance_level};
@@ -461,7 +479,7 @@ mod test {
     )]
     trait AlsCalibrationGain {
         #[zbus(property(emits_changed_signal = "false"))]
-        fn als_calibration_gain(&self) -> zbus::Result<f64>;
+        fn als_calibration_gain(&self) -> zbus::Result<Vec<f64>>;
     }
 
     #[tokio::test]
@@ -476,19 +494,37 @@ mod test {
             .test
             .process_cb
             .set(|_, _| Ok((0, String::from("0.0\n"))));
-        assert_eq!(proxy.als_calibration_gain().await.unwrap(), 0.0);
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), &[0.0]);
+
+        fake_model(HardwareVariant::Galileo)
+            .await
+            .expect("fake_model");
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), &[0.0, 0.0]);
+
+        fake_model(HardwareVariant::Unknown)
+            .await
+            .expect("fake_model");
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), &[]);
+
+        fake_model(HardwareVariant::Jupiter)
+            .await
+            .expect("fake_model");
 
         test.h
             .test
             .process_cb
             .set(|_, _| Ok((0, String::from("1.0\n"))));
-        assert_eq!(proxy.als_calibration_gain().await.unwrap(), 1.0);
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), &[1.0]);
 
         test.h
             .test
             .process_cb
             .set(|_, _| Ok((0, String::from("big\n"))));
-        assert_eq!(proxy.als_calibration_gain().await.unwrap(), -1.0);
+        assert_eq!(proxy.als_calibration_gain().await.unwrap(), &[-1.0]);
 
         test.connection.close().await.unwrap();
     }

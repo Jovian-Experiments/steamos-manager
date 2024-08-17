@@ -214,14 +214,14 @@ impl SteamOSManager {
 #[interface(name = "com.steampowered.SteamOSManager1.AmbientLightSensor1")]
 impl AmbientLightSensor1 {
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn als_calibration_gain(&self) -> fdo::Result<f64> {
+    async fn als_calibration_gain(&self) -> fdo::Result<Vec<f64>> {
         getter!(self, "AlsCalibrationGain")
     }
 
-    async fn get_als_integration_time_file_descriptor(&self) -> fdo::Result<Fd> {
+    async fn get_als_integration_time_file_descriptor(&self, index: u32) -> fdo::Result<Fd> {
         let m = self
             .proxy
-            .call_method::<&str, ()>("GetAlsIntegrationTimeFileDescriptor", &())
+            .call_method("GetAlsIntegrationTimeFileDescriptor", &(index))
             .await
             .map_err(zbus_to_zbus_fdo)?;
         match m.body().deserialize::<Fd>() {
