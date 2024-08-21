@@ -27,20 +27,6 @@
     -->
     <property name="AlsCalibrationGain" type="ad" access="read"/>
 
-    <!--
-        GetAlsIntegrationTimeFileDescriptor:
-
-        Get the ALS integration time file descriptor.
-
-        @descriptor: A file descriptor that can be written to to set ALS
-        integration time. Will be null if unable to open file or other error
-        occurred.
-    -->
-    <method name="GetAlsIntegrationTimeFileDescriptor">
-      <arg type="u" name="index" direction="in"/>
-      <arg type="h" name="descriptor" direction="out"/>
-    </method>
-
   </interface>
 
   <!--

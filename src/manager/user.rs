@@ -12,8 +12,7 @@ use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::oneshot;
 use tracing::error;
 use zbus::proxy::Builder;
-use zbus::zvariant::{self, Fd};
-use zbus::{fdo, interface, CacheProperties, Connection, Proxy, SignalContext};
+use zbus::{fdo, interface, zvariant, CacheProperties, Connection, Proxy, SignalContext};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::daemon::user::Command;
@@ -216,18 +215,6 @@ impl AmbientLightSensor1 {
     #[zbus(property(emits_changed_signal = "false"))]
     async fn als_calibration_gain(&self) -> fdo::Result<Vec<f64>> {
         getter!(self, "AlsCalibrationGain")
-    }
-
-    async fn get_als_integration_time_file_descriptor(&self, index: u32) -> fdo::Result<Fd> {
-        let m = self
-            .proxy
-            .call_method("GetAlsIntegrationTimeFileDescriptor", &(index))
-            .await
-            .map_err(zbus_to_zbus_fdo)?;
-        match m.body().deserialize::<Fd>() {
-            Ok(fd) => fd.try_to_owned().map_err(to_zbus_fdo_error),
-            Err(e) => Err(zbus_to_zbus_fdo(e)),
-        }
     }
 }
 
