@@ -19,10 +19,7 @@ use zbus::proxy;
     assume_defaults = true
 )]
 trait AmbientLightSensor1 {
-    /// GetAlsIntegrationTimeFileDescriptor method
-    fn get_als_integration_time_file_descriptor(&self) -> zbus::Result<zbus::zvariant::OwnedFd>;
-
     /// AlsCalibrationGain property
     #[zbus(property)]
-    fn als_calibration_gain(&self) -> zbus::Result<f64>;
+    fn als_calibration_gain(&self) -> zbus::Result<Vec<f64>>;
 }

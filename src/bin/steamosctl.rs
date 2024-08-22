@@ -220,7 +220,8 @@ async fn main() -> Result<()> {
         Commands::GetAlsCalibrationGain => {
             let proxy = AmbientLightSensor1Proxy::new(&conn).await?;
             let gain = proxy.als_calibration_gain().await?;
-            println!("ALS calibration gain: {gain}");
+            let gains = gain.into_iter().map(|g| g.to_string()).join(", ");
+            println!("ALS calibration gain: {gains}");
         }
         Commands::GetHardwareCurrentlySupported => {
             let proxy = Manager2Proxy::new(&conn).await?;
