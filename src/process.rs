@@ -28,7 +28,10 @@ pub async fn script_exit_code(
 }
 
 #[cfg(test)]
-pub async fn script_exit_code(executable: impl AsRef<OsStr>, args: &[impl AsRef<OsStr>]) -> Result<i32> {
+pub async fn script_exit_code(
+    executable: impl AsRef<OsStr>,
+    args: &[impl AsRef<OsStr>],
+) -> Result<i32> {
     let test = crate::testing::current();
     let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
     let cb = test.process_cb.get();
