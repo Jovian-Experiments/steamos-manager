@@ -534,8 +534,6 @@ pub(crate) mod test {
             .await
             .expect("at");
 
-        //sleep(Duration::from_millis(10)).await;
-
         let (tx, mut rx) = mpsc::channel(3);
         let (fin_tx, fin_rx) = oneshot::channel();
 

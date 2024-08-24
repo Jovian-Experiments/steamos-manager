@@ -694,6 +694,7 @@ mod test {
         handle.test.platform_config.replace(platform_config);
         let connection = handle.new_dbus().await?;
         connection.request_name("org.freedesktop.systemd1").await?;
+        sleep(Duration::from_millis(10)).await;
         {
             let object_server = connection.object_server();
             object_server

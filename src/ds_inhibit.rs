@@ -303,11 +303,20 @@ impl Service for Inhibitor {
 mod test {
     use super::*;
     use crate::testing;
-    use std::fs::{create_dir_all, read_to_string, remove_file, write, File};
-    use std::os::unix::fs::symlink;
+    use tokio::fs::{create_dir_all, read_to_string, remove_file, symlink, write, File};
 
-    async fn nyield(time: u64) {
-        sleep(Duration::from_millis(time)).await;
+    async fn try_read(path: &Path, expected: &str) -> bool {
+        tokio::select! {
+            res = async move {
+                loop {
+                    match read_to_string(path).await {
+                        Ok(e) if e == expected => break true,
+                        _ => sleep(Duration::from_millis(1)).await,
+                    }
+                }
+            } => res,
+            _ = sleep(Duration::from_millis(500)) => false,
+        }
     }
 
     #[tokio::test]
@@ -317,9 +326,15 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(sys_base.join("input/input0/foo0")).expect("foo0");
-        create_dir_all(sys_base.join("input/input1/bar0")).expect("bar0");
-        create_dir_all(sys_base.join("input/input2/mouse0")).expect("mouse0");
+        create_dir_all(sys_base.join("input/input0/foo0"))
+            .await
+            .expect("foo0");
+        create_dir_all(sys_base.join("input/input1/bar0"))
+            .await
+            .expect("bar0");
+        create_dir_all(sys_base.join("input/input2/mouse0"))
+            .await
+            .expect("mouse0");
 
         assert_eq!(
             hid.get_nodes().await.expect("get_nodes"),
@@ -341,19 +356,45 @@ mod test {
             HidNode::new(6),
         ];
 
-        create_dir_all(hids[0].sys_base().join("input/input0/foo0")).expect("foo0");
-        symlink("foo", hids[0].sys_base().join("driver")).expect("hidraw0");
-        create_dir_all(hids[1].sys_base().join("input/input1/mouse0")).expect("mouse0");
-        symlink("foo", hids[1].sys_base().join("driver")).expect("hidraw1");
-        create_dir_all(hids[2].sys_base().join("input/input2/foo1")).expect("foo1");
-        symlink("sony", hids[2].sys_base().join("driver")).expect("hidraw2");
-        create_dir_all(hids[3].sys_base().join("input/input3/mouse1")).expect("mouse1");
-        symlink("sony", hids[3].sys_base().join("driver")).expect("hidraw3");
-        create_dir_all(hids[4].sys_base().join("input/input4/foo2")).expect("foo2");
-        symlink("playstation", hids[4].sys_base().join("driver")).expect("hidraw4");
-        create_dir_all(hids[5].sys_base().join("input/input5/mouse2")).expect("mouse2");
-        symlink("playstation", hids[5].sys_base().join("driver")).expect("hidraw5");
-        create_dir_all(hids[6].sys_base().join("input/input6/mouse3")).expect("mouse3");
+        create_dir_all(hids[0].sys_base().join("input/input0/foo0"))
+            .await
+            .expect("foo0");
+        symlink("foo", hids[0].sys_base().join("driver"))
+            .await
+            .expect("hidraw0");
+        create_dir_all(hids[1].sys_base().join("input/input1/mouse0"))
+            .await
+            .expect("mouse0");
+        symlink("foo", hids[1].sys_base().join("driver"))
+            .await
+            .expect("hidraw1");
+        create_dir_all(hids[2].sys_base().join("input/input2/foo1"))
+            .await
+            .expect("foo1");
+        symlink("sony", hids[2].sys_base().join("driver"))
+            .await
+            .expect("hidraw2");
+        create_dir_all(hids[3].sys_base().join("input/input3/mouse1"))
+            .await
+            .expect("mouse1");
+        symlink("sony", hids[3].sys_base().join("driver"))
+            .await
+            .expect("hidraw3");
+        create_dir_all(hids[4].sys_base().join("input/input4/foo2"))
+            .await
+            .expect("foo2");
+        symlink("playstation", hids[4].sys_base().join("driver"))
+            .await
+            .expect("hidraw4");
+        create_dir_all(hids[5].sys_base().join("input/input5/mouse2"))
+            .await
+            .expect("mouse2");
+        symlink("playstation", hids[5].sys_base().join("driver"))
+            .await
+            .expect("hidraw5");
+        create_dir_all(hids[6].sys_base().join("input/input6/mouse3"))
+            .await
+            .expect("mouse3");
 
         assert!(!hids[0].can_inhibit().await);
         assert!(!hids[1].can_inhibit().await);
@@ -371,19 +412,27 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        symlink("sony", sys_base.join("driver")).expect("hidraw0");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("hidraw0");
 
         assert!(hid.can_inhibit().await);
 
         hid.inhibit().await.expect("inhibit");
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "1\n"
         );
         hid.uninhibit().await.expect("uninhibit");
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "0\n"
         );
     }
@@ -395,21 +444,33 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        create_dir_all(sys_base.join("input/input0/inhibited")).expect("inhibited");
-        create_dir_all(sys_base.join("input/input1/mouse1")).expect("mouse0");
-        symlink("sony", sys_base.join("driver")).expect("hidraw0");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        create_dir_all(sys_base.join("input/input0/inhibited"))
+            .await
+            .expect("inhibited");
+        create_dir_all(sys_base.join("input/input1/mouse1"))
+            .await
+            .expect("mouse0");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("hidraw0");
 
         assert!(hid.can_inhibit().await);
 
         assert!(hid.inhibit().await.is_err());
         assert_eq!(
-            read_to_string(sys_base.join("input/input1/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input1/inhibited"))
+                .await
+                .expect("inhibited"),
             "1\n"
         );
         assert!(hid.uninhibit().await.is_err());
         assert_eq!(
-            read_to_string(sys_base.join("input/input1/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input1/inhibited"))
+                .await
+                .expect("inhibited"),
             "0\n"
         );
     }
@@ -422,31 +483,49 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        symlink("sony", sys_base.join("driver")).expect("hidraw0");
-        create_dir_all(path.join("proc/1/fd")).expect("fd");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("hidraw0");
+        create_dir_all(path.join("proc/1/fd")).await.expect("fd");
 
-        symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
-        write(path.join("proc/1/comm"), "steam\n").expect("comm");
+        symlink(hid.hidraw(), path.join("proc/1/fd/3"))
+            .await
+            .expect("symlink");
+        write(path.join("proc/1/comm"), "steam\n")
+            .await
+            .expect("comm");
 
         hid.check().await.expect("check");
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "1\n"
         );
 
-        write(path.join("proc/1/comm"), "epic\n").expect("comm");
+        write(path.join("proc/1/comm"), "epic\n")
+            .await
+            .expect("comm");
         hid.check().await.expect("check");
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "0\n"
         );
 
-        remove_file(path.join("proc/1/fd/3")).expect("rm");
-        write(path.join("proc/1/comm"), "steam\n").expect("comm");
+        remove_file(path.join("proc/1/fd/3")).await.expect("rm");
+        write(path.join("proc/1/comm"), "steam\n")
+            .await
+            .expect("comm");
         hid.check().await.expect("check");
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "0\n"
         );
     }
@@ -459,25 +538,37 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(path.join("dev")).expect("dev");
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        write(hid.hidraw(), "").expect("hidraw");
-        symlink("sony", sys_base.join("driver")).expect("driver");
-        create_dir_all(path.join("proc/1/fd")).expect("fd");
-        symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
-        write(path.join("proc/1/comm"), "steam\n").expect("comm");
+        create_dir_all(path.join("dev")).await.expect("dev");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        write(hid.hidraw(), "").await.expect("hidraw");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("driver");
+        create_dir_all(path.join("proc/1/fd")).await.expect("fd");
+        symlink(hid.hidraw(), path.join("proc/1/fd/3"))
+            .await
+            .expect("symlink");
+        write(path.join("proc/1/comm"), "steam\n")
+            .await
+            .expect("comm");
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
 
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "1\n"
         );
 
         inhibitor.shutdown().await.expect("stop");
 
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "0\n"
         );
     }
@@ -490,39 +581,40 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(path.join("dev")).expect("dev");
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        File::create(hid.hidraw()).expect("hidraw");
-        symlink("sony", sys_base.join("driver")).expect("driver");
-        create_dir_all(path.join("proc/1/fd")).expect("fd");
-        write(path.join("proc/1/comm"), "steam\n").expect("comm");
+        create_dir_all(path.join("dev")).await.expect("dev");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        File::create(hid.hidraw()).await.expect("hidraw");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("driver");
+        create_dir_all(path.join("proc/1/fd")).await.expect("fd");
+        write(path.join("proc/1/comm"), "steam\n")
+            .await
+            .expect("comm");
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
         let task = tokio::spawn(async move {
             inhibitor.run().await.expect("run");
         });
 
-        nyield(5).await;
         assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
+            read_to_string(sys_base.join("input/input0/inhibited"))
+                .await
+                .expect("inhibited"),
             "0\n"
         );
 
-        symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
-        let f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(15).await;
-        assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
-            "1\n"
-        );
+        symlink(hid.hidraw(), path.join("proc/1/fd/3"))
+            .await
+            .expect("symlink");
+        let f = File::open(hid.hidraw()).await.expect("hidraw");
+        assert!(try_read(sys_base.join("input/input0/inhibited").as_path(), "1\n").await);
 
         drop(f);
-        remove_file(path.join("proc/1/fd/3")).expect("rm");
-        nyield(15).await;
-        assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
-            "0\n"
-        );
+        remove_file(path.join("proc/1/fd/3")).await.expect("rm");
+        assert!(try_read(sys_base.join("input/input0/inhibited").as_path(), "0\n").await);
 
         task.abort();
     }
@@ -535,28 +627,33 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(path.join("dev")).expect("dev");
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        symlink("sony", sys_base.join("driver")).expect("driver");
-        create_dir_all(path.join("proc/1/fd")).expect("fd");
-        write(path.join("proc/1/comm"), "steam\n").expect("comm");
+        create_dir_all(path.join("dev")).await.expect("dev");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("driver");
+        create_dir_all(path.join("proc/1/fd")).await.expect("fd");
+        write(path.join("proc/1/comm"), "steam\n")
+            .await
+            .expect("comm");
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
         let task = tokio::spawn(async move {
             inhibitor.run().await.expect("run");
         });
 
-        nyield(5).await;
-        assert!(read_to_string(sys_base.join("input/input0/inhibited")).is_err());
+        assert!(read_to_string(sys_base.join("input/input0/inhibited"))
+            .await
+            .is_err());
 
-        File::create(hid.hidraw()).expect("hidraw");
-        symlink(hid.hidraw(), path.join("proc/1/fd/3")).expect("symlink");
-        let _f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(300).await;
-        assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
-            "1\n"
-        );
+        File::create(hid.hidraw()).await.expect("hidraw");
+        symlink(hid.hidraw(), path.join("proc/1/fd/3"))
+            .await
+            .expect("symlink");
+        let _f = File::open(hid.hidraw()).await.expect("hidraw");
+        assert!(try_read(sys_base.join("input/input0/inhibited").as_path(), "1\n").await);
 
         task.abort();
     }
@@ -568,29 +665,31 @@ mod test {
         let hid = HidNode::new(0);
         let sys_base = hid.sys_base();
 
-        create_dir_all(path("/dev")).expect("dev");
-        create_dir_all(sys_base.join("input/input0/mouse0")).expect("mouse0");
-        symlink("sony", sys_base.join("driver")).expect("driver");
-        create_dir_all(path("/proc/1/fd")).expect("fd");
-        write(path("/proc/1/comm"), "steam\n").expect("comm");
+        create_dir_all(path("/dev")).await.expect("dev");
+        create_dir_all(sys_base.join("input/input0/mouse0"))
+            .await
+            .expect("mouse0");
+        symlink("sony", sys_base.join("driver"))
+            .await
+            .expect("driver");
+        create_dir_all(path("/proc/1/fd")).await.expect("fd");
+        write(path("/proc/1/comm"), "steam\n").await.expect("comm");
 
         let mut inhibitor = Inhibitor::init().await.expect("init");
         let task = tokio::spawn(async move {
             inhibitor.run().await.expect("run");
         });
 
-        nyield(5).await;
-        assert!(read_to_string(sys_base.join("input/input0/inhibited")).is_err());
+        assert!(read_to_string(sys_base.join("input/input0/inhibited"))
+            .await
+            .is_err());
 
-        File::create(hid.hidraw()).expect("hidraw");
-        nyield(50).await;
-        symlink(hid.hidraw(), path("/proc/1/fd/3")).expect("symlink");
-        let _f = File::open(hid.hidraw()).expect("hidraw");
-        nyield(250).await;
-        assert_eq!(
-            read_to_string(sys_base.join("input/input0/inhibited")).expect("inhibited"),
-            "1\n"
-        );
+        File::create(hid.hidraw()).await.expect("hidraw");
+        symlink(hid.hidraw(), path("/proc/1/fd/3"))
+            .await
+            .expect("symlink");
+        let _f = File::open(hid.hidraw()).await.expect("hidraw");
+        assert!(try_read(sys_base.join("input/input0/inhibited").as_path(), "1\n").await);
 
         task.abort();
     }
