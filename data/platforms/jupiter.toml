@@ -19,3 +19,7 @@ no_validate_flag = "--skip-validation"
 
 [fan_control]
 systemd = "jupiter-fan-control.service"
+
+[tdp_limit]
+min = 3
+max = 15

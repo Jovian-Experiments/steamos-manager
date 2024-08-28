@@ -16,6 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{error, warn};
 
 use crate::hardware::is_deck;
+use crate::platform::platform_config;
 use crate::{path, write_synced};
 
 const GPU_HWMON_PREFIX: &str = "/sys/class/hwmon";
@@ -395,6 +396,15 @@ pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
         power2file.flush().await?;
     }
     Ok(())
+}
+
+pub(crate) async fn get_tdp_limit_range() -> Result<(u32, u32)> {
+    let range = platform_config()
+        .await?
+        .as_ref()
+        .and_then(|config| config.tdp_limit)
+        .ok_or(anyhow!("No TDP limit range configured"))?;
+    Ok((range.min, range.max))
 }
 
 #[cfg(test)]

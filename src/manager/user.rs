@@ -27,6 +27,7 @@ use crate::power::{
     get_available_cpu_scaling_governors, get_available_gpu_performance_levels,
     get_available_gpu_power_profiles, get_cpu_scaling_governor, get_gpu_clocks,
     get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_tdp_limit,
+    get_tdp_limit_range,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state, list_wifi_interfaces};
 use crate::API_VERSION;
@@ -418,8 +419,8 @@ impl Storage1 {
 #[interface(name = "com.steampowered.SteamOSManager1.TdpLimit1")]
 impl TdpLimit1 {
     #[zbus(property(emits_changed_signal = "false"))]
-    async fn tdp_limit(&self) -> fdo::Result<u32> {
-        get_tdp_limit().await.map_err(to_zbus_fdo_error)
+    async fn tdp_limit(&self) -> u32 {
+        get_tdp_limit().await.unwrap_or(0)
     }
 
     #[zbus(property)]
@@ -429,14 +430,18 @@ impl TdpLimit1 {
 
     #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_min(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        3
+        get_tdp_limit_range()
+            .await
+            .and_then(|(min, _)| Ok(min))
+            .unwrap_or(0)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_max(&self) -> u32 {
-        // TODO: Can this be queried from somewhere?
-        15
+        get_tdp_limit_range()
+            .await
+            .and_then(|(_, max)| Ok(max))
+            .unwrap_or(0)
     }
 }
 
@@ -661,7 +666,9 @@ mod test {
     use crate::daemon::user::UserContext;
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
-    use crate::platform::{PlatformConfig, ScriptConfig, ServiceConfig, StorageConfig};
+    use crate::platform::{
+        PlatformConfig, RangeConfig, ScriptConfig, ServiceConfig, StorageConfig,
+    };
     use crate::systemd::test::{MockManager, MockUnit};
     use crate::{power, testing};
 
@@ -684,6 +691,7 @@ mod test {
             fan_control: Some(ServiceConfig::Systemd(String::from(
                 "jupiter-fan-control.service",
             ))),
+            tdp_limit: Some(RangeConfig::new(3, 15)),
         })
     }
 

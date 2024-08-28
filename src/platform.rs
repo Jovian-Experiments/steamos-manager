@@ -26,7 +26,16 @@ pub(crate) struct PlatformConfig {
     pub update_dock: Option<ScriptConfig>,
     pub storage: Option<StorageConfig>,
     pub fan_control: Option<ServiceConfig>,
+    pub tdp_limit: Option<RangeConfig<u32>>,
 }
+
+#[derive(Clone, Deserialize, Debug)]
+pub(crate) struct RangeConfig<T: Clone> {
+    pub min: T,
+    pub max: T,
+}
+
+impl<T> Copy for RangeConfig<T> where T: Copy {}
 
 #[derive(Clone, Default, Deserialize, Debug)]
 pub(crate) struct ScriptConfig {
@@ -65,6 +74,13 @@ pub(crate) struct FormatDeviceConfig {
     pub validate_flag: Option<String>,
     #[serde(default)]
     pub no_validate_flag: Option<String>,
+}
+
+impl<T: Clone> RangeConfig<T> {
+    #[allow(unused)]
+    pub(crate) fn new(min: T, max: T) -> RangeConfig<T> {
+        RangeConfig { min, max }
+    }
 }
 
 impl PlatformConfig {

@@ -369,6 +369,7 @@ pub mod test {
             fan_control: Some(ServiceConfig::Systemd(String::from(
                 "jupiter-fan-control.service",
             ))),
+            tdp_limit: None,
         }));
 
         let fan_control = FanControl::new(connection);
