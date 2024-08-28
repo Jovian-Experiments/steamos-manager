@@ -25,7 +25,7 @@ use zbus::{interface, zvariant, Connection, Interface, InterfaceRef, SignalConte
 use zbus_xml::Node;
 
 use crate::error::{to_zbus_fdo_error, zbus_to_zbus_fdo};
-use crate::proxy::{JobManagerProxy, JobProxy};
+use crate::proxy::{JobManager1Proxy, Job1Proxy};
 use crate::Service;
 
 const JOB_PREFIX: &str = "/com/steampowered/SteamOSManager1/Jobs";
@@ -54,7 +54,7 @@ pub struct JobManagerService {
 }
 
 struct MirroredJob {
-    job: JobProxy<'static>,
+    job: Job1Proxy<'static>,
 }
 
 pub enum JobManagerCommand {
@@ -135,7 +135,7 @@ impl JobManager {
             return Ok(object_path.clone());
         }
 
-        let proxy = JobProxy::builder(connection)
+        let proxy = Job1Proxy::builder(connection)
             .destination("com.steampowered.SteamOSManager1")?
             .path(path)?
             .build()
@@ -166,7 +166,7 @@ impl JobManager {
     }
 }
 
-#[interface(name = "com.steampowered.SteamOSManager1.JobManager")]
+#[interface(name = "com.steampowered.SteamOSManager1.JobManager1")]
 impl JobManagerInterface {
     #[zbus(signal)]
     async fn job_started(
@@ -232,7 +232,7 @@ impl Job {
     }
 }
 
-#[interface(name = "com.steampowered.SteamOSManager1.Job")]
+#[interface(name = "com.steampowered.SteamOSManager1.Job1")]
 impl Job {
     pub async fn pause(&mut self) -> fdo::Result<()> {
         if self.paused {
@@ -285,7 +285,7 @@ impl Job {
     }
 }
 
-#[interface(name = "com.steampowered.SteamOSManager1.Job")]
+#[interface(name = "com.steampowered.SteamOSManager1.Job1")]
 impl MirroredJob {
     pub async fn pause(&mut self) -> fdo::Result<()> {
         self.job.pause().await.map_err(zbus_to_zbus_fdo)
@@ -355,7 +355,7 @@ impl Service for JobManagerService {
     const NAME: &'static str = "job-manager";
 
     async fn run(&mut self) -> Result<()> {
-        let jm = JobManagerProxy::new(&self.connection).await?;
+        let jm = JobManager1Proxy::new(&self.connection).await?;
         let mut stream = jm.receive_job_started().await?;
 
         loop {
@@ -381,7 +381,6 @@ impl Service for JobManagerService {
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use crate::proxy::JobProxy;
     use crate::testing;
 
     use anyhow::anyhow;
@@ -409,7 +408,7 @@ pub(crate) mod test {
 
         let job = tokio::spawn(async move {
             let connection = ConnectionBuilder::session()?.build().await?;
-            let jm = JobManagerProxy::builder(&connection)
+            let jm = JobManager1Proxy::builder(&connection)
                 .destination(sender)?
                 .build()
                 .await?;
@@ -498,7 +497,7 @@ pub(crate) mod test {
 
     struct MockJob {}
 
-    #[zbus::interface(name = "com.steampowered.SteamOSManager1.Job")]
+    #[zbus::interface(name = "com.steampowered.SteamOSManager1.Job1")]
     impl MockJob {
         pub async fn pause(&mut self) -> fdo::Result<()> {
             Err(fdo::Error::Failed(String::from("pause")))
@@ -552,7 +551,7 @@ pub(crate) mod test {
                 .await
                 .expect("mirror_job");
             let name = connection.unique_name().unwrap().clone();
-            let proxy = JobProxy::builder(&connection)
+            let proxy = Job1Proxy::builder(&connection)
                 .destination(BusName::Unique(name.into()))
                 .expect("destination")
                 .path(path)

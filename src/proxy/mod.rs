@@ -8,11 +8,11 @@
 // Re-export relevant proxies
 
 // TODO Some of these should get renamed
-mod job;
-mod job_manager;
+mod job1;
+mod job_manager1;
 mod udev_events;
-pub use crate::proxy::job::JobProxy;
-pub use crate::proxy::job_manager::JobManagerProxy;
+pub use crate::proxy::job1::Job1Proxy;
+pub use crate::proxy::job_manager1::JobManager1Proxy;
 pub use crate::proxy::udev_events::UdevEventsProxy;
 
 // Deprecated interface
