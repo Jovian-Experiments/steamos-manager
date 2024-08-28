@@ -159,9 +159,10 @@ impl FanControl {
                 let jupiter_fan_control =
                     SystemdUnit::new(self.connection.clone(), service).await?;
                 let active = jupiter_fan_control.active().await?;
-                Ok(match active {
-                    true => FanControlState::Os,
-                    false => FanControlState::Bios,
+                Ok(if active {
+                    FanControlState::Os
+                } else {
+                    FanControlState::Bios
                 })
             }
             Some(ServiceConfig::Script {

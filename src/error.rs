@@ -7,10 +7,12 @@
 
 use zbus::fdo;
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn to_zbus_fdo_error<S: ToString>(error: S) -> fdo::Error {
     fdo::Error::Failed(error.to_string())
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn to_zbus_error<S: ToString>(error: S) -> zbus::Error {
     zbus::Error::Failure(error.to_string())
 }

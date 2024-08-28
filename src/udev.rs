@@ -51,7 +51,7 @@ impl Service for UdevMonitor {
             .shutdown_receiver
             .take()
             .ok_or(anyhow!("UdevMonitor cannot be run twice"))?;
-        let mut handle = spawn(move || run_udev(ev_sender, shutdown_receiver));
+        let mut handle = spawn(move || run_udev(&ev_sender, &shutdown_receiver));
 
         loop {
             let handle = &mut handle;
@@ -71,7 +71,7 @@ impl Service for UdevMonitor {
                         port.as_str(),
                         count,
                     )
-                    .await?
+                    .await?;
                 }
             }
         }
@@ -111,7 +111,7 @@ impl UdevDbusObject {
     ) -> zbus::Result<()>;
 }
 
-fn run_udev(tx: UnboundedSender<UdevEvent>, rx: OwnedFd) -> Result<()> {
+fn run_udev(tx: &UnboundedSender<UdevEvent>, rx: &OwnedFd) -> Result<()> {
     let usb_monitor = MonitorBuilder::new()?
         .match_subsystem_devtype("usb", "usb_interface")?
         .listen()?;
@@ -137,7 +137,7 @@ fn run_udev(tx: UnboundedSender<UdevEvent>, rx: OwnedFd) -> Result<()> {
                 let ev = iter
                     .next()
                     .ok_or(anyhow!("Poller said event was present, but it was not"))?;
-                process_usb_event(ev, &tx)?;
+                process_usb_event(&ev, tx)?;
             }
             Some(false) => (),
         }
@@ -149,7 +149,7 @@ fn run_udev(tx: UnboundedSender<UdevEvent>, rx: OwnedFd) -> Result<()> {
     }
 }
 
-fn process_usb_event(ev: Event, tx: &UnboundedSender<UdevEvent>) -> Result<()> {
+fn process_usb_event(ev: &Event, tx: &UnboundedSender<UdevEvent>) -> Result<()> {
     debug!("Got USB event {ev:?}");
     if ev.event_type() != EventType::Change {
         return Ok(());

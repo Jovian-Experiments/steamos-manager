@@ -90,7 +90,7 @@ impl Service for LogReceiver {
 }
 
 impl LogLayer {
-    pub async fn new(receiver: &LogReceiver) -> LogLayer {
+    pub fn new(receiver: &LogReceiver) -> LogLayer {
         LogLayer {
             queue: receiver.sender.clone(),
         }
@@ -111,8 +111,7 @@ impl<S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>> Layer
                 prefix + "." + suffix
             });
         let level = match *event.metadata().level() {
-            Level::TRACE => 10,
-            Level::DEBUG => 10,
+            Level::TRACE | Level::DEBUG => 10,
             Level::INFO => 20,
             Level::WARN => 30,
             Level::ERROR => 40,

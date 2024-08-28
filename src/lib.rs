@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use config::builder::AsyncState;
 use config::{AsyncSource, ConfigBuilder, ConfigError, FileFormat, Format, Map, Value};
@@ -58,7 +58,7 @@ where
             info!("Starting {}", Self::NAME);
             let res = tokio::select! {
                 r = self.run() => r,
-                _ = token.cancelled() => Ok(()),
+                () = token.cancelled() => Ok(()),
             };
             if res.is_err() {
                 warn!(
@@ -129,36 +129,35 @@ pub(crate) async fn write_synced<P: AsRef<Path>>(path: P, bytes: &[u8]) -> Resul
 }
 
 pub(crate) fn read_comm(pid: u32) -> Result<String> {
-    let comm = std::fs::read_to_string(path(format!("/proc/{}/comm", pid)))?;
+    let comm = std::fs::read_to_string(path(format!("/proc/{pid}/comm")))?;
     Ok(comm.trim_end().to_string())
 }
 
 pub(crate) fn get_appid(pid: u32) -> Result<Option<u64>> {
-    let environ = std::fs::read_to_string(path(format!("/proc/{}/environ", pid)))?;
+    let environ = std::fs::read_to_string(path(format!("/proc/{pid}/environ")))?;
     for env_var in environ.split('\0') {
-        let (key, value) = match env_var.split_once('=') {
-            Some((k, v)) => (k, v),
-            None => continue,
+        let Some((key, value)) = env_var.split_once('=') else {
+            continue;
         };
         if key != "SteamGameId" {
             continue;
         }
-        match value.parse() {
-            Ok(appid) => return Ok(Some(appid)),
-            Err(_) => break,
-        };
+        if let Ok(appid) = value.parse() {
+            return Ok(Some(appid));
+        }
+        break;
     }
 
-    let stat = std::fs::read_to_string(path(format!("/proc/{}/stat", pid)))?;
-    let stat = match stat.rsplit_once(") ") {
-        Some((_, v)) => v,
-        None => return Ok(None),
+    let stat = std::fs::read_to_string(path(format!("/proc/{pid}/stat")))?;
+    let ppid: u32 = if let Some((_, stat)) = stat.rsplit_once(") ") {
+        if let Some(ppid) = stat.split(' ').nth(1) {
+            ppid.parse()?
+        } else {
+            bail!("stat data invalid");
+        }
+    } else {
+        return Ok(None);
     };
-    let ppid = match stat.split(' ').nth(1) {
-        Some(ppid) => ppid,
-        None => return Err(anyhow!("stat data invalid")),
-    };
-    let ppid: u32 = ppid.parse()?;
     if ppid > 1 {
         get_appid(ppid)
     } else {

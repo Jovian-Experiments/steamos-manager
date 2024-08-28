@@ -123,30 +123,26 @@ async fn write_cpu_governor_sysfs_contents(contents: String) -> Result<()> {
     let mut dir = fs::read_dir(path(CPU_PREFIX)).await?;
     let mut wrote_stuff = false;
     loop {
-        let base = match dir.next_entry().await? {
-            Some(entry) => {
-                let file_name = entry
-                    .file_name()
-                    .into_string()
-                    .map_err(|_| anyhow!("Unable to convert path to string"))?;
-                if !file_name.starts_with(CPU_POLICY_NAME) {
-                    continue;
-                }
-                entry.path()
-            }
-            None => {
-                ensure!(
-                    wrote_stuff,
-                    "No data written, unable to find any policyX sysfs paths"
-                );
-                return Ok(());
-            }
+        let Some(entry) = dir.next_entry().await? else {
+            ensure!(
+                wrote_stuff,
+                "No data written, unable to find any policyX sysfs paths"
+            );
+            return Ok(());
         };
+        let file_name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| anyhow!("Unable to convert path to string"))?;
+        if !file_name.starts_with(CPU_POLICY_NAME) {
+            continue;
+        }
+        let base = entry.path();
         // Write contents to each one
         wrote_stuff = true;
         write_synced(base.join(CPU_SCALING_GOVERNOR_SUFFIX), contents.as_bytes())
             .await
-            .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?
+            .inspect_err(|message| error!("Error writing to sysfs file: {message}"))?;
     }
 }
 
@@ -158,10 +154,8 @@ pub(crate) async fn get_gpu_power_profile() -> Result<GPUPowerProfile> {
     // firmware support setting the value to no-op values.
     let lines = contents.lines();
     for line in lines {
-        let caps = GPU_POWER_PROFILE_REGEX.captures(line);
-        let caps = match caps {
-            Some(caps) => caps,
-            None => continue,
+        let Some(caps) = GPU_POWER_PROFILE_REGEX.captures(line) else {
+            continue;
         };
 
         let name = &caps["name"].to_lowercase();
@@ -184,10 +178,8 @@ pub(crate) async fn get_available_gpu_power_profiles() -> Result<Vec<(u32, Strin
     let mut map = Vec::new();
     let lines = contents.lines();
     for line in lines {
-        let caps = GPU_POWER_PROFILE_REGEX.captures(line);
-        let caps = match caps {
-            Some(caps) => caps,
-            None => continue,
+        let Some(caps) = GPU_POWER_PROFILE_REGEX.captures(line) else {
+            continue;
         };
         let value: u32 = caps["value"]
             .parse()
@@ -217,9 +209,7 @@ pub(crate) async fn set_gpu_power_profile(value: GPUPowerProfile) -> Result<()> 
 
 pub(crate) async fn get_available_gpu_performance_levels() -> Result<Vec<GPUPerformanceLevel>> {
     let base = find_hwmon().await?;
-    if !try_exists(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX)).await? {
-        Ok(Vec::new())
-    } else {
+    if try_exists(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX)).await? {
         Ok(vec![
             GPUPerformanceLevel::Auto,
             GPUPerformanceLevel::Low,
@@ -227,6 +217,8 @@ pub(crate) async fn get_available_gpu_performance_levels() -> Result<Vec<GPUPerf
             GPUPerformanceLevel::Manual,
             GPUPerformanceLevel::ProfilePeak,
         ])
+    } else {
+        Ok(Vec::new())
     }
 }
 
@@ -277,14 +269,12 @@ pub(crate) async fn set_cpu_scaling_governor(governor: CPUScalingGovernor) -> Re
 pub(crate) async fn get_gpu_clocks_range() -> Result<(u32, u32)> {
     let contents = read_gpu_sysfs_contents(GPU_CLOCK_LEVELS_SUFFIX).await?;
     let lines = contents.lines();
-    let mut min = 1000000;
+    let mut min = 1_000_000;
     let mut max = 0;
 
     for line in lines {
-        let caps = GPU_CLOCK_LEVELS_REGEX.captures(line);
-        let caps = match caps {
-            Some(caps) => caps,
-            None => continue,
+        let Some(caps) = GPU_CLOCK_LEVELS_REGEX.captures(line) else {
+            continue;
         };
         let value: u32 = caps["value"]
             .parse()
@@ -381,7 +371,7 @@ pub(crate) async fn get_tdp_limit() -> Result<u32> {
     let base = find_hwmon().await?;
     let power1cap = fs::read_to_string(base.join(TDP_LIMIT1)).await?;
     let power1cap: u32 = power1cap.trim_end().parse()?;
-    Ok(power1cap / 1000000)
+    Ok(power1cap / 1_000_000)
 }
 
 pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
@@ -394,7 +384,7 @@ pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
     write_synced(base.join(TDP_LIMIT1), data.as_bytes())
         .await
         .inspect_err(|message| {
-            error!("Error opening sysfs power1_cap file for writing TDP limits {message}")
+            error!("Error opening sysfs power1_cap file for writing TDP limits {message}");
         })?;
 
     if let Ok(mut power2file) = File::create(base.join(TDP_LIMIT2)).await {

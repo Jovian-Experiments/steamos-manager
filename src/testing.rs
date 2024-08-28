@@ -25,7 +25,7 @@ use zbus_xml::{Method, Node, Property};
 use crate::platform::PlatformConfig;
 
 thread_local! {
-    static TEST: RefCell<Option<Rc<Test>>> = RefCell::new(None);
+    static TEST: RefCell<Option<Rc<Test>>> = const { RefCell::new(None) };
 }
 
 #[macro_export]
@@ -233,7 +233,7 @@ impl<'a> InterfaceIntrospection<'a> {
 
     fn collect_methods(&self) -> HashMap<String, &Method<'_>> {
         let mut map = HashMap::new();
-        for method in self.interface.methods().iter() {
+        for method in self.interface.methods() {
             map.insert(method.name().to_string(), method);
         }
         map
@@ -241,7 +241,7 @@ impl<'a> InterfaceIntrospection<'a> {
 
     fn collect_properties(&self) -> HashMap<String, &Property<'_>> {
         let mut map = HashMap::new();
-        for prop in self.interface.properties().iter() {
+        for prop in self.interface.properties() {
             map.insert(prop.name().to_string(), prop);
         }
         map

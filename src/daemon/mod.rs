@@ -81,7 +81,7 @@ impl<C: DaemonContext> Daemon<C> {
         let token = CancellationToken::new();
 
         let log_receiver = LogReceiver::new(connection.clone()).await?;
-        let remote_logger = LogLayer::new(&log_receiver).await;
+        let remote_logger = LogLayer::new(&log_receiver);
         let subscriber = subscriber
             .with(EnvFilter::from_default_env())
             .with(remote_logger);
@@ -90,8 +90,8 @@ impl<C: DaemonContext> Daemon<C> {
         let mut daemon = Daemon {
             services,
             token,
-            channel,
             connection,
+            channel,
         };
         daemon.add_service(log_receiver);
 
@@ -134,11 +134,11 @@ impl<C: DaemonContext> Daemon<C> {
                 },
                 _ = tokio::signal::ctrl_c() => break Ok(()),
                 e = sigterm.recv() => match e {
-                    Some(_) => Ok(()),
+                    Some(()) => Ok(()),
                     None => Err(anyhow!("SIGTERM machine broke")),
                 },
                 e = sighup.recv() => match e {
-                    Some(_) => {
+                    Some(()) => {
                         match read_config(&context).await {
                             Ok(config) =>
                                 context.reload(config, self).await,

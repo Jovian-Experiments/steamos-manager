@@ -45,7 +45,7 @@ async fn setup_traces(base: &Path) -> Result<()> {
         if !string.starts_with("flags") {
             continue;
         }
-        if let Some((_, rest)) = string.split_once(":") {
+        if let Some((_, rest)) = string.split_once(':') {
             let mut flags = rest.split_whitespace();
             if flags.any(|flag| flag == "split_lock_detect") {
                 fs::write(base.join("set_ftrace_filter"), "split_lock_warn").await?;
@@ -196,7 +196,7 @@ mod test {
         );
         assert_eq!(
             *map.get("appid").expect("appid"),
-            zvariant::Value::new(5678 as u64)
+            zvariant::Value::new(5678_u64)
         );
 
         let mut map = HashMap::new();
@@ -212,7 +212,7 @@ mod test {
         assert!(map.get("comm").is_none());
         assert_eq!(
             *map.get("appid").expect("appid"),
-            zvariant::Value::new(5678 as u64)
+            zvariant::Value::new(5678_u64)
         );
     }
 
@@ -349,7 +349,7 @@ mod test {
         assert_eq!(data.len(), 2);
         assert_eq!(
             data.get("appid").map(|v| v.downcast_ref()),
-            Some(Ok(5678 as u64))
+            Some(Ok(5678_u64))
         );
         assert_eq!(
             data.get("comm").map(|v| v.downcast_ref()),

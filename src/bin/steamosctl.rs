@@ -10,7 +10,6 @@ use clap::{Parser, Subcommand};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::io::Cursor;
-use std::ops::Deref;
 use steamos_manager::cec::HdmiCecState;
 use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
@@ -165,6 +164,48 @@ enum Commands {
     FactoryReset,
 }
 
+async fn get_all_properties(conn: &Connection) -> Result<()> {
+    let proxy = IntrospectableProxy::builder(conn)
+        .destination("com.steampowered.SteamOSManager1")?
+        .path("/com/steampowered/SteamOSManager1")?
+        .build()
+        .await?;
+    let introspection = proxy.introspect().await?;
+    let introspection = Node::from_reader(Cursor::new(introspection))?;
+
+    let properties_proxy = PropertiesProxy::new(
+        &conn,
+        "com.steampowered.SteamOSManager1",
+        "/com/steampowered/SteamOSManager1",
+    )
+    .await?;
+
+    let mut properties = HashMap::new();
+    for interface in introspection.interfaces() {
+        let name = match interface.name() {
+            name if name
+                .as_str()
+                .starts_with("com.steampowered.SteamOSManager1") =>
+            {
+                name
+            }
+            _ => continue,
+        };
+        properties.extend(
+            properties_proxy
+                .get_all(zvariant::Optional::from(Some(name)))
+                .await?,
+        );
+    }
+    for key in properties.keys().sorted() {
+        let value = &properties[key];
+        let val = &**value;
+        println!("{key}: {val}");
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<()> {
     // This is a command-line utility that calls api using dbus
@@ -178,43 +219,7 @@ async fn main() -> Result<()> {
     // Then process arguments
     match &args.command {
         Commands::GetAllProperties => {
-            let proxy = IntrospectableProxy::builder(&conn)
-                .destination("com.steampowered.SteamOSManager1")?
-                .path("/com/steampowered/SteamOSManager1")?
-                .build()
-                .await?;
-            let introspection = proxy.introspect().await?;
-            let introspection = Node::from_reader(Cursor::new(introspection))?;
-
-            let properties_proxy = PropertiesProxy::new(
-                &conn,
-                "com.steampowered.SteamOSManager1",
-                "/com/steampowered/SteamOSManager1",
-            )
-            .await?;
-
-            let mut properties = HashMap::new();
-            for interface in introspection.interfaces() {
-                let name = match interface.name() {
-                    name if name
-                        .as_str()
-                        .starts_with("com.steampowered.SteamOSManager1") =>
-                    {
-                        name
-                    }
-                    _ => continue,
-                };
-                properties.extend(
-                    properties_proxy
-                        .get_all(zvariant::Optional::from(Some(name)))
-                        .await?,
-                );
-            }
-            for key in properties.keys().sorted() {
-                let value = &properties[key];
-                let val = value.deref();
-                println!("{key}: {val}");
-            }
+            get_all_properties(&conn).await?;
         }
         Commands::GetAlsCalibrationGain => {
             let proxy = AmbientLightSensor1Proxy::new(&conn).await?;
@@ -235,7 +240,7 @@ async fn main() -> Result<()> {
             let proxy = FanControl1Proxy::new(&conn).await?;
             let state = proxy.fan_control_state().await?;
             match FanControlState::try_from(state) {
-                Ok(s) => println!("Fan control state: {}", s),
+                Ok(s) => println!("Fan control state: {s}"),
                 Err(_) => println!("Got unknown value {state} from backend"),
             }
         }
@@ -284,7 +289,7 @@ async fn main() -> Result<()> {
                     println!("GPU Power Profile: {profile} {name}");
                 }
                 Err(_) => {
-                    println!("Unknown GPU power profile or unable to get type from {profile}")
+                    println!("Unknown GPU power profile or unable to get type from {profile}");
                 }
             }
         }
@@ -304,7 +309,7 @@ async fn main() -> Result<()> {
             let proxy = GpuPerformanceLevel1Proxy::new(&conn).await?;
             let level = proxy.gpu_performance_level().await?;
             match GPUPerformanceLevel::try_from(level.as_str()) {
-                Ok(l) => println!("GPU performance level: {}", l),
+                Ok(l) => println!("GPU performance level: {l}"),
                 Err(_) => println!("Got unknown value {level} from backend"),
             }
         }

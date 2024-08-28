@@ -91,7 +91,7 @@ impl SteamOSManager {
             config = factory_reset ("PrepareFactoryReset") => {
                 let res = run_script(&config.script, &config.script_args).await;
                 Ok(match res {
-                    Ok(_) => PrepareFactoryReset::RebootRequired as u32,
+                    Ok(()) => PrepareFactoryReset::RebootRequired as u32,
                     Err(_) => PrepareFactoryReset::Unknown as u32,
                 })
             }
@@ -302,7 +302,10 @@ impl SteamOSManager {
             Ok(mode) => mode,
             Err(e) => return Err(fdo::Error::InvalidArgs(e.to_string())),
         };
-        let buffer_size = match options.get("buffer_size").map(|v| v.downcast_ref::<u32>()) {
+        let buffer_size = match options
+            .get("buffer_size")
+            .map(zbus::zvariant::Value::downcast_ref)
+        {
             Some(Ok(v)) => v,
             None => 20000,
             Some(Err(e)) => return Err(fdo::Error::InvalidArgs(e.to_string())),

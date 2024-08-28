@@ -143,7 +143,7 @@ impl JobManager {
         let job = MirroredJob { job: proxy };
 
         let object_path = self.add_job(job).await?;
-        self.mirrored_jobs.insert(name, object_path.to_owned());
+        self.mirrored_jobs.insert(name, object_path.clone());
         Ok(object_path)
     }
 
@@ -186,9 +186,8 @@ impl Job {
     }
 
     fn send_signal(&self, signal: nix::sys::signal::Signal) -> Result<()> {
-        let pid = match self.process.id() {
-            Some(id) => id,
-            None => bail!("Unable to get pid from command, it likely finished running"),
+        let Some(pid) = self.process.id() else {
+            bail!("Unable to get pid from command, it likely finished running");
         };
         let pid: pid_t = match pid.try_into() {
             Ok(pid) => pid,
@@ -257,9 +256,10 @@ impl Job {
 
     pub async fn cancel(&mut self, force: bool) -> fdo::Result<()> {
         if self.try_wait().map_err(to_zbus_fdo_error)?.is_none() {
-            self.send_signal(match force {
-                true => Signal::SIGKILL,
-                false => Signal::SIGTERM,
+            self.send_signal(if force {
+                Signal::SIGKILL
+            } else {
+                Signal::SIGTERM
             })
             .map_err(to_zbus_fdo_error)?;
             if self.paused {
@@ -274,14 +274,12 @@ impl Job {
             self.resume().await?;
         }
 
-        let code = match self.wait_internal().await.map_err(to_zbus_fdo_error) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(fdo::Error::Failed("Unable to get exit code".to_string()));
-            }
-        };
-        self.exit_code = Some(code);
-        Ok(code)
+        if let Ok(code) = self.wait_internal().await.map_err(to_zbus_fdo_error) {
+            self.exit_code = Some(code);
+            Ok(code)
+        } else {
+            Err(fdo::Error::Failed("Unable to get exit code".to_string()))
+        }
     }
 }
 
@@ -320,7 +318,7 @@ impl JobManagerService {
     async fn handle_command(&mut self, command: JobManagerCommand) -> Result<()> {
         match command {
             JobManagerCommand::MirrorConnection(connection) => {
-                self.job_manager.mirror_connection(&connection).await?
+                self.job_manager.mirror_connection(&connection).await?;
             }
             JobManagerCommand::MirrorJob {
                 connection,

@@ -401,13 +401,13 @@ pub mod test {
         let unit = SystemdUnit::new(connection.clone(), "test.service")
             .await
             .expect("unit");
-        assert_eq!(unit.enable().await.unwrap(), true);
-        assert_eq!(unit.enable().await.unwrap(), false);
-        assert_eq!(unit.disable().await.unwrap(), true);
-        assert_eq!(unit.disable().await.unwrap(), false);
-        assert_eq!(unit.mask().await.unwrap(), true);
-        assert_eq!(unit.mask().await.unwrap(), false);
-        assert_eq!(unit.unmask().await.unwrap(), true);
-        assert_eq!(unit.unmask().await.unwrap(), false);
+        assert!(unit.enable().await.unwrap());
+        assert!(!unit.enable().await.unwrap());
+        assert!(unit.disable().await.unwrap());
+        assert!(!unit.disable().await.unwrap());
+        assert!(unit.mask().await.unwrap());
+        assert!(!unit.mask().await.unwrap());
+        assert!(unit.unmask().await.unwrap());
+        assert!(!unit.unmask().await.unwrap());
     }
 }

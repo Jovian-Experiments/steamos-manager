@@ -506,6 +506,7 @@ impl WifiPowerManagement1 {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn create_interfaces(
     session: Connection,
     system: Connection,
@@ -760,7 +761,7 @@ mod test {
     async fn test_interface_missing<I: Interface>(connection: &Connection) -> bool {
         let remote =
             testing::InterfaceIntrospection::from_remote::<I, _>(connection, MANAGER_PATH).await;
-        return remote.is_err();
+        remote.is_err()
     }
 
     #[tokio::test]

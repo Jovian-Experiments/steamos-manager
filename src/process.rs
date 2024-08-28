@@ -33,7 +33,7 @@ pub async fn script_exit_code(
     args: &[impl AsRef<OsStr>],
 ) -> Result<i32> {
     let test = crate::testing::current();
-    let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
+    let args: Vec<&OsStr> = args.iter().map(std::convert::AsRef::as_ref).collect();
     let cb = test.process_cb.get();
     cb(executable.as_ref(), args.as_ref()).map(|(res, _)| res)
 }
@@ -68,7 +68,7 @@ pub async fn script_output(
     args: &[impl AsRef<OsStr>],
 ) -> Result<String> {
     let test = crate::testing::current();
-    let args: Vec<&OsStr> = args.iter().map(|arg| arg.as_ref()).collect();
+    let args: Vec<&OsStr> = args.iter().map(std::convert::AsRef::as_ref).collect();
     let cb = test.process_cb.get();
     cb(executable.as_ref(), args.as_ref()).map(|(_, res)| res)
 }

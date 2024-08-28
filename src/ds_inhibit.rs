@@ -77,7 +77,7 @@ impl HidNode {
 
         if !matches!(
             driver.file_name().and_then(|d| d.to_str()),
-            Some("sony") | Some("playstation")
+            Some("sony" | "playstation")
         ) {
             debug!("Not a PlayStation controller");
             return false;
@@ -101,9 +101,8 @@ impl HidNode {
         let mut dir = read_dir(path("/proc")).await?;
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
-            let proc = match path.file_name().map(|p| p.to_str()) {
-                Some(Some(p)) => p,
-                _ => continue,
+            let Some(Some(proc)) = path.file_name().map(|p| p.to_str()) else {
+                continue;
             };
             let _: u32 = match proc.parse() {
                 Ok(i) => i,
@@ -147,7 +146,7 @@ impl HidNode {
 
     async fn inhibit(&self) -> Result<()> {
         let mut res = Ok(());
-        for node in self.get_nodes().await?.into_iter() {
+        for node in self.get_nodes().await? {
             if let Err(err) = write_synced(node, b"1\n").await {
                 error!("Encountered error inhibiting: {err}");
                 res = Err(err);
@@ -158,7 +157,7 @@ impl HidNode {
 
     async fn uninhibit(&self) -> Result<()> {
         let mut res = Ok(());
-        for node in self.get_nodes().await?.into_iter() {
+        for node in self.get_nodes().await? {
             if let Err(err) = write_synced(node, b"0\n").await {
                 error!("Encountered error inhibiting: {err}");
                 res = Err(err);
@@ -204,14 +203,13 @@ impl Inhibitor {
             return Ok(false);
         }
 
-        let id = match path
+        let Some(id) = path
             .file_name()
             .and_then(|f| f.to_str())
             .and_then(|s| s.strip_prefix("hidraw"))
             .and_then(|s| s.parse().ok())
-        {
-            Some(id) => id,
-            None => return Ok(false),
+        else {
+            return Ok(false);
         };
 
         let node = HidNode::new(id);
@@ -240,12 +238,11 @@ impl Inhibitor {
         const QSEC: Duration = Duration::from_millis(250);
         debug!("Got event: {:08x}", event.mask);
         if event.wd == self.dev_watch {
-            let path = match event.name {
-                Some(fname) => PathBuf::from(fname),
-                None => {
-                    error!("Got an event without an associated filename!");
-                    return Err(anyhow!("Got an event without an associated filename"));
-                }
+            let path = if let Some(fname) = event.name {
+                PathBuf::from(fname)
+            } else {
+                error!("Got an event without an associated filename!");
+                return Err(anyhow!("Got an event without an associated filename"));
             };
             debug!("New device {} found", path.display());
             let path = crate::path("/dev").join(path);
@@ -315,7 +312,7 @@ mod test {
                     }
                 }
             } => res,
-            _ = sleep(Duration::from_millis(500)) => false,
+            () = sleep(Duration::from_millis(500)) => false,
         }
     }
 
