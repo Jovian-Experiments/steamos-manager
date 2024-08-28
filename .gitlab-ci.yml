@@ -10,3 +10,11 @@ test:
   script:
     - pacman -Sy --noconfirm --needed dbus rust
     - dbus-run-session cargo test
+
+fmt:
+  stage: test
+  tags:
+    - x86_64-linux-kvm-docker
+  script:
+    - pacman -Sy --noconfirm --needed rust
+    - cargo fmt --check
