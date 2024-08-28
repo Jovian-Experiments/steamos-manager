@@ -16,9 +16,8 @@ use steamos_manager::hardware::FanControlState;
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
-    GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, GpuTdpLimit1Proxy, HdmiCec1Proxy,
-    Manager2Proxy, Storage1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy,
-    WifiPowerManagement1Proxy,
+    GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, Storage1Proxy,
+    TdpLimit1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy, WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::{IntrospectableProxy, PropertiesProxy};
@@ -329,21 +328,21 @@ async fn main() -> Result<()> {
             println!("Manual GPU Clock Min: {value}");
         }
         Commands::SetTDPLimit { limit } => {
-            let proxy = GpuTdpLimit1Proxy::new(&conn).await?;
+            let proxy = TdpLimit1Proxy::new(&conn).await?;
             proxy.set_tdp_limit(*limit).await?;
         }
         Commands::GetTDPLimit => {
-            let proxy = GpuTdpLimit1Proxy::new(&conn).await?;
+            let proxy = TdpLimit1Proxy::new(&conn).await?;
             let limit = proxy.tdp_limit().await?;
             println!("TDP limit: {limit}");
         }
         Commands::GetTDPLimitMax => {
-            let proxy = GpuTdpLimit1Proxy::new(&conn).await?;
+            let proxy = TdpLimit1Proxy::new(&conn).await?;
             let value = proxy.tdp_limit_max().await?;
             println!("TDP limit max: {value}");
         }
         Commands::GetTDPLimitMin => {
-            let proxy = GpuTdpLimit1Proxy::new(&conn).await?;
+            let proxy = TdpLimit1Proxy::new(&conn).await?;
             let value = proxy.tdp_limit_min().await?;
             println!("TDP limit min: {value}");
         }

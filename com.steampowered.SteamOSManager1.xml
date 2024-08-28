@@ -163,37 +163,6 @@
   </interface>
 
   <!--
-      com.steampowered.SteamOSManager1.GpuTdpLimit1
-      @short_description: Optional interface for GPU TDP limits.
-  -->
-  <interface name="com.steampowered.SteamOSManager1.GpuTdpLimit1">
-
-    <!--
-        TdpLimit:
-
-        Controls the GPU TDP limit.
-
-        Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
-    -->
-    <property name="TdpLimit" type="u" access="readwrite"/>
-
-    <!--
-        TdpLimitMin:
-
-        Minimum allowed TDP Limit.
-    -->
-    <property name="TdpLimitMin" type="u" access="read"/>
-
-    <!--
-        TdpLimitMax:
-
-        Maximum allowed TDP Limit.
-    -->
-    <property name="TdpLimitMax" type="u" access="read"/>
-
-  </interface>
-
-  <!--
       com.steampowered.SteamOSManager1.HdmiCec1
       @short_description: Optional interface for HDMI-CEC.
   -->
@@ -275,6 +244,37 @@
     <method name="TrimDevices">
       <arg type="o" name="jobpath" direction="out"/>
     </method>
+
+  </interface>
+
+  <!--
+      com.steampowered.SteamOSManager1.TdpLimit1
+      @short_description: Optional interface for TDP limits.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.TdpLimit1">
+
+    <!--
+        TdpLimit:
+
+        Controls the TDP limit.
+
+        Valid states: In range of [ TdpLimitMin, TdpLimitMax ]
+    -->
+    <property name="TdpLimit" type="u" access="readwrite"/>
+
+    <!--
+        TdpLimitMin:
+
+        Minimum allowed TDP Limit.
+    -->
+    <property name="TdpLimitMin" type="u" access="read"/>
+
+    <!--
+        TdpLimitMax:
+
+        Maximum allowed TDP Limit.
+    -->
+    <property name="TdpLimitMax" type="u" access="read"/>
 
   </interface>
 
