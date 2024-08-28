@@ -44,7 +44,7 @@ enum Commands {
 
     /// Set the fan control state
     SetFanControlState {
-        /// Valid options are bios, os
+        /// Valid options are `bios`, `os`
         state: FanControlState,
     },
 
@@ -77,26 +77,26 @@ enum Commands {
 
     /// Set the GPU performance level
     SetGPUPerformanceLevel {
-        /// Valid levels are auto, low, high, manual, profile_peak
+        /// Valid levels are `auto`, `low`, `high`, `manual`, `profile_peak`
         level: GPUPerformanceLevel,
     },
 
     /// Get the GPU performance level
     GetGPUPerformanceLevel,
 
-    /// Set the GPU clock value manually. Only works when performance level is set to Manual
+    /// Set the GPU clock value manually. Only works when performance level is set to `manual`
     SetManualGPUClock {
         /// GPU clock frequency in MHz
         freq: u32,
     },
 
-    /// Get the GPU clock frequency, in MHz. Only works when performance level is set to Manual
+    /// Get the GPU clock frequency, in MHz. Only works when performance level is set to `manual`
     GetManualGPUClock,
 
-    /// Get the maximum allowed GPU clock frequency for the Manual performance level
+    /// Get the maximum allowed GPU clock frequency for the `manual` performance level
     GetManualGPUClockMax,
 
-    /// Get the minimum allowed GPU clock frequency for the Manual performance level
+    /// Get the minimum allowed GPU clock frequency for the `manual` performance level
     GetManualGPUClockMin,
 
     /// Set the TDP limit
@@ -114,33 +114,33 @@ enum Commands {
     /// Get the minimum allowed TDP limit
     GetTDPLimitMin,
 
-    /// Set the wifi backend if possible
+    /// Set the Wi-Fi backend, if possible
     SetWifiBackend {
-        /// Supported backends are iwd, wpa_supplicant
+        /// Supported backends are `iwd`, `wpa_supplicant`
         backend: WifiBackend,
     },
 
-    /// Get the wifi backend
+    /// Get the Wi-Fi backend
     GetWifiBackend,
 
-    /// Set wifi debug mode
+    /// Set Wi-Fi debug mode, if possible
     SetWifiDebugMode {
-        /// Valid modes are on, off
+        /// Valid modes are `on`, `off`
         mode: WifiDebugMode,
         /// The size of the debug buffer, in bytes
         buffer: Option<u32>,
     },
 
-    /// Get wifi debug mode
+    /// Get Wi-Fi debug mode
     GetWifiDebugMode,
 
-    /// Set the wifi power management state
+    /// Set the Wi-Fi power management state
     SetWifiPowerManagementState {
-        /// Valid modes are enabled, disabled
+        /// Valid modes are `enabled`, `disabled`
         state: WifiPowerManagement,
     },
 
-    /// Get the wifi power management state
+    /// Get the Wi-Fi power management state
     GetWifiPowerManagementState,
 
     /// Get the state of HDMI-CEC support
@@ -148,7 +148,7 @@ enum Commands {
 
     /// Set the state of HDMI-CEC support
     SetHdmiCecState {
-        /// Valid modes are disabled, control-only, control-and-wake
+        /// Valid modes are `disabled`, `control-only`, `control-and-wake`
         state: HdmiCecState,
     },
 
