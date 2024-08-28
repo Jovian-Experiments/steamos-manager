@@ -25,7 +25,7 @@ use zbus::{interface, zvariant, Connection, Interface, InterfaceRef, SignalConte
 use zbus_xml::Node;
 
 use crate::error::{to_zbus_fdo_error, zbus_to_zbus_fdo};
-use crate::proxy::{JobManager1Proxy, Job1Proxy};
+use crate::proxy::{Job1Proxy, JobManager1Proxy};
 use crate::Service;
 
 const JOB_PREFIX: &str = "/com/steampowered/SteamOSManager1/Jobs";
