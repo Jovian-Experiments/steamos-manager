@@ -13,7 +13,7 @@ strip="symbols"
 anyhow = "1"
 async-trait = "0.1"
 clap = { version = "4.5", default-features = false, features = ["derive", "help", "std", "usage"] }
-config = { version = "0.14", default-features = false, features = ["async", "toml"] }
+config = { version = "0.14", default-features = false, features = ["async", "ini", "toml"] }
 inotify = { version = "0.10", default-features = false, features = ["stream"] }
 lazy_static = "1"
 libc = "0.2"

@@ -6,15 +6,17 @@
  */
 
 use anyhow::{anyhow, bail, ensure, Error, Result};
+use config::builder::AsyncState;
+use config::{ConfigBuilder, FileFormat};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use tokio::fs;
 use tracing::error;
 use zbus::Connection;
 
-use crate::path;
 use crate::process::{run_script, script_output};
 use crate::systemd::{daemon_reload, SystemdUnit};
+use crate::{path, read_config_directory};
 
 const OVERRIDE_CONTENTS: &str = "[Service]
 ExecStart=
@@ -30,7 +32,10 @@ const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
 
 const MIN_BUFFER_SIZE: u32 = 100;
 
-const WIFI_BACKEND_PATH: &str = "/etc/NetworkManager/conf.d/99-valve-wifi-backend.conf";
+const WIFI_BACKEND_PATHS: &[&str] = &[
+    "/usr/lib/etc/NetworkManager/conf.d",
+    "/etc/NetworkManager/conf.d",
+];
 
 #[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
@@ -209,15 +214,19 @@ pub(crate) async fn set_wifi_debug_mode(
 }
 
 pub(crate) async fn get_wifi_backend() -> Result<WifiBackend> {
-    let wifi_backend_contents = fs::read_to_string(path(WIFI_BACKEND_PATH))
-        .await?
-        .trim()
-        .to_string();
-    for line in wifi_backend_contents.lines() {
-        if line.starts_with("wifi.backend=") {
-            let backend = line.trim_start_matches("wifi.backend=").trim();
-            return Ok(WifiBackend::from_str(backend)?);
-        }
+    let mut builder = ConfigBuilder::<AsyncState>::default();
+    for dir in WIFI_BACKEND_PATHS {
+        println!("{dir}");
+        builder = read_config_directory(builder, path(dir), &["conf"], FileFormat::Ini).await?;
+    }
+    println!("{builder:?}");
+    let config = builder.build().await?;
+    println!("{config:?}");
+
+    if let Some(backend) = config.get_table("device")?.remove("wifi.backend") {
+        let backend = backend.into_string()?;
+        println!("{backend:?}");
+        return Ok(WifiBackend::from_str(backend.as_str())?);
     }
 
     bail!("Wi-Fi backend not found in config");
@@ -330,29 +339,35 @@ mod test {
     async fn test_get_wifi_backend() {
         let _h = testing::start();
 
-        create_dir_all(path(WIFI_BACKEND_PATH).parent().unwrap())
-            .await
-            .expect("create_dir_all");
+        for dir in WIFI_BACKEND_PATHS {
+            create_dir_all(path(dir)).await.expect("create_dir_all");
+        }
 
         assert!(get_wifi_backend().await.is_err());
 
-        write(path(WIFI_BACKEND_PATH), "[device]")
+        write(path(WIFI_BACKEND_PATHS[0]).join("test.conf"), "[device]")
             .await
             .expect("write");
         assert!(get_wifi_backend().await.is_err());
 
-        write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=fake\n")
-            .await
-            .expect("write");
+        write(
+            path(WIFI_BACKEND_PATHS[0]).join("test.conf"),
+            "[device]\nwifi.backend=fake\n",
+        )
+        .await
+        .expect("write");
         assert!(get_wifi_backend().await.is_err());
 
-        write(path(WIFI_BACKEND_PATH), "[device]\nwifi.backend=iwd\n")
-            .await
-            .expect("write");
+        write(
+            path(WIFI_BACKEND_PATHS[0]).join("test.conf"),
+            "[device]\nwifi.backend=iwd\n",
+        )
+        .await
+        .expect("write");
         assert_eq!(get_wifi_backend().await.unwrap(), WifiBackend::Iwd);
 
         write(
-            path(WIFI_BACKEND_PATH),
+            path(WIFI_BACKEND_PATHS[0]).join("test.conf"),
             "[device]\nwifi.backend=wpa_supplicant\n",
         )
         .await
