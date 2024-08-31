@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#![allow(clippy::module_name_repetitions)]
+
 // Re-export relevant proxies
 
 // TODO Some of these should get renamed

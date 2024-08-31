@@ -55,6 +55,7 @@ impl fmt::Display for HdmiCecState {
 }
 
 impl HdmiCecState {
+    #[must_use]
     pub fn to_human_readable(&self) -> &'static str {
         match self {
             HdmiCecState::Disabled => "disabled",
