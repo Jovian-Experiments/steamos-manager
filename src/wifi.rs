@@ -216,16 +216,12 @@ pub(crate) async fn set_wifi_debug_mode(
 pub(crate) async fn get_wifi_backend() -> Result<WifiBackend> {
     let mut builder = ConfigBuilder::<AsyncState>::default();
     for dir in WIFI_BACKEND_PATHS {
-        println!("{dir}");
         builder = read_config_directory(builder, path(dir), &["conf"], FileFormat::Ini).await?;
     }
-    println!("{builder:?}");
     let config = builder.build().await?;
-    println!("{config:?}");
 
     if let Some(backend) = config.get_table("device")?.remove("wifi.backend") {
         let backend = backend.into_string()?;
-        println!("{backend:?}");
         return Ok(WifiBackend::from_str(backend.as_str())?);
     }
 
