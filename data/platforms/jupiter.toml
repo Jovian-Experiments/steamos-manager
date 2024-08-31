@@ -23,3 +23,7 @@ systemd = "jupiter-fan-control.service"
 [tdp_limit]
 min = 3
 max = 15
+
+[gpu_clocks]
+min = 200
+max = 1600

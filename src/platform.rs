@@ -27,6 +27,7 @@ pub(crate) struct PlatformConfig {
     pub storage: Option<StorageConfig>,
     pub fan_control: Option<ServiceConfig>,
     pub tdp_limit: Option<RangeConfig<u32>>,
+    pub gpu_clocks: Option<RangeConfig<u32>>,
 }
 
 #[derive(Clone, Deserialize, Debug)]

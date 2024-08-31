@@ -268,6 +268,13 @@ pub(crate) async fn set_cpu_scaling_governor(governor: CPUScalingGovernor) -> Re
 }
 
 pub(crate) async fn get_gpu_clocks_range() -> Result<(u32, u32)> {
+    if let Some(range) = platform_config()
+        .await?
+        .as_ref()
+        .and_then(|config| config.gpu_clocks)
+    {
+        return Ok((range.min, range.max));
+    }
     let contents = read_gpu_sysfs_contents(GPU_CLOCK_LEVELS_SUFFIX).await?;
     let lines = contents.lines();
     let mut min = 1_000_000;

@@ -370,6 +370,7 @@ pub mod test {
                 "jupiter-fan-control.service",
             ))),
             tdp_limit: None,
+            gpu_clocks: None,
         }));
 
         let fan_control = FanControl::new(connection);

@@ -692,6 +692,7 @@ mod test {
                 "jupiter-fan-control.service",
             ))),
             tdp_limit: Some(RangeConfig::new(3, 15)),
+            gpu_clocks: Some(RangeConfig::new(200, 1600)),
         })
     }
 
