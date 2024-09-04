@@ -281,6 +281,7 @@ pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) 
 mod test {
     use super::*;
     use crate::{enum_on_off, enum_roundtrip, testing};
+    use std::ffi::OsStr;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, try_exists, write};
 
     #[test]
@@ -371,6 +372,96 @@ mod test {
         assert_eq!(
             get_wifi_backend().await.unwrap(),
             WifiBackend::WPASupplicant
+        );
+    }
+
+    #[tokio::test]
+    async fn test_power_management() {
+        let h = testing::start();
+
+        fn process_output(executable: &OsStr, args: &[&OsStr]) -> Result<(i32, String)> {
+            ensure!(executable.to_string_lossy() == "/usr/bin/iw", "Not iw");
+            ensure!(args[0] == "dev", "Not dev");
+            if args.len() < 2 {
+                return Ok((0, String::from("Interface eth0")));
+            }
+            ensure!(args[1] == "eth0", "Not eth0");
+            ensure!(args[3] == "power_save", "Not power_save");
+            match args[2].to_str() {
+                Some("get") => Ok((0, String::from("Power save: on"))),
+                Some("set") => {
+                    ensure!(args[4] == "on");
+                    Ok((0, String::new()))
+                }
+                _ => bail!("Unknown query"),
+            }
+        }
+        h.test.process_cb.set(process_output);
+
+        assert_eq!(
+            get_wifi_power_management_state().await.expect("get"),
+            WifiPowerManagement::Enabled
+        );
+
+        assert!(
+            set_wifi_power_management_state(WifiPowerManagement::Enabled)
+                .await
+                .is_ok()
+        );
+        assert!(
+            set_wifi_power_management_state(WifiPowerManagement::Disabled)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_power_management_disabled() {
+        let h = testing::start();
+
+        fn process_output(executable: &OsStr, args: &[&OsStr]) -> Result<(i32, String)> {
+            ensure!(executable.to_string_lossy() == "/usr/bin/iw", "Not iw");
+            ensure!(args[0] == "dev", "Not dev");
+            if args.len() < 2 {
+                return Ok((0, String::from("Interface eth0")));
+            }
+            ensure!(args[1] == "eth0", "Not eth0");
+            ensure!(args[3] == "power_save", "Not power_save");
+            match args[2].to_str() {
+                Some("get") => Ok((0, String::from("Power save: off"))),
+                _ => bail!("Unknown query"),
+            }
+        }
+        h.test.process_cb.set(process_output);
+
+        assert_eq!(
+            get_wifi_power_management_state().await.expect("get"),
+            WifiPowerManagement::Disabled
+        );
+    }
+
+    #[tokio::test]
+    async fn test_power_management_multi_iface() {
+        let h = testing::start();
+
+        fn process_output(executable: &OsStr, args: &[&OsStr]) -> Result<(i32, String)> {
+            ensure!(executable.to_string_lossy() == "/usr/bin/iw", "Not iw");
+            ensure!(args[0] == "dev", "Not dev");
+            if args.len() < 2 {
+                return Ok((0, String::from("Interface eth0\nInterface eth1")));
+            }
+            ensure!(args[3] == "power_save", "Not power_save");
+            match args[1].to_str() {
+                Some("eth0") => Ok((0, String::from("Power save: off"))),
+                Some("eth1") => Ok((0, String::from("Power save: on"))),
+                _ => bail!("Unknown query"),
+            }
+        }
+        h.test.process_cb.set(process_output);
+
+        assert_eq!(
+            get_wifi_power_management_state().await.expect("get"),
+            WifiPowerManagement::Enabled
         );
     }
 
