@@ -1,7 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use libc::pid_t;
 use nix::sys::signal;
-use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -20,7 +19,7 @@ use tokio::sync::Mutex;
 use tracing::error;
 use zbus::zvariant::ObjectPath;
 use zbus::{Address, Connection, ConnectionBuilder, Interface};
-use zbus_xml::{Method, Node, Property};
+use zbus_xml::{Method, Node, Property, Signal};
 
 use crate::platform::PlatformConfig;
 
@@ -147,7 +146,7 @@ impl MockDBus {
             Ok(pid) => pid,
             Err(message) => bail!("Unable to get pid_t from command {message}"),
         };
-        signal::kill(Pid::from_raw(pid), Signal::SIGINT)?;
+        signal::kill(Pid::from_raw(pid), signal::Signal::SIGINT)?;
         for _ in [0..10] {
             // Wait for the process to exit synchronously, but not for too long
             if self.process.try_wait()?.is_some() {
@@ -247,6 +246,14 @@ impl<'a> InterfaceIntrospection<'a> {
         map
     }
 
+    fn collect_signals(&self) -> HashMap<String, &Signal<'_>> {
+        let mut map = HashMap::new();
+        for signal in self.interface.signals() {
+            map.insert(signal.name().to_string(), signal);
+        }
+        map
+    }
+
     fn compare_methods(&self, other: &InterfaceIntrospection<'_>) -> u32 {
         let local_methods = self.collect_methods();
         let local_method_names: HashSet<&String> = local_methods.keys().collect();
@@ -331,10 +338,47 @@ impl<'a> InterfaceIntrospection<'a> {
         issues
     }
 
+    fn compare_signals(&self, other: &InterfaceIntrospection<'_>) -> u32 {
+        let local_signals = self.collect_signals();
+        let local_signal_names: HashSet<&String> = local_signals.keys().collect();
+
+        let other_signals = other.collect_signals();
+        let other_signal_names: HashSet<&String> = other_signals.keys().collect();
+
+        let mut issues = 0;
+
+        for key in local_signal_names.union(&other_signal_names) {
+            let Some(local_signal) = local_signals.get(*key) else {
+                error!("Signal {key} missing on self");
+                issues += 1;
+                continue;
+            };
+
+            let Some(other_signal) = other_signals.get(*key) else {
+                error!("Signal {key} missing on other");
+                issues += 1;
+                continue;
+            };
+
+            for (local_arg, other_arg) in
+                zip(local_signal.args().iter(), other_signal.args().iter())
+            {
+                if local_arg.ty() != other_arg.ty() {
+                    error!("Arguments {local_arg:?} and {other_arg:?} differ in type");
+                    issues += 1;
+                    continue;
+                }
+            }
+        }
+
+        issues
+    }
+
     pub fn compare(&self, other: &InterfaceIntrospection<'_>) -> bool {
         let mut issues = 0;
         issues += self.compare_methods(other);
         issues += self.compare_properties(other);
+        issues += self.compare_signals(other);
 
         issues == 0
     }
