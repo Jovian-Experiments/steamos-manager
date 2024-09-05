@@ -256,22 +256,16 @@ impl<'a> InterfaceIntrospection<'a> {
         let mut issues = 0;
 
         for key in local_method_names.union(&other_method_names) {
-            let local_method = match local_methods.get(*key) {
-                None => {
-                    error!("Method {key} missing on self");
-                    issues += 1;
-                    continue;
-                }
-                Some(method) => method,
+            let Some(local_method) = local_methods.get(*key) else {
+                error!("Method {key} missing on self");
+                issues += 1;
+                continue;
             };
 
-            let other_method = match other_methods.get(*key) {
-                None => {
-                    error!("Method {key} missing on other");
-                    issues += 1;
-                    continue;
-                }
-                Some(method) => method,
+            let Some(other_method) = other_methods.get(*key) else {
+                error!("Method {key} missing on other");
+                issues += 1;
+                continue;
             };
 
             if local_method.args().len() != other_method.args().len() {
@@ -309,22 +303,16 @@ impl<'a> InterfaceIntrospection<'a> {
         let mut issues = 0;
 
         for key in local_property_names.union(&other_property_names) {
-            let local_property = match local_properties.get(*key) {
-                None => {
-                    error!("Property {key} missing on self");
-                    issues += 1;
-                    continue;
-                }
-                Some(prop) => prop,
+            let Some(local_property) = local_properties.get(*key) else {
+                error!("Property {key} missing on self");
+                issues += 1;
+                continue;
             };
 
-            let other_property = match other_properties.get(*key) {
-                None => {
-                    error!("Property {key} missing on other");
-                    issues += 1;
-                    continue;
-                }
-                Some(prop) => prop,
+            let Some(other_property) = other_properties.get(*key) else {
+                error!("Property {key} missing on other");
+                issues += 1;
+                continue;
             };
 
             if local_property.ty() != other_property.ty() {
