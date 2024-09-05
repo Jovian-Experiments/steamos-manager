@@ -18,7 +18,7 @@ use zbus::{self, interface, Connection, InterfaceRef, SignalContext};
 use crate::thread::spawn;
 use crate::Service;
 
-const PATH: &str = "/com/steampowered/SteamOSManager1/UdevEvents";
+const PATH: &str = "/com/steampowered/SteamOSManager1";
 
 pub(crate) struct UdevMonitor
 where
@@ -65,7 +65,7 @@ impl Service for UdevMonitor {
                     port,
                     count,
                 } => {
-                    UdevDbusObject::over_current(
+                    UdevDbusObject::usb_over_current(
                         self.udev_object.signal_context(),
                         devpath.as_str(),
                         port.as_str(),
@@ -88,7 +88,7 @@ impl UdevMonitor {
         let object_server = connection.object_server();
         ensure!(
             object_server.at(PATH, UdevDbusObject {}).await?,
-            "Could not register UdevEvents"
+            "Could not register UdevEvents1"
         );
         let udev_object: InterfaceRef<UdevDbusObject> = object_server.interface(PATH).await?;
         let (shutdown_receiver, shutdown_sender) = pipe()?;
@@ -100,10 +100,10 @@ impl UdevMonitor {
     }
 }
 
-#[interface(name = "com.steampowered.SteamOSManager1.UdevEvents")]
+#[interface(name = "com.steampowered.SteamOSManager1.UdevEvents1")]
 impl UdevDbusObject {
     #[zbus(signal)]
-    async fn over_current(
+    async fn usb_over_current(
         signal_ctxt: &SignalContext<'_>,
         devpath: &str,
         port: &str,
@@ -169,4 +169,35 @@ fn process_usb_event(ev: &Event, tx: &UnboundedSender<UdevEvent>) -> Result<()> 
         count,
     })?;
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::sleep;
+    use zbus::Interface;
+
+    use crate::testing;
+
+    #[tokio::test]
+    async fn test_interface_matches() {
+        let mut handle = testing::start();
+        let connection = handle.new_dbus().await.expect("new_dbus");
+        sleep(Duration::from_millis(1)).await;
+        let object_server = connection.object_server();
+        object_server.at(PATH, UdevDbusObject {}).await.expect("at");
+
+        let remote =
+            testing::InterfaceIntrospection::from_remote::<UdevDbusObject, _>(&connection, PATH)
+                .await
+                .expect("remove");
+        let local = testing::InterfaceIntrospection::from_local(
+            "com.steampowered.SteamOSManager1.xml",
+            UdevDbusObject::name().to_string(),
+        )
+        .await
+        .expect("local");
+        assert!(remote.compare(&local));
+    }
 }

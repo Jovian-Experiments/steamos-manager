@@ -440,7 +440,7 @@
       @short_description: Specific udev events that are monitored to be
       bubbled up to the desktop interface.
   -->
-  <interface name="com.steampowered.SteamOSManager1.UdevEvents">
+  <interface name="com.steampowered.SteamOSManager1.UdevEvents1">
 
       <!--
         OverCurrent:
@@ -452,7 +452,7 @@
         @count: The number of times this devices has had an over-current
         event.
         -->
-      <signal name="OverCurrent">
+      <signal name="UsbOverCurrent">
         <arg type="s" name="devpath"/>
         <arg type="s" name="port"/>
         <arg type="t" name="count"/>
