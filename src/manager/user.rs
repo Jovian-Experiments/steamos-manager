@@ -430,18 +430,12 @@ impl TdpLimit1 {
 
     #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_min(&self) -> u32 {
-        get_tdp_limit_range()
-            .await
-            .map(|(min, _)| min)
-            .unwrap_or(0)
+        get_tdp_limit_range().await.map(|(min, _)| min).unwrap_or(0)
     }
 
     #[zbus(property(emits_changed_signal = "const"))]
     async fn tdp_limit_max(&self) -> u32 {
-        get_tdp_limit_range()
-            .await
-            .map(|(_, max)| max)
-            .unwrap_or(0)
+        get_tdp_limit_range().await.map(|(_, max)| max).unwrap_or(0)
     }
 }
 
