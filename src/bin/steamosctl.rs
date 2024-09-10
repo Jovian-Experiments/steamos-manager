@@ -174,7 +174,7 @@ async fn get_all_properties(conn: &Connection) -> Result<()> {
     let introspection = Node::from_reader(Cursor::new(introspection))?;
 
     let properties_proxy = PropertiesProxy::new(
-        &conn,
+        conn,
         "com.steampowered.SteamOSManager1",
         "/com/steampowered/SteamOSManager1",
     )

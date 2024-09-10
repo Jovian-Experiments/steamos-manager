@@ -432,7 +432,7 @@ impl TdpLimit1 {
     async fn tdp_limit_min(&self) -> u32 {
         get_tdp_limit_range()
             .await
-            .and_then(|(min, _)| Ok(min))
+            .map(|(min, _)| min)
             .unwrap_or(0)
     }
 
@@ -440,7 +440,7 @@ impl TdpLimit1 {
     async fn tdp_limit_max(&self) -> u32 {
         get_tdp_limit_range()
             .await
-            .and_then(|(_, max)| Ok(max))
+            .map(|(_, max)| max)
             .unwrap_or(0)
     }
 }
