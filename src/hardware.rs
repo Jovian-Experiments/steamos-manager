@@ -5,7 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, ensure, Error, Result};
+use anyhow::{bail, ensure, Error, Result};
+use num_enum::TryFromPrimitive;
 use std::fmt;
 use std::str::FromStr;
 use tokio::fs;
@@ -27,7 +28,7 @@ pub(crate) enum HardwareVariant {
     Galileo,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub(crate) enum HardwareCurrentlySupported {
     Unknown = 0,
@@ -35,7 +36,7 @@ pub(crate) enum HardwareCurrentlySupported {
     Supported = 2,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
 #[repr(u32)]
 pub enum FanControlState {
     Bios = 0,
@@ -53,41 +54,12 @@ impl FromStr for HardwareVariant {
     }
 }
 
-impl TryFrom<u32> for HardwareCurrentlySupported {
-    type Error = anyhow::Error;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == HardwareCurrentlySupported::Unknown as u32 => {
-                Ok(HardwareCurrentlySupported::Unknown)
-            }
-            x if x == HardwareCurrentlySupported::UnsupportedPrototype as u32 => {
-                Ok(HardwareCurrentlySupported::UnsupportedPrototype)
-            }
-            x if x == HardwareCurrentlySupported::Supported as u32 => {
-                Ok(HardwareCurrentlySupported::Supported)
-            }
-            _ => Err(anyhow!("No enum match for value {v}")),
-        }
-    }
-}
-
 impl fmt::Display for HardwareCurrentlySupported {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             HardwareCurrentlySupported::Unknown => write!(f, "Unknown"),
             HardwareCurrentlySupported::UnsupportedPrototype => write!(f, "Unsupported Prototype"),
             HardwareCurrentlySupported::Supported => write!(f, "Supported"),
-        }
-    }
-}
-
-impl TryFrom<u32> for FanControlState {
-    type Error = Error;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == FanControlState::Bios as u32 => Ok(FanControlState::Bios),
-            x if x == FanControlState::Os as u32 => Ok(FanControlState::Os),
-            _ => Err(anyhow!("No enum match for value {v}")),
         }
     }
 }
@@ -172,7 +144,7 @@ impl FanControl {
             }) => {
                 let res = script_exit_code(&status.script, &status.script_args).await?;
                 ensure!(res >= 0, "Script exited abnormally");
-                FanControlState::try_from(res as u32)
+                Ok(FanControlState::try_from(res as u32)?)
             }
             None => bail!("Fan control not configured"),
         }

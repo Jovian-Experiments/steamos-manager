@@ -7,6 +7,7 @@
 
 use anyhow::{anyhow, bail, ensure, Result};
 use lazy_static::lazy_static;
+use num_enum::TryFromPrimitive;
 use regex::Regex;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -43,8 +44,9 @@ lazy_static! {
         Regex::new(r"^\s*(?<index>[0-9]+): (?<value>[0-9]+)Mhz").unwrap();
 }
 
-#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
 #[strum(serialize_all = "snake_case")]
+#[repr(u32)]
 pub enum GPUPowerProfile {
     // Currently firmware exposes these values, though
     // deck doesn't support them yet
@@ -58,22 +60,6 @@ pub enum GPUPowerProfile {
     // deck hardware/firmware. Add more later as needed
     Capped = 8,
     Uncapped = 9,
-}
-
-impl TryFrom<u32> for GPUPowerProfile {
-    type Error = &'static str;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == GPUPowerProfile::FullScreen as u32 => Ok(GPUPowerProfile::FullScreen),
-            x if x == GPUPowerProfile::Video as u32 => Ok(GPUPowerProfile::Video),
-            x if x == GPUPowerProfile::VR as u32 => Ok(GPUPowerProfile::VR),
-            x if x == GPUPowerProfile::Compute as u32 => Ok(GPUPowerProfile::Compute),
-            x if x == GPUPowerProfile::Custom as u32 => Ok(GPUPowerProfile::Custom),
-            x if x == GPUPowerProfile::Capped as u32 => Ok(GPUPowerProfile::Capped),
-            x if x == GPUPowerProfile::Uncapped as u32 => Ok(GPUPowerProfile::Uncapped),
-            _ => Err("No GPUPowerProfile for value"),
-        }
-    }
 }
 
 #[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]

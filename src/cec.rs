@@ -6,30 +6,20 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{bail, Error, Result};
+use num_enum::TryFromPrimitive;
 use std::fmt;
 use std::str::FromStr;
 use zbus::Connection;
 
 use crate::systemd::{daemon_reload, EnableState, SystemdUnit};
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
+#[repr(u32)]
 pub enum HdmiCecState {
     Disabled = 0,
     ControlOnly = 1,
     ControlAndWake = 2,
-}
-
-impl TryFrom<u32> for HdmiCecState {
-    type Error = Error;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == HdmiCecState::Disabled as u32 => Ok(HdmiCecState::Disabled),
-            x if x == HdmiCecState::ControlOnly as u32 => Ok(HdmiCecState::ControlOnly),
-            x if x == HdmiCecState::ControlAndWake as u32 => Ok(HdmiCecState::ControlAndWake),
-            _ => Err(anyhow!("No enum match for value {v}")),
-        }
-    }
 }
 
 impl FromStr for HdmiCecState {

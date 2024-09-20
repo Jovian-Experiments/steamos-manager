@@ -5,9 +5,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::{anyhow, bail, ensure, Error, Result};
+use anyhow::{bail, ensure, Result};
 use config::builder::AsyncState;
 use config::{ConfigBuilder, FileFormat};
+use num_enum::TryFromPrimitive;
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use tokio::fs;
@@ -37,7 +38,7 @@ const WIFI_BACKEND_PATHS: &[&str] = &[
     "/etc/NetworkManager/conf.d",
 ];
 
-#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 #[repr(u32)]
 pub enum WifiDebugMode {
@@ -51,7 +52,7 @@ pub enum WifiDebugMode {
     Tracing = 1,
 }
 
-#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
 #[strum(ascii_case_insensitive)]
 #[repr(u32)]
 pub enum WifiPowerManagement {
@@ -71,45 +72,12 @@ pub enum WifiPowerManagement {
     Enabled = 1,
 }
 
-#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 #[repr(u32)]
 pub enum WifiBackend {
     Iwd = 0,
     WPASupplicant = 1,
-}
-
-impl TryFrom<u32> for WifiDebugMode {
-    type Error = Error;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == WifiDebugMode::Off as u32 => Ok(WifiDebugMode::Off),
-            x if x == WifiDebugMode::Tracing as u32 => Ok(WifiDebugMode::Tracing),
-            _ => Err(anyhow!("No enum match for value {v}")),
-        }
-    }
-}
-
-impl TryFrom<u32> for WifiPowerManagement {
-    type Error = Error;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == WifiPowerManagement::Disabled as u32 => Ok(WifiPowerManagement::Disabled),
-            x if x == WifiPowerManagement::Enabled as u32 => Ok(WifiPowerManagement::Enabled),
-            _ => Err(anyhow!("No enum match for value {v}")),
-        }
-    }
-}
-
-impl TryFrom<u32> for WifiBackend {
-    type Error = Error;
-    fn try_from(v: u32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == WifiBackend::Iwd as u32 => Ok(WifiBackend::Iwd),
-            x if x == WifiBackend::WPASupplicant as u32 => Ok(WifiBackend::WPASupplicant),
-            _ => Err(anyhow!("No enum match for WifiBackend value {v}")),
-        }
-    }
 }
 
 pub(crate) async fn setup_iwd_config(want_override: bool) -> std::io::Result<()> {
