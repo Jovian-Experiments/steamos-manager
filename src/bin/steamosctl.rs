@@ -11,7 +11,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 use std::io::Cursor;
 use steamos_manager::cec::HdmiCecState;
-use steamos_manager::hardware::FanControlState;
+use steamos_manager::hardware::{FactoryResetKind, FanControlState};
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
@@ -160,8 +160,11 @@ enum Commands {
     /// Trim applicable drives
     TrimDevices,
 
-    /// Factory reset the device
-    FactoryReset,
+    /// Factory reset the os/user partitions
+    PrepareFactoryReset {
+        /// Valid kind(s) are `user`, `os`, `all`
+        kind: FactoryResetKind,
+    },
 }
 
 async fn get_all_properties(conn: &Connection) -> Result<()> {
@@ -413,9 +416,9 @@ async fn main() -> Result<()> {
             let proxy = UpdateDock1Proxy::new(&conn).await?;
             let _ = proxy.update_dock().await?;
         }
-        Commands::FactoryReset => {
+        Commands::PrepareFactoryReset { kind } => {
             let proxy = FactoryReset1Proxy::new(&conn).await?;
-            let _ = proxy.prepare_factory_reset().await?;
+            let _ = proxy.prepare_factory_reset(*kind as u32).await?;
         }
         Commands::TrimDevices => {
             let proxy = Storage1Proxy::new(&conn).await?;

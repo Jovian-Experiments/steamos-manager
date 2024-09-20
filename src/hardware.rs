@@ -68,6 +68,15 @@ impl fmt::Display for HardwareCurrentlySupported {
     }
 }
 
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
+#[strum(ascii_case_insensitive)]
+#[repr(u32)]
+pub enum FactoryResetKind {
+    User = 1,
+    OS = 2,
+    All = 3,
+}
+
 pub(crate) async fn variant() -> Result<HardwareVariant> {
     let board_vendor = fs::read_to_string(path(BOARD_VENDOR_PATH)).await?;
     if board_vendor.trim_end() != "Valve" {

@@ -1,5 +1,14 @@
-[factory_reset]
-script = "/usr/bin/steamos-factory-reset-config"
+[factory_reset.all]
+script  = "/usr/bin/steamos-reset-tool"
+script_args = ["factory-reset", "--reset-all"]
+
+[factory_reset.os]
+script  = "/usr/bin/steamos-reset-tool"
+script_args = ["factory-reset", "--reset-os"]
+  
+[factory_reset.user]
+script  = "/usr/bin/steamos-reset-tool"
+script_args = ["factory-reset", "--reset-user-data"]
 
 [update_bios]
 script = "/usr/bin/jupiter-biosupdate"

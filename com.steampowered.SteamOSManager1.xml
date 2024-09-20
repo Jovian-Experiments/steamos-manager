@@ -65,11 +65,13 @@
         Perform factory reset of device. Runs steamos-factory-reset script for
         now.
 
+        @kind: 1 = Clear just user settings, 2 = Clear just OS, 3 = clear both user settings and OS
         @returns: Status of reset operation.
 
         Valid statuses: 0 = Unknown, 1 = RebootRequired
     -->
     <method name="PrepareFactoryReset">
+      <arg type="u" name="kind" direction="in"/>
       <arg type="u" name="status" direction="out"/>
     </method>
 

@@ -21,7 +21,7 @@ static CONFIG: OnceCell<Option<PlatformConfig>> = OnceCell::const_new();
 #[derive(Clone, Default, Deserialize, Debug)]
 #[serde(default)]
 pub(crate) struct PlatformConfig {
-    pub factory_reset: Option<ScriptConfig>,
+    pub factory_reset: Option<ResetConfig>,
     pub update_bios: Option<ScriptConfig>,
     pub update_dock: Option<ScriptConfig>,
     pub storage: Option<StorageConfig>,
@@ -43,6 +43,13 @@ pub(crate) struct ScriptConfig {
     pub script: PathBuf,
     #[serde(default)]
     pub script_args: Vec<String>,
+}
+
+#[derive(Clone, Default, Deserialize, Debug)]
+pub(crate) struct ResetConfig {
+    pub all: ScriptConfig,
+    pub os: ScriptConfig,
+    pub user: ScriptConfig,
 }
 
 #[derive(Clone, Deserialize, Debug)]

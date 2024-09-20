@@ -6,7 +6,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use tokio::fs::File;
@@ -19,7 +19,7 @@ use zbus::{fdo, interface, Connection, SignalContext};
 use crate::daemon::root::{Command, RootCommand};
 use crate::daemon::DaemonCommand;
 use crate::error::{to_zbus_error, to_zbus_fdo_error};
-use crate::hardware::{variant, FanControl, FanControlState, HardwareVariant};
+use crate::hardware::{variant, FactoryResetKind, FanControl, FanControlState, HardwareVariant};
 use crate::job::JobManager;
 use crate::platform::platform_config;
 use crate::power::{
@@ -54,7 +54,9 @@ macro_rules! with_platform_config {
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(u32)]
-enum PrepareFactoryReset {
+enum PrepareFactoryResetResult {
+    // NOTE: both old PrepareFactoryReset and new PrepareFactoryResetExt use these
+    // result values.
     Unknown = 0,
     RebootRequired = 1,
 }
@@ -85,14 +87,28 @@ impl SteamOSManager {
 
 #[interface(name = "com.steampowered.SteamOSManager1.RootManager")]
 impl SteamOSManager {
-    async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
-        // Run steamos factory reset script and return true on success
+    async fn prepare_factory_reset(&self, kind: u32) -> fdo::Result<u32> {
+        // Run steamos-reset with arguments based on flags passed and return 1 on success
         with_platform_config! {
-            config = factory_reset ("PrepareFactoryReset") => {
-                let res = run_script(&config.script, &config.script_args).await;
+            config = factory_reset("PrepareFactoryReset") => {
+                let res =
+                match FactoryResetKind::try_from(kind) {
+                    Ok(FactoryResetKind::User) => {
+                        run_script(&config.user.script, &config.user.script_args).await
+                    },
+                    Ok(FactoryResetKind::OS) => {
+                        run_script(&config.os.script, &config.os.script_args).await
+                    },
+                    Ok(FactoryResetKind::All) => {
+                        run_script(&config.all.script, &config.all.script_args).await
+                    },
+                    Err(_) => {
+                        Err(anyhow!("Unable to generate command arguments for steamos-reset-tool script"))
+                    }
+                };
                 Ok(match res {
-                    Ok(()) => PrepareFactoryReset::RebootRequired as u32,
-                    Err(_) => PrepareFactoryReset::Unknown as u32,
+                    Ok(()) => PrepareFactoryResetResult::RebootRequired as u32,
+                    Err(_) => PrepareFactoryResetResult::Unknown as u32,
                 })
             }
         }
@@ -391,7 +407,7 @@ mod test {
     use crate::daemon::channel;
     use crate::daemon::root::RootContext;
     use crate::hardware::test::fake_model;
-    use crate::platform::{PlatformConfig, ScriptConfig};
+    use crate::platform::{PlatformConfig, ResetConfig};
     use crate::power::test::{format_clocks, read_clocks};
     use crate::power::{self, get_gpu_performance_level};
     use crate::process::test::{code, exit, ok};
@@ -439,7 +455,7 @@ mod test {
         default_path = "/com/steampowered/SteamOSManager1"
     )]
     trait PrepareFactoryReset {
-        fn prepare_factory_reset(&self) -> zbus::Result<u32>;
+        fn prepare_factory_reset(&self, kind: u32) -> zbus::Result<u32>;
     }
 
     #[tokio::test]
@@ -447,7 +463,7 @@ mod test {
         let test = start().await.expect("start");
 
         let mut config = PlatformConfig::default();
-        config.factory_reset = Some(ScriptConfig::default());
+        config.factory_reset = Some(ResetConfig::default());
         test.h.test.platform_config.replace(Some(config));
 
         let name = test.connection.unique_name().unwrap();
@@ -457,20 +473,83 @@ mod test {
 
         test.h.test.process_cb.set(ok);
         assert_eq!(
-            proxy.prepare_factory_reset().await.unwrap(),
-            PrepareFactoryReset::RebootRequired as u32
+            proxy
+                .prepare_factory_reset(FactoryResetKind::All as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::RebootRequired as u32
         );
 
         test.h.test.process_cb.set(code);
         assert_eq!(
-            proxy.prepare_factory_reset().await.unwrap(),
-            PrepareFactoryReset::Unknown as u32
+            proxy
+                .prepare_factory_reset(FactoryResetKind::All as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::Unknown as u32
         );
 
         test.h.test.process_cb.set(exit);
         assert_eq!(
-            proxy.prepare_factory_reset().await.unwrap(),
-            PrepareFactoryReset::Unknown as u32
+            proxy
+                .prepare_factory_reset(FactoryResetKind::All as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::Unknown as u32
+        );
+
+        test.h.test.process_cb.set(ok);
+        assert_eq!(
+            proxy
+                .prepare_factory_reset(FactoryResetKind::OS as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::RebootRequired as u32
+        );
+
+        test.h.test.process_cb.set(code);
+        assert_eq!(
+            proxy
+                .prepare_factory_reset(FactoryResetKind::OS as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::Unknown as u32
+        );
+
+        test.h.test.process_cb.set(exit);
+        assert_eq!(
+            proxy
+                .prepare_factory_reset(FactoryResetKind::OS as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::Unknown as u32
+        );
+
+        test.h.test.process_cb.set(ok);
+        assert_eq!(
+            proxy
+                .prepare_factory_reset(FactoryResetKind::User as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::RebootRequired as u32
+        );
+
+        test.h.test.process_cb.set(code);
+        assert_eq!(
+            proxy
+                .prepare_factory_reset(FactoryResetKind::User as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::Unknown as u32
+        );
+
+        test.h.test.process_cb.set(exit);
+        assert_eq!(
+            proxy
+                .prepare_factory_reset(FactoryResetKind::User as u32)
+                .await
+                .unwrap(),
+            PrepareFactoryResetResult::Unknown as u32
         );
 
         test.connection.close().await.unwrap();

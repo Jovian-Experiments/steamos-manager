@@ -251,8 +251,8 @@ impl CpuScaling1 {
 
 #[interface(name = "com.steampowered.SteamOSManager1.FactoryReset1")]
 impl FactoryReset1 {
-    async fn prepare_factory_reset(&self) -> fdo::Result<u32> {
-        method!(self, "PrepareFactoryReset")
+    async fn prepare_factory_reset(&self, flags: u32) -> fdo::Result<u32> {
+        method!(self, "PrepareFactoryReset", flags)
     }
 }
 
@@ -661,7 +661,7 @@ mod test {
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
     use crate::platform::{
-        PlatformConfig, RangeConfig, ScriptConfig, ServiceConfig, StorageConfig,
+        PlatformConfig, RangeConfig, ResetConfig, ScriptConfig, ServiceConfig, StorageConfig,
     };
     use crate::systemd::test::{MockManager, MockUnit};
     use crate::{power, testing};
@@ -678,7 +678,7 @@ mod test {
 
     fn all_config() -> Option<PlatformConfig> {
         Some(PlatformConfig {
-            factory_reset: Some(ScriptConfig::default()),
+            factory_reset: Some(ResetConfig::default()),
             update_bios: Some(ScriptConfig::default()),
             update_dock: Some(ScriptConfig::default()),
             storage: Some(StorageConfig::default()),

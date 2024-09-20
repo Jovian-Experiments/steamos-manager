@@ -20,5 +20,5 @@ use zbus::proxy;
 )]
 trait FactoryReset1 {
     /// PrepareFactoryReset method
-    fn prepare_factory_reset(&self) -> zbus::Result<u32>;
+    fn prepare_factory_reset(&self, kind: u32) -> zbus::Result<u32>;
 }
