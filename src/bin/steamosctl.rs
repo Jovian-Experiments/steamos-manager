@@ -124,7 +124,7 @@ enum Commands {
 
     /// Set Wi-Fi debug mode, if possible
     SetWifiDebugMode {
-        /// Valid modes are `on`, `off`
+        /// Valid modes are `off` or `tracing`
         mode: WifiDebugMode,
         /// The size of the debug buffer, in bytes
         buffer: Option<u32>,
