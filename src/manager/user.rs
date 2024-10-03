@@ -192,7 +192,7 @@ impl SteamOSManager {
         buffer_size: u32,
         #[zbus(signal_context)] ctx: SignalContext<'_>,
     ) -> fdo::Result<()> {
-        method!(self, "SetWifiDebugMode", mode, buffer_size)?;
+        let _: () = method!(self, "SetWifiDebugMode", mode, buffer_size)?;
         self.wifi_debug_mode_state_changed(&ctx)
             .await
             .map_err(zbus_to_zbus_fdo)?;
@@ -466,7 +466,7 @@ impl WifiDebug1 {
         options: HashMap<&str, zvariant::Value<'_>>,
         #[zbus(signal_context)] ctx: SignalContext<'_>,
     ) -> fdo::Result<()> {
-        method!(self, "SetWifiDebugMode", mode, options)?;
+        let _: () = method!(self, "SetWifiDebugMode", mode, options)?;
         self.wifi_debug_mode_state_changed(&ctx)
             .await
             .map_err(zbus_to_zbus_fdo)?;
