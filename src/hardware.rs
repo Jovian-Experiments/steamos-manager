@@ -9,6 +9,7 @@ use anyhow::{bail, ensure, Error, Result};
 use num_enum::TryFromPrimitive;
 use std::fmt;
 use std::str::FromStr;
+use strum::{Display, EnumString};
 use tokio::fs;
 use zbus::Connection;
 
@@ -36,10 +37,13 @@ pub(crate) enum HardwareCurrentlySupported {
     Supported = 2,
 }
 
-#[derive(PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
+#[derive(Display, EnumString, PartialEq, Debug, Copy, Clone, TryFromPrimitive)]
+#[strum(ascii_case_insensitive)]
 #[repr(u32)]
 pub enum FanControlState {
+    #[strum(to_string = "BIOS")]
     Bios = 0,
+    #[strum(to_string = "OS")]
     Os = 1,
 }
 
@@ -60,26 +64,6 @@ impl fmt::Display for HardwareCurrentlySupported {
             HardwareCurrentlySupported::Unknown => write!(f, "Unknown"),
             HardwareCurrentlySupported::UnsupportedPrototype => write!(f, "Unsupported Prototype"),
             HardwareCurrentlySupported::Supported => write!(f, "Supported"),
-        }
-    }
-}
-
-impl FromStr for FanControlState {
-    type Err = Error;
-    fn from_str(input: &str) -> Result<FanControlState, Self::Err> {
-        Ok(match input.to_lowercase().as_str() {
-            "bios" => FanControlState::Bios,
-            "os" => FanControlState::Os,
-            v => bail!("No enum match for value {v}"),
-        })
-    }
-}
-
-impl fmt::Display for FanControlState {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            FanControlState::Bios => write!(f, "BIOS"),
-            FanControlState::Os => write!(f, "OS"),
         }
     }
 }
