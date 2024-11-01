@@ -257,14 +257,15 @@ pub async fn get_wifi_power_management_state() -> Result<WifiPowerManagement> {
 }
 
 pub async fn set_wifi_power_management_state(state: WifiPowerManagement) -> Result<()> {
-    let state = match state {
+    let _state = match state {
         WifiPowerManagement::Disabled => "off",
         WifiPowerManagement::Enabled => "on",
     };
 
-    run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
-        .await
-        .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
+    // run_script("/usr/bin/iwconfig", &["wlan0", "power", state])
+        // .await
+        // .inspect_err(|message| error!("Error setting wifi power management state: {message}"))
+    Ok(())
 }
 
 #[cfg(test)]
