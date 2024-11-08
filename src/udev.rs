@@ -13,7 +13,8 @@ use tokio::net::unix::pipe::Sender;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tracing::debug;
 use udev::{Event, EventType, MonitorBuilder};
-use zbus::{self, interface, Connection, InterfaceRef, SignalContext};
+use zbus::object_server::{InterfaceRef, SignalEmitter};
+use zbus::{self, interface, Connection};
 
 use crate::thread::spawn;
 use crate::Service;
@@ -66,7 +67,7 @@ impl Service for UdevMonitor {
                     count,
                 } => {
                     UdevDbusObject::usb_over_current(
-                        self.udev_object.signal_context(),
+                        self.udev_object.signal_emitter(),
                         devpath.as_str(),
                         port.as_str(),
                         count,
@@ -104,7 +105,7 @@ impl UdevMonitor {
 impl UdevDbusObject {
     #[zbus(signal)]
     async fn usb_over_current(
-        signal_ctxt: &SignalContext<'_>,
+        signal_ctxt: &SignalEmitter<'_>,
         devpath: &str,
         port: &str,
         count: u64,
@@ -176,7 +177,7 @@ mod test {
     use super::*;
     use std::time::Duration;
     use tokio::time::sleep;
-    use zbus::Interface;
+    use zbus::object_server::Interface;
 
     use crate::testing;
 

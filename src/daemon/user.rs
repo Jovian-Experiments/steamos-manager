@@ -14,8 +14,7 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, Registry};
 #[cfg(not(test))]
 use xdg::BaseDirectories;
-use zbus::connection::Connection;
-use zbus::ConnectionBuilder;
+use zbus::connection::{Builder, Connection};
 
 use crate::daemon::{channel, Daemon, DaemonCommand, DaemonContext};
 use crate::job::{JobManager, JobManagerService};
@@ -107,7 +106,7 @@ async fn create_connections(
     channel: Sender<Command>,
 ) -> Result<(Connection, Connection, impl Service)> {
     let system = Connection::system().await?;
-    let connection = ConnectionBuilder::session()?
+    let connection = Builder::session()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;

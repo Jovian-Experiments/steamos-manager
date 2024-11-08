@@ -17,8 +17,10 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tracing::error;
+use zbus::connection::{Builder, Connection};
+use zbus::object_server::Interface;
 use zbus::zvariant::ObjectPath;
-use zbus::{Address, Connection, ConnectionBuilder, Interface};
+use zbus::Address;
 use zbus_xml::{Method, Node, Property, Signal};
 
 use crate::platform::PlatformConfig;
@@ -128,7 +130,7 @@ impl MockDBus {
             .ok_or(anyhow!("Failed to read address"))?;
 
         let address = Address::from_str(address.trim_end())?;
-        let connection = ConnectionBuilder::address(address.clone())?.build().await?;
+        let connection = Builder::address(address.clone())?.build().await?;
 
         Ok(MockDBus {
             connection,

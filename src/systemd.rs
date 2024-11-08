@@ -9,8 +9,9 @@ use anyhow::{anyhow, Result};
 use std::path::PathBuf;
 use std::str::FromStr;
 use strum::{Display, EnumString};
+use zbus::proxy::CacheProperties;
 use zbus::zvariant::OwnedObjectPath;
-use zbus::{CacheProperties, Connection};
+use zbus::Connection;
 
 #[zbus::proxy(
     interface = "org.freedesktop.systemd1.Unit",

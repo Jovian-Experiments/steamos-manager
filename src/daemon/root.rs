@@ -14,8 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, Registry};
-use zbus::connection::Connection;
-use zbus::ConnectionBuilder;
+use zbus::connection::{Builder, Connection};
 
 use crate::daemon::{channel, Daemon, DaemonCommand, DaemonContext};
 use crate::ds_inhibit::Inhibitor;
@@ -160,7 +159,7 @@ impl DaemonContext for RootContext {
 pub(crate) type Command = DaemonCommand<RootCommand>;
 
 async fn create_connection(channel: Sender<Command>) -> Result<Connection> {
-    let connection = ConnectionBuilder::system()?
+    let connection = Builder::system()?
         .name("com.steampowered.SteamOSManager1")?
         .build()
         .await?;

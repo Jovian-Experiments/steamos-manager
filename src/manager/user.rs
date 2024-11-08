@@ -11,8 +11,9 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::oneshot;
 use tracing::error;
-use zbus::proxy::Builder;
-use zbus::{fdo, interface, zvariant, CacheProperties, Connection, Proxy, SignalContext};
+use zbus::object_server::SignalEmitter;
+use zbus::proxy::{Builder, CacheProperties};
+use zbus::{fdo, interface, zvariant, Connection, Proxy};
 
 use crate::cec::{HdmiCecControl, HdmiCecState};
 use crate::daemon::user::Command;
@@ -190,7 +191,7 @@ impl SteamOSManager {
         &self,
         mode: u32,
         buffer_size: u32,
-        #[zbus(signal_context)] ctx: SignalContext<'_>,
+        #[zbus(signal_emitter)] ctx: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
         let _: () = method!(self, "SetWifiDebugMode", mode, buffer_size)?;
         self.wifi_debug_mode_state_changed(&ctx)
@@ -464,7 +465,7 @@ impl WifiDebug1 {
         &self,
         mode: u32,
         options: HashMap<&str, zvariant::Value<'_>>,
-        #[zbus(signal_context)] ctx: SignalContext<'_>,
+        #[zbus(signal_emitter)] ctx: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
         let _: () = method!(self, "SetWifiDebugMode", mode, options)?;
         self.wifi_debug_mode_state_changed(&ctx)
@@ -669,7 +670,8 @@ mod test {
     use std::time::Duration;
     use tokio::sync::mpsc::unbounded_channel;
     use tokio::time::sleep;
-    use zbus::{Connection, Interface};
+    use zbus::object_server::Interface;
+    use zbus::Connection;
 
     struct TestHandle {
         _handle: testing::TestHandle,

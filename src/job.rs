@@ -21,7 +21,8 @@ use tokio::sync::oneshot;
 use tokio_stream::StreamExt;
 use tracing::error;
 use zbus::fdo::{self, IntrospectableProxy};
-use zbus::{interface, zvariant, Connection, Interface, InterfaceRef, SignalContext};
+use zbus::object_server::{Interface, InterfaceRef, SignalEmitter};
+use zbus::{interface, zvariant, Connection};
 use zbus_xml::Node;
 
 use crate::error::{to_zbus_fdo_error, zbus_to_zbus_fdo};
@@ -100,7 +101,7 @@ impl JobManager {
             .await?;
 
         let object_path = zvariant::OwnedObjectPath::try_from(path).map_err(to_zbus_fdo_error)?;
-        JobManagerInterface::job_started(self.jm_iface.signal_context(), object_path.as_ref())
+        JobManagerInterface::job_started(self.jm_iface.signal_emitter(), object_path.as_ref())
             .await?;
         Ok(object_path)
     }
@@ -170,7 +171,7 @@ impl JobManager {
 impl JobManagerInterface {
     #[zbus(signal)]
     async fn job_started(
-        signal_ctxt: &SignalContext<'_>,
+        signal_ctxt: &SignalEmitter<'_>,
         job: zvariant::ObjectPath<'_>,
     ) -> zbus::Result<()>;
 }
@@ -387,14 +388,14 @@ pub(crate) mod test {
     use tokio::sync::{mpsc, oneshot};
     use tokio::task::JoinHandle;
     use tokio::time::sleep;
+    use zbus::connection::Builder;
     use zbus::names::BusName;
-    use zbus::ConnectionBuilder;
 
     #[tokio::test]
     async fn test_job_emitted() {
         let _h = testing::start();
 
-        let connection = ConnectionBuilder::session()
+        let connection = Builder::session()
             .expect("session")
             .build()
             .await
@@ -405,7 +406,7 @@ pub(crate) mod test {
         let (tx, rx) = oneshot::channel::<()>();
 
         let job = tokio::spawn(async move {
-            let connection = ConnectionBuilder::session()?.build().await?;
+            let connection = Builder::session()?.build().await?;
             let jm = JobManager1Proxy::builder(&connection)
                 .destination(sender)?
                 .build()
@@ -535,7 +536,7 @@ pub(crate) mod test {
         let (fin_tx, fin_rx) = oneshot::channel();
 
         let job: JoinHandle<Result<()>> = tokio::spawn(async move {
-            let connection = ConnectionBuilder::address(address)
+            let connection = Builder::address(address)
                 .expect("address")
                 .build()
                 .await

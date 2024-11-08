@@ -194,11 +194,7 @@ async fn get_all_properties(conn: &Connection) -> Result<()> {
             }
             _ => continue,
         };
-        properties.extend(
-            properties_proxy
-                .get_all(zvariant::Optional::from(Some(name)))
-                .await?,
-        );
+        properties.extend(properties_proxy.get_all(name).await?);
     }
     for key in properties.keys().sorted() {
         let value = &properties[key];

@@ -13,8 +13,9 @@ use tokio::fs::File;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
 use tracing::{error, info};
+use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{self, Fd};
-use zbus::{fdo, interface, Connection, SignalContext};
+use zbus::{fdo, interface, Connection};
 
 use crate::daemon::root::{Command, RootCommand};
 use crate::daemon::DaemonCommand;
@@ -310,7 +311,7 @@ impl SteamOSManager {
         &mut self,
         mode: u32,
         options: HashMap<&str, zvariant::Value<'_>>,
-        #[zbus(signal_context)] ctx: SignalContext<'_>,
+        #[zbus(signal_emitter)] ctx: SignalEmitter<'_>,
     ) -> fdo::Result<()> {
         // Set the wifi debug mode to mode, using an int for flexibility going forward but only
         // doing things on 0 or 1 for now
