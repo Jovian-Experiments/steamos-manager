@@ -381,10 +381,10 @@
   </interface>
 
   <!--
-      com.steampowered.SteamOSManager1.Job
+      com.steampowered.SteamOSManager1.Job1
       @short_description: Interface to control a job
   -->
-  <interface name="com.steampowered.SteamOSManager1.Job">
+  <interface name="com.steampowered.SteamOSManager1.Job1">
 
       <!--
         Pause:
@@ -430,7 +430,7 @@
 
         @result: The exit code, or negative signal number if the process
         exited via signal.
-        -->
+      -->
       <method name="ExitCode">
         <arg type="i" name="result" direction="out"/>
       </method>
@@ -453,7 +453,7 @@
         @port: The associated port.
         @count: The number of times this devices has had an over-current
         event.
-        -->
+      -->
       <signal name="UsbOverCurrent">
         <arg type="s" name="devpath"/>
         <arg type="s" name="port"/>
@@ -462,8 +462,19 @@
 
   </interface>
 
-  <interface name="com.steampowered.SteamOSManager1.JobManager">
+  <!--
+      com.steampowered.SteamOSManager1.JobManager1
+      @short_description: Interface to manage jobs
+  -->
+  <interface name="com.steampowered.SteamOSManager1.JobManager1">
 
+      <!--
+        JobStarted:
+
+        Signals that a job has started
+
+        @job: The object path of the job
+      -->
       <signal name="JobStarted">
         <arg type="o" name="job"/>
       </signal>
