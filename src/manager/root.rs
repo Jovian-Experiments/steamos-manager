@@ -12,7 +12,7 @@ use std::ffi::OsStr;
 use tokio::fs::File;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::oneshot;
-use tracing::error;
+use tracing::{error, info};
 use zbus::zvariant::{self, Fd};
 use zbus::{fdo, interface, Connection, SignalContext};
 
@@ -318,6 +318,12 @@ impl SteamOSManager {
             Ok(mode) => mode,
             Err(e) => return Err(fdo::Error::InvalidArgs(e.to_string())),
         };
+
+        if self.wifi_debug_mode == wanted_mode {
+            info!("Not changing wifi debug mode since it's already set to {wanted_mode}");
+            return Ok(());
+        }
+
         let buffer_size = match options
             .get("buffer_size")
             .map(zbus::zvariant::Value::downcast_ref)
