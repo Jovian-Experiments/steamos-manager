@@ -14,10 +14,10 @@ use steamos_manager::cec::HdmiCecState;
 use steamos_manager::hardware::{FactoryResetKind, FanControlState};
 use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile};
 use steamos_manager::proxy::{
-    AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
-    GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, Storage1Proxy,
-    TdpLimit1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy, WifiDebugDump1Proxy,
-    WifiPowerManagement1Proxy,
+    AmbientLightSensor1Proxy, BatteryChargeLimit1Proxy, CpuScaling1Proxy, FactoryReset1Proxy,
+    FanControl1Proxy, GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, HdmiCec1Proxy,
+    Manager2Proxy, Storage1Proxy, TdpLimit1Proxy, UpdateBios1Proxy, UpdateDock1Proxy,
+    WifiDebug1Proxy, WifiDebugDump1Proxy, WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::{IntrospectableProxy, PropertiesProxy};
@@ -172,6 +172,18 @@ enum Commands {
         /// Valid kind(s) are `user`, `os`, `all`
         kind: FactoryResetKind,
     },
+
+    /// Get the maximum charge level set for the battery
+    GetMaxChargeLevel,
+
+    /// Set the maximum charge level set for the battery
+    SetMaxChargeLevel {
+        /// Valid levels are 1 - 100, or -1 to reset to default
+        level: i32,
+    },
+
+    /// Get the recommended minimum for a charge level limit
+    SuggestedMinimumChargeLimit,
 }
 
 async fn get_all_properties(conn: &Connection) -> Result<()> {
@@ -436,6 +448,20 @@ async fn main() -> Result<()> {
         Commands::TrimDevices => {
             let proxy = Storage1Proxy::new(&conn).await?;
             let _ = proxy.trim_devices().await?;
+        }
+        Commands::GetMaxChargeLevel => {
+            let proxy = BatteryChargeLimit1Proxy::new(&conn).await?;
+            let level = proxy.max_charge_level().await?;
+            println!("Max charge level: {level}");
+        }
+        Commands::SetMaxChargeLevel { level } => {
+            let proxy = BatteryChargeLimit1Proxy::new(&conn).await?;
+            proxy.set_max_charge_level(*level).await?;
+        }
+        Commands::SuggestedMinimumChargeLimit => {
+            let proxy = BatteryChargeLimit1Proxy::new(&conn).await?;
+            let limit = proxy.suggested_minimum_limit().await?;
+            println!("Suggested minimum charge limit: {limit}");
         }
     }
 

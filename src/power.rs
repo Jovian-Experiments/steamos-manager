@@ -20,8 +20,10 @@ use crate::hardware::is_deck;
 use crate::platform::platform_config;
 use crate::{path, write_synced};
 
-const GPU_HWMON_PREFIX: &str = "/sys/class/hwmon";
+const HWMON_PREFIX: &str = "/sys/class/hwmon";
+
 const GPU_HWMON_NAME: &str = "amdgpu";
+
 const CPU_PREFIX: &str = "/sys/devices/system/cpu/cpufreq";
 
 const CPU0_NAME: &str = "policy0";
@@ -85,14 +87,14 @@ pub enum CPUScalingGovernor {
 
 async fn read_gpu_sysfs_contents<S: AsRef<Path>>(suffix: S) -> Result<String> {
     // Read a given suffix for the GPU
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     fs::read_to_string(base.join(suffix.as_ref()))
         .await
         .map_err(|message| anyhow!("Error opening sysfs file for reading {message}"))
 }
 
 async fn write_gpu_sysfs_contents<S: AsRef<Path>>(suffix: S, data: &[u8]) -> Result<()> {
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     write_synced(base.join(suffix), data)
         .await
         .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
@@ -195,7 +197,7 @@ pub(crate) async fn set_gpu_power_profile(value: GPUPowerProfile) -> Result<()> 
 }
 
 pub(crate) async fn get_available_gpu_performance_levels() -> Result<Vec<GPUPerformanceLevel>> {
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     if try_exists(base.join(GPU_PERFORMANCE_LEVEL_SUFFIX)).await? {
         Ok(vec![
             GPUPerformanceLevel::Auto,
@@ -288,7 +290,7 @@ pub(crate) async fn get_gpu_clocks_range() -> Result<(u32, u32)> {
 pub(crate) async fn set_gpu_clocks(clocks: u32) -> Result<()> {
     // Set GPU clocks to given value valid
     // Only used when GPU Performance Level is manual, but write whenever called.
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     let mut myfile = File::create(base.join(GPU_CLOCKS_SUFFIX))
         .await
         .inspect_err(|message| error!("Error opening sysfs file for writing: {message}"))?;
@@ -317,7 +319,7 @@ pub(crate) async fn set_gpu_clocks(clocks: u32) -> Result<()> {
 }
 
 pub(crate) async fn get_gpu_clocks() -> Result<u32> {
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     let clocks_file = File::open(base.join(GPU_CLOCKS_SUFFIX)).await?;
     let mut reader = BufReader::new(clocks_file);
     loop {
@@ -343,8 +345,8 @@ pub(crate) async fn get_gpu_clocks() -> Result<u32> {
     Ok(0)
 }
 
-async fn find_hwmon() -> Result<PathBuf> {
-    let mut dir = fs::read_dir(path(GPU_HWMON_PREFIX)).await?;
+async fn find_hwmon(hwmon: &str) -> Result<PathBuf> {
+    let mut dir = fs::read_dir(path(HWMON_PREFIX)).await?;
     loop {
         let base = match dir.next_entry().await? {
             Some(entry) => entry.path(),
@@ -355,14 +357,14 @@ async fn find_hwmon() -> Result<PathBuf> {
             .await?
             .trim()
             .to_string();
-        if name == GPU_HWMON_NAME {
+        if name == hwmon {
             return Ok(base);
         }
     }
 }
 
 pub(crate) async fn get_tdp_limit() -> Result<u32> {
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     let power1cap = fs::read_to_string(base.join(TDP_LIMIT1)).await?;
     let power1cap: u32 = power1cap.trim_end().parse()?;
     Ok(power1cap / 1_000_000)
@@ -374,7 +376,7 @@ pub(crate) async fn set_tdp_limit(limit: u32) -> Result<()> {
     ensure!((3..=15).contains(&limit), "Invalid limit");
     let data = format!("{limit}000000");
 
-    let base = find_hwmon().await?;
+    let base = find_hwmon(GPU_HWMON_NAME).await?;
     write_synced(base.join(TDP_LIMIT1), data.as_bytes())
         .await
         .inspect_err(|message| {
@@ -400,19 +402,51 @@ pub(crate) async fn get_tdp_limit_range() -> Result<(u32, u32)> {
     Ok((range.min, range.max))
 }
 
+pub(crate) async fn get_max_charge_level() -> Result<i32> {
+    let config = platform_config()
+        .await?
+        .as_ref()
+        .and_then(|config| config.battery_charge_limit.clone())
+        .ok_or(anyhow!("No battery charge limit configured"))?;
+    let base = find_hwmon(config.hwmon_name.as_str()).await?;
+
+    fs::read_to_string(base.join(config.attribute.as_str()))
+        .await
+        .map_err(|message| anyhow!("Error reading sysfs: {message}"))?
+        .trim()
+        .parse()
+        .map_err(|e| anyhow!("Error parsing value: {e}"))
+}
+
+pub(crate) async fn set_max_charge_level(limit: i32) -> Result<()> {
+    ensure!((0..=100).contains(&limit), "Invalid limit");
+    let data = limit.to_string();
+    let config = platform_config()
+        .await?
+        .as_ref()
+        .and_then(|config| config.battery_charge_limit.clone())
+        .ok_or(anyhow!("No battery charge limit configured"))?;
+    let base = find_hwmon(config.hwmon_name.as_str()).await?;
+
+    write_synced(base.join(config.attribute.as_str()), data.as_bytes())
+        .await
+        .inspect_err(|message| error!("Error writing to sysfs file: {message}"))
+}
+
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
+    use crate::platform::{BatteryChargeLimitConfig, PlatformConfig};
     use crate::{enum_roundtrip, testing};
     use anyhow::anyhow;
     use tokio::fs::{create_dir_all, read_to_string, remove_dir, write};
 
     pub async fn setup() -> Result<()> {
-        // Use hwmon5 just as a test. We needed a subfolder of GPU_HWMON_PREFIX
+        // Use hwmon5 just as a test. We needed a subfolder of HWMON_PREFIX
         // and this is as good as any.
-        let base = path(GPU_HWMON_PREFIX).join("hwmon5");
+        let base = path(HWMON_PREFIX).join("hwmon5");
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         // Creates hwmon path, including device subpath
         create_dir_all(filename.parent().unwrap()).await?;
@@ -423,7 +457,7 @@ pub(crate) mod test {
 
     pub async fn create_nodes() -> Result<()> {
         setup().await?;
-        let base = find_hwmon().await?;
+        let base = find_hwmon(GPU_HWMON_NAME).await?;
 
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         write(filename.as_path(), "auto\n").await?;
@@ -441,11 +475,18 @@ pub(crate) mod test {
         let filename = base.join(TDP_LIMIT1);
         write(filename.as_path(), "15000000\n").await?;
 
+        let base = path(HWMON_PREFIX).join("hwmon6");
+        create_dir_all(&base).await?;
+
+        write(base.join("name"), "steamdeck_hwmon\n").await?;
+
+        write(base.join("max_battery_charge_level"), "10\n").await?;
+
         Ok(())
     }
 
     pub async fn write_clocks(mhz: u32) {
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_CLOCKS_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -467,7 +508,7 @@ CCLK_RANGE in Core0:
     }
 
     pub async fn read_clocks() -> Result<String, std::io::Error> {
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         read_to_string(base.join(GPU_CLOCKS_SUFFIX)).await
     }
 
@@ -480,7 +521,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
         assert!(get_gpu_performance_level().await.is_err());
 
@@ -525,7 +566,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_PERFORMANCE_LEVEL_SUFFIX);
 
         set_gpu_performance_level(GPUPerformanceLevel::Auto)
@@ -570,7 +611,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let hwmon = path(GPU_HWMON_PREFIX);
+        let hwmon = path(HWMON_PREFIX);
 
         assert!(get_tdp_limit().await.is_err());
 
@@ -594,7 +635,7 @@ CCLK_RANGE in Core0:
         );
         assert!(set_tdp_limit(10).await.is_err());
 
-        let hwmon = path(GPU_HWMON_PREFIX);
+        let hwmon = path(HWMON_PREFIX);
         assert_eq!(
             set_tdp_limit(10).await.unwrap_err().to_string(),
             anyhow!("No such file or directory (os error 2)").to_string()
@@ -645,7 +686,7 @@ CCLK_RANGE in Core0:
         assert!(get_gpu_clocks().await.is_err());
         setup().await.expect("setup");
 
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_CLOCKS_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -678,7 +719,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_CLOCK_LEVELS_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -758,7 +799,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -814,7 +855,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -872,7 +913,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -910,7 +951,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -942,7 +983,7 @@ CCLK_RANGE in Core0:
         let _h = testing::start();
 
         setup().await.expect("setup");
-        let base = find_hwmon().await.unwrap();
+        let base = find_hwmon(GPU_HWMON_NAME).await.unwrap();
         let filename = base.join(GPU_POWER_PROFILE_SUFFIX);
         create_dir_all(filename.parent().unwrap())
             .await
@@ -1052,5 +1093,53 @@ CCLK_RANGE in Core0:
             .expect("write");
 
         assert!(get_cpu_scaling_governor().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_max_charge_level() {
+        let handle = testing::start();
+
+        let platform_config = Some(PlatformConfig {
+            factory_reset: None,
+            update_bios: None,
+            update_dock: None,
+            storage: None,
+            fan_control: None,
+            tdp_limit: None,
+            gpu_clocks: None,
+            battery_charge_limit: Some(BatteryChargeLimitConfig {
+                suggested_minimum_limit: Some(10),
+                hwmon_name: String::from("steamdeck_hwmon"),
+                attribute: String::from("max_battery_charge_level"),
+            }),
+        });
+        handle.test.platform_config.replace(platform_config);
+
+        let base = path(HWMON_PREFIX).join("hwmon6");
+        create_dir_all(&base).await.expect("create_dir_all");
+
+        write(base.join("name"), "steamdeck_hwmon\n")
+            .await
+            .expect("write");
+
+        assert_eq!(
+            find_hwmon("steamdeck_hwmon").await.unwrap(),
+            path(HWMON_PREFIX).join("hwmon6")
+        );
+
+        write(base.join("max_battery_charge_level"), "10\n")
+            .await
+            .expect("write");
+
+        assert_eq!(get_max_charge_level().await.unwrap(), 10);
+
+        set_max_charge_level(99).await.expect("set");
+        assert_eq!(get_max_charge_level().await.unwrap(), 99);
+
+        set_max_charge_level(0).await.expect("set");
+        assert_eq!(get_max_charge_level().await.unwrap(), 0);
+
+        assert!(set_max_charge_level(101).await.is_err());
+        assert!(set_max_charge_level(-1).await.is_err());
     }
 }

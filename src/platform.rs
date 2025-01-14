@@ -28,6 +28,7 @@ pub(crate) struct PlatformConfig {
     pub fan_control: Option<ServiceConfig>,
     pub tdp_limit: Option<RangeConfig<u32>>,
     pub gpu_clocks: Option<RangeConfig<u32>>,
+    pub battery_charge_limit: Option<BatteryChargeLimitConfig>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -68,6 +69,13 @@ pub(crate) enum ServiceConfig {
 pub(crate) struct StorageConfig {
     pub trim_devices: ScriptConfig,
     pub format_device: FormatDeviceConfig,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub(crate) struct BatteryChargeLimitConfig {
+    pub suggested_minimum_limit: Option<i32>,
+    pub hwmon_name: String,
+    pub attribute: String,
 }
 
 #[derive(Clone, Default, Deserialize, Debug)]

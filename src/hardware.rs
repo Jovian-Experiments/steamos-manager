@@ -336,6 +336,7 @@ pub mod test {
             ))),
             tdp_limit: None,
             gpu_clocks: None,
+            battery_charge_limit: None,
         }));
 
         let fan_control = FanControl::new(connection);

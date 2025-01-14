@@ -25,7 +25,7 @@ use crate::job::JobManager;
 use crate::platform::platform_config;
 use crate::power::{
     set_cpu_scaling_governor, set_gpu_clocks, set_gpu_performance_level, set_gpu_power_profile,
-    set_tdp_limit, CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile,
+    set_max_charge_level, set_tdp_limit, CPUScalingGovernor, GPUPerformanceLevel, GPUPowerProfile,
 };
 use crate::process::{run_script, script_output};
 use crate::wifi::{
@@ -418,6 +418,12 @@ impl SteamOSManager {
             .send(DaemonCommand::ReadConfig)
             .await
             .inspect_err(|message| error!("Error sending ReadConfig command: {message}"))
+            .map_err(to_zbus_fdo_error)
+    }
+
+    async fn set_max_charge_level(&self, level: i32) -> fdo::Result<()> {
+        set_max_charge_level(if level == -1 { 0 } else { level })
+            .await
             .map_err(to_zbus_fdo_error)
     }
 

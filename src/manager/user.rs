@@ -27,8 +27,8 @@ use crate::platform::platform_config;
 use crate::power::{
     get_available_cpu_scaling_governors, get_available_gpu_performance_levels,
     get_available_gpu_power_profiles, get_cpu_scaling_governor, get_gpu_clocks,
-    get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_tdp_limit,
-    get_tdp_limit_range,
+    get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_max_charge_level,
+    get_tdp_limit, get_tdp_limit_range,
 };
 use crate::wifi::{get_wifi_backend, get_wifi_power_management_state, list_wifi_interfaces};
 use crate::API_VERSION;
@@ -100,6 +100,10 @@ struct SteamOSManager {
 }
 
 struct AmbientLightSensor1 {
+    proxy: Proxy<'static>,
+}
+
+struct BatteryChargeLimit1 {
     proxy: Proxy<'static>,
 }
 
@@ -223,6 +227,41 @@ impl AmbientLightSensor1 {
     #[zbus(property(emits_changed_signal = "false"))]
     async fn als_calibration_gain(&self) -> fdo::Result<Vec<f64>> {
         getter!(self, "AlsCalibrationGain")
+    }
+}
+
+impl BatteryChargeLimit1 {
+    const DEFAULT_SUGGESTED_MINIMUM_LIMIT: i32 = 10;
+}
+
+#[interface(name = "com.steampowered.SteamOSManager1.BatteryChargeLimit1")]
+impl BatteryChargeLimit1 {
+    #[zbus(property(emits_changed_signal = "false"))]
+    async fn max_charge_level(&self) -> fdo::Result<i32> {
+        let level = get_max_charge_level().await.map_err(to_zbus_fdo_error)?;
+        if level <= 0 {
+            Ok(-1)
+        } else {
+            Ok(level)
+        }
+    }
+
+    #[zbus(property)]
+    async fn set_max_charge_level(&self, limit: i32) -> zbus::Result<()> {
+        self.proxy.call("SetMaxChargeLevel", &(limit)).await
+    }
+
+    #[zbus(property(emits_changed_signal = "const"))]
+    async fn suggested_minimum_limit(&self) -> i32 {
+        let Ok(Some(ref config)) = platform_config().await else {
+            return BatteryChargeLimit1::DEFAULT_SUGGESTED_MINIMUM_LIMIT;
+        };
+        let Some(ref config) = config.battery_charge_limit else {
+            return BatteryChargeLimit1::DEFAULT_SUGGESTED_MINIMUM_LIMIT;
+        };
+        config
+            .suggested_minimum_limit
+            .unwrap_or(BatteryChargeLimit1::DEFAULT_SUGGESTED_MINIMUM_LIMIT)
     }
 }
 
@@ -541,6 +580,9 @@ pub(crate) async fn create_interfaces(
     let als = AmbientLightSensor1 {
         proxy: proxy.clone(),
     };
+    let battery_charge_limit = BatteryChargeLimit1 {
+        proxy: proxy.clone(),
+    };
     let cpu_scaling = CpuScaling1 {
         proxy: proxy.clone(),
     };
@@ -595,6 +637,10 @@ pub(crate) async fn create_interfaces(
     }
     if variant().await? == HardwareVariant::Galileo {
         object_server.at(MANAGER_PATH, wifi_debug_dump).await?;
+    }
+
+    if get_max_charge_level().await.is_ok() {
+        object_server.at(MANAGER_PATH, battery_charge_limit).await?;
     }
 
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
@@ -683,7 +729,8 @@ mod test {
     use crate::hardware::test::fake_model;
     use crate::hardware::HardwareVariant;
     use crate::platform::{
-        PlatformConfig, RangeConfig, ResetConfig, ScriptConfig, ServiceConfig, StorageConfig,
+        BatteryChargeLimitConfig, PlatformConfig, RangeConfig, ResetConfig, ScriptConfig,
+        ServiceConfig, StorageConfig,
     };
     use crate::systemd::test::{MockManager, MockUnit};
     use crate::{power, testing};
@@ -710,6 +757,11 @@ mod test {
             ))),
             tdp_limit: Some(RangeConfig::new(3, 15)),
             gpu_clocks: Some(RangeConfig::new(200, 1600)),
+            battery_charge_limit: Some(BatteryChargeLimitConfig {
+                suggested_minimum_limit: Some(10),
+                hwmon_name: String::from("steamdeck_hwmon"),
+                attribute: String::from("max_battery_charge_level"),
+            }),
         })
     }
 
@@ -796,6 +848,17 @@ mod test {
 
         assert!(
             test_interface_matches::<AmbientLightSensor1>(&test.connection)
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn interface_matches_battery_charge_limit() {
+        let test = start(all_config()).await.expect("start");
+
+        assert!(
+            test_interface_matches::<BatteryChargeLimit1>(&test.connection)
                 .await
                 .unwrap()
         );

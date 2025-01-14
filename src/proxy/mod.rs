@@ -15,6 +15,7 @@ pub use crate::proxy::manager::ManagerProxy;
 
 // Optional interfaces
 mod ambient_light_sensor1;
+mod battery_charge_limit1;
 mod cpu_scaling1;
 mod factory_reset1;
 mod fan_control1;
@@ -30,6 +31,7 @@ mod wifi_debug1;
 mod wifi_debug_dump1;
 mod wifi_power_management1;
 pub use crate::proxy::ambient_light_sensor1::AmbientLightSensor1Proxy;
+pub use crate::proxy::battery_charge_limit1::BatteryChargeLimit1Proxy;
 pub use crate::proxy::cpu_scaling1::CpuScaling1Proxy;
 pub use crate::proxy::factory_reset1::FactoryReset1Proxy;
 pub use crate::proxy::fan_control1::FanControl1Proxy;
