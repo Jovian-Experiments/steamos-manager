@@ -19,6 +19,9 @@ use zbus::proxy;
     assume_defaults = true
 )]
 pub trait WifiDebug1 {
+    /// CaptureDebugTraceOutput method
+    fn capture_debug_trace_output(&self) -> zbus::Result<String>;
+
     /// SetWifiDebugMode method
     fn set_wifi_debug_mode(
         &self,

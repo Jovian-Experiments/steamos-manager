@@ -361,6 +361,19 @@
     -->
     <property name="WifiBackend" type="s" access="readwrite"/>
 
+    <!--
+        CaptureDebugTraceOutput:
+
+        @path: The path to the captured file. This will be world-readable and
+        in a temporary directory, so make sure to move it to a permanent
+        location if keeping it is desired.
+
+        Extract the Wi-Fi trace to a file, if present.
+    -->
+    <method name="CaptureDebugTraceOutput">
+      <arg type="s" name="path" direction="out"/>
+    </method>
+
   </interface>
 
   <!--

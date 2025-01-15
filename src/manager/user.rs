@@ -486,6 +486,10 @@ impl WifiDebug1 {
     async fn set_wifi_backend(&self, backend: &str) -> zbus::Result<()> {
         self.proxy.call("SetWifiBackend", &(backend)).await
     }
+
+    async fn capture_debug_trace_output(&self) -> fdo::Result<String> {
+        method!(self, "CaptureDebugTraceOutput")
+    }
 }
 
 #[interface(name = "com.steampowered.SteamOSManager1.WifiPowerManagement1")]

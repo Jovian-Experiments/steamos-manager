@@ -133,6 +133,9 @@ enum Commands {
     /// Get Wi-Fi debug mode
     GetWifiDebugMode,
 
+    /// Capture the current Wi-Fi debug trace
+    CaptureWifiDebugTraceOutput,
+
     /// Set the Wi-Fi power management state
     SetWifiPowerManagementState {
         /// Valid modes are `enabled`, `disabled`
@@ -379,6 +382,11 @@ async fn main() -> Result<()> {
                 Ok(m) => println!("Wi-Fi debug mode: {m}"),
                 Err(_) => println!("Got unknown value {mode} from backend"),
             }
+        }
+        Commands::CaptureWifiDebugTraceOutput => {
+            let proxy = WifiDebugDump1Proxy::new(&conn).await?;
+            let path = proxy.generate_debug_dump().await?;
+            println!("{path}");
         }
         Commands::SetWifiPowerManagementState { state } => {
             let proxy = WifiPowerManagement1Proxy::new(&conn).await?;

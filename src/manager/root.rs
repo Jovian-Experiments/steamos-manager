@@ -29,8 +29,8 @@ use crate::power::{
 };
 use crate::process::{run_script, script_output};
 use crate::wifi::{
-    set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state, WifiBackend,
-    WifiDebugMode, WifiPowerManagement,
+    extract_wifi_trace, set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state,
+    WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
 use crate::{path, API_VERSION};
 
@@ -367,6 +367,16 @@ impl SteamOSManager {
             .await
             .inspect_err(|message| error!("Error setting wifi backend: {message}"))
             .map_err(to_zbus_fdo_error)
+    }
+
+    async fn capture_debug_trace_output(&self) -> fdo::Result<String> {
+        Ok(extract_wifi_trace()
+            .await
+            .inspect_err(|message| error!("Error capturing trace output: {message}"))
+            .map_err(to_zbus_fdo_error)?
+            .into_os_string()
+            .to_string_lossy()
+            .into())
     }
 
     #[zbus(property)]

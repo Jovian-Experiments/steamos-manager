@@ -8,14 +8,20 @@
 use anyhow::{bail, ensure, Result};
 use config::builder::AsyncState;
 use config::{ConfigBuilder, FileFormat};
+use nix::sys::stat::{self, Mode};
 use num_enum::TryFromPrimitive;
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 use std::str::FromStr;
 use strum::{Display, EnumString};
+use tempfile::Builder as TempFileBuilder;
 use tokio::fs;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::error;
 use zbus::Connection;
 
-use crate::process::{run_script, script_output};
+use crate::process::{run_script, script_output, script_pipe_output};
 use crate::systemd::{daemon_reload, SystemdUnit};
 use crate::{path, read_config_directory};
 
@@ -28,7 +34,6 @@ const OVERRIDE_PATH: &str = "/etc/systemd/system/iwd.service.d/99-valve-override
 
 // Only use one path for output for now. If needed we can add a timestamp later
 // to have multiple files, etc.
-const OUTPUT_FILE: &str = "/var/log/wifitrace.dat";
 const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
 
 const MIN_BUFFER_SIZE: u32 = 100;
@@ -114,10 +119,7 @@ async fn restart_iwd(connection: Connection) -> Result<()> {
 }
 
 async fn stop_tracing() -> Result<()> {
-    // Stop tracing and extract ring buffer to disk for capture
-    run_script(TRACE_CMD_PATH, &["stop"]).await?;
-    // stop tracing worked
-    run_script(TRACE_CMD_PATH, &["extract", "-o", OUTPUT_FILE]).await
+    run_script(TRACE_CMD_PATH, &["stop"]).await
 }
 
 async fn start_tracing(buffer_size: u32) -> Result<()> {
@@ -128,6 +130,32 @@ async fn start_tracing(buffer_size: u32) -> Result<()> {
         &["start", "-e", "ath11k_wmi_diag", "-b", &size_str],
     )
     .await
+}
+
+fn make_tempfile(prefix: &str) -> Result<(fs::File, PathBuf)> {
+    let umask = stat::umask(Mode::from_bits_truncate(0));
+    let output = TempFileBuilder::new()
+        .prefix(prefix)
+        .permissions(Permissions::from_mode(0o666))
+        .tempfile()?;
+    let (output, path) = output.keep()?;
+    let output = fs::File::from_std(output);
+    stat::umask(umask);
+
+    Ok((output, path))
+}
+
+pub async fn extract_wifi_trace() -> Result<PathBuf> {
+    let (mut output, path) = make_tempfile("wifi-trace-")?;
+    let mut pipe = script_pipe_output("trace-cmd", &["extract"]).await?;
+    let mut buf = [0; 4096];
+    loop {
+        let read = pipe.read(&mut buf).await?;
+        if read == 0 {
+            break Ok(path);
+        }
+        output.write_all(&buf[..read]).await?;
+    }
 }
 
 pub(crate) async fn set_wifi_debug_mode(
@@ -468,5 +496,20 @@ mod test {
         });
         assert!(WifiBackend::try_from(2).is_err());
         assert!(WifiBackend::from_str("iwl").is_err());
+    }
+
+    #[tokio::test]
+    async fn trace_extract() {
+        let h = testing::start();
+
+        fn process_output(_: &OsStr, _: &[&OsStr]) -> Result<(i32, String)> {
+            Ok((0, String::from("output")))
+        }
+        h.test.process_cb.set(process_output);
+
+        let pathbuf = extract_wifi_trace().await.unwrap();
+
+        assert_eq!(fs::read_to_string(&pathbuf).await.unwrap(), "output");
+        fs::remove_file(pathbuf).await.unwrap();
     }
 }
