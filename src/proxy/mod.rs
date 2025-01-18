@@ -27,6 +27,7 @@ mod tdp_limit1;
 mod update_bios1;
 mod update_dock1;
 mod wifi_debug1;
+mod wifi_debug_dump1;
 mod wifi_power_management1;
 pub use crate::proxy::ambient_light_sensor1::AmbientLightSensor1Proxy;
 pub use crate::proxy::cpu_scaling1::CpuScaling1Proxy;
@@ -41,6 +42,7 @@ pub use crate::proxy::tdp_limit1::TdpLimit1Proxy;
 pub use crate::proxy::update_bios1::UpdateBios1Proxy;
 pub use crate::proxy::update_dock1::UpdateDock1Proxy;
 pub use crate::proxy::wifi_debug1::WifiDebug1Proxy;
+pub use crate::proxy::wifi_debug_dump1::WifiDebugDump1Proxy;
 pub use crate::proxy::wifi_power_management1::WifiPowerManagement1Proxy;
 
 // Sub-interfaces

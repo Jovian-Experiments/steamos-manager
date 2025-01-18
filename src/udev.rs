@@ -9,6 +9,8 @@ use anyhow::{anyhow, bail, ensure, Result};
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use nix::unistd::pipe;
 use std::os::fd::{AsFd, AsRawFd, OwnedFd};
+use std::path::PathBuf;
+use std::sync::mpsc::channel;
 use tokio::net::unix::pipe::Sender;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tracing::debug;
@@ -16,7 +18,7 @@ use udev::{Event, EventType, MonitorBuilder};
 use zbus::object_server::{InterfaceRef, SignalEmitter};
 use zbus::{self, interface, Connection};
 
-use crate::thread::spawn;
+use crate::thread::{spawn, AsyncJoinHandle};
 use crate::Service;
 
 const PATH: &str = "/com/steampowered/SteamOSManager1";
@@ -148,6 +150,51 @@ fn run_udev(tx: &UnboundedSender<UdevEvent>, rx: &OwnedFd) -> Result<()> {
             Some(false) => (),
         }
     }
+}
+
+pub(crate) fn single_poll<F>(
+    subsystem: &str,
+    callback: F,
+    timeout: PollTimeout,
+) -> AsyncJoinHandle<Result<PathBuf>>
+where
+    F: Fn(&Event) -> bool + Send + 'static,
+{
+    let (tx, rx) = channel();
+    let subsystem = subsystem.to_string();
+    let handle = spawn(move || {
+        let monitor = MonitorBuilder::new()?
+            .match_subsystem(subsystem)?
+            .listen()?;
+        let fd = monitor.as_fd();
+        let mut iter = monitor.iter();
+        let ev_poller = PollFd::new(fd, PollFlags::POLLIN);
+        let _ = tx.send(());
+        loop {
+            let fds = &mut [ev_poller];
+            // TODO: Subtract the time from the last loop, if relevant
+            let ret = poll(fds, timeout)?;
+            if ret < 0 {
+                return Err(std::io::Error::from_raw_os_error(-ret).into());
+            }
+            ensure!(ret == 1, "Udev poller timed out");
+            let [ev_poller] = fds;
+            match ev_poller.any() {
+                None => bail!("Udev poller encountered unknown flags"),
+                Some(true) => {
+                    let ev = iter
+                        .next()
+                        .ok_or(anyhow!("Poller said event was present, but it was not"))?;
+                    if callback(&ev) {
+                        return Ok(ev.syspath().to_path_buf());
+                    }
+                }
+                Some(false) => (),
+            }
+        }
+    });
+    let _ = rx.recv();
+    handle
 }
 
 fn process_usb_event(ev: &Event, tx: &UnboundedSender<UdevEvent>) -> Result<()> {

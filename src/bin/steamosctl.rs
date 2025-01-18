@@ -16,7 +16,8 @@ use steamos_manager::power::{CPUScalingGovernor, GPUPerformanceLevel, GPUPowerPr
 use steamos_manager::proxy::{
     AmbientLightSensor1Proxy, CpuScaling1Proxy, FactoryReset1Proxy, FanControl1Proxy,
     GpuPerformanceLevel1Proxy, GpuPowerProfile1Proxy, HdmiCec1Proxy, Manager2Proxy, Storage1Proxy,
-    TdpLimit1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy, WifiPowerManagement1Proxy,
+    TdpLimit1Proxy, UpdateBios1Proxy, UpdateDock1Proxy, WifiDebug1Proxy, WifiDebugDump1Proxy,
+    WifiPowerManagement1Proxy,
 };
 use steamos_manager::wifi::{WifiBackend, WifiDebugMode, WifiPowerManagement};
 use zbus::fdo::{IntrospectableProxy, PropertiesProxy};
@@ -144,6 +145,9 @@ enum Commands {
 
     /// Get the Wi-Fi power management state
     GetWifiPowerManagementState,
+
+    /// Generate a Wi-Fi debug dump
+    GenerateWifiDebugDump,
 
     /// Get the state of HDMI-CEC support
     GetHdmiCecState,
@@ -399,6 +403,11 @@ async fn main() -> Result<()> {
                 Ok(s) => println!("Wi-Fi power management state: {s}"),
                 Err(_) => println!("Got unknown value {state} from backend"),
             }
+        }
+        Commands::GenerateWifiDebugDump => {
+            let proxy = WifiDebugDump1Proxy::new(&conn).await?;
+            let path = proxy.generate_debug_dump().await?;
+            println!("{path}");
         }
         Commands::SetHdmiCecState { state } => {
             let proxy = HdmiCec1Proxy::new(&conn).await?;

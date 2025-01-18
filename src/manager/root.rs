@@ -29,8 +29,8 @@ use crate::power::{
 };
 use crate::process::{run_script, script_output};
 use crate::wifi::{
-    extract_wifi_trace, set_wifi_backend, set_wifi_debug_mode, set_wifi_power_management_state,
-    WifiBackend, WifiDebugMode, WifiPowerManagement,
+    extract_wifi_trace, generate_wifi_dump, set_wifi_backend, set_wifi_debug_mode,
+    set_wifi_power_management_state, WifiBackend, WifiDebugMode, WifiPowerManagement,
 };
 use crate::{path, API_VERSION};
 
@@ -373,6 +373,16 @@ impl SteamOSManager {
         Ok(extract_wifi_trace()
             .await
             .inspect_err(|message| error!("Error capturing trace output: {message}"))
+            .map_err(to_zbus_fdo_error)?
+            .into_os_string()
+            .to_string_lossy()
+            .into())
+    }
+
+    async fn generate_debug_dump(&self) -> fdo::Result<String> {
+        Ok(generate_wifi_dump()
+            .await
+            .inspect_err(|message| error!("Error capturing dump output: {message}"))
             .map_err(to_zbus_fdo_error)?
             .into_os_string()
             .to_string_lossy()

@@ -377,6 +377,27 @@
   </interface>
 
   <!--
+      com.steampowered.SteamOSManager1.WifiDebugDump1
+      @short_description: Optional interface for generating Wi-Fi driver dumps.
+  -->
+  <interface name="com.steampowered.SteamOSManager1.WifiDebugDump1">
+
+    <!--
+        GenerateDebugDump:
+
+        @path: The path to the generated file. This will be world-readable and
+        in a temporary directory, so make sure to move it to a permanent
+        location if keeping it is desired.
+
+        Generate a Wi-Fi driver dump and export it to a file.
+    -->
+    <method name="GenerateDebugDump">
+      <arg type="s" name="path" direction="out"/>
+    </method>
+
+  </interface>
+
+  <!--
       com.steampowered.SteamOSManager1.WifiPowerManagement1
       @short_description: Optional interface for Wi-Fi power management.
   -->

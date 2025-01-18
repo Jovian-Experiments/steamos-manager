@@ -10,19 +10,24 @@ use config::builder::AsyncState;
 use config::{ConfigBuilder, FileFormat};
 use nix::sys::stat::{self, Mode};
 use num_enum::TryFromPrimitive;
+use std::ffi::OsStr;
 use std::fs::Permissions;
+use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 use strum::{Display, EnumString};
 use tempfile::Builder as TempFileBuilder;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::error;
+use udev::{Event, EventType};
 use zbus::Connection;
 
 use crate::process::{run_script, script_output, script_pipe_output};
 use crate::systemd::{daemon_reload, SystemdUnit};
+use crate::udev::single_poll;
 use crate::{path, read_config_directory};
 
 const OVERRIDE_CONTENTS: &str = "[Service]
@@ -98,7 +103,7 @@ pub(crate) async fn setup_iwd_config(want_override: bool) -> std::io::Result<()>
     } else {
         // Delete it
         match fs::remove_file(path(OVERRIDE_PATH)).await {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
             res => res,
         }
     }
@@ -271,6 +276,67 @@ pub(crate) async fn set_wifi_power_management_state(state: WifiPowerManagement) 
         .inspect_err(|message| error!("Error setting Wi-Fi power management state: {message}"))?;
     }
     Ok(())
+}
+
+async fn generate_wifi_dump_inner() -> Result<PathBuf> {
+    fn cb(ev: &Event) -> bool {
+        if ev.event_type() != EventType::Add {
+            return false;
+        }
+        let path = ev.syspath();
+        let Ok(link) = std::fs::read_link(path.join("failing_device/driver")) else {
+            return false;
+        };
+        link.file_name() == Some(OsStr::new("ath11k_pci"))
+    }
+
+    let poller = single_poll("devcoredump", cb, Duration::from_secs(5).try_into()?);
+    fs::write(
+        path("/sys/kernel/debug/ath11k/pci-0000:03:00.0/simulate_fw_crash"),
+        "mhi-rddm\n",
+    )
+    .await?;
+    let devcd = poller.await?;
+    let data = devcd.join("data");
+    let (mut output, path) = make_tempfile("wifi-dump-")?;
+
+    {
+        let mut dump = fs::File::open(&data).await?;
+        let mut buf = [0; 4096];
+        loop {
+            let read = dump.read(&mut buf).await?;
+            if read == 0 {
+                break;
+            }
+            output.write_all(&buf[..read]).await?;
+        }
+    }
+
+    fs::write(data, "1\n").await?;
+    Ok(path)
+}
+
+pub(crate) async fn generate_wifi_dump() -> Result<PathBuf> {
+    const DEVCD_BLOCK: &str = "/var/lib/steamos-log-submitter/data/devcd-block/ath11k_pci";
+    let placeholder = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(path(DEVCD_BLOCK))
+        .await;
+    if let Err(ref err) = placeholder {
+        ensure!(
+            err.kind() == ErrorKind::NotFound,
+            "Cound not create SLS helper block"
+        );
+    }
+
+    let res = generate_wifi_dump_inner().await;
+
+    if placeholder.is_ok() {
+        let _ = fs::remove_file(DEVCD_BLOCK).await;
+    }
+
+    res
 }
 
 #[cfg(test)]

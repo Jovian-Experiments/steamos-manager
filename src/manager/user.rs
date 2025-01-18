@@ -155,6 +155,10 @@ struct WifiDebug1 {
     proxy: Proxy<'static>,
 }
 
+struct WifiDebugDump1 {
+    proxy: Proxy<'static>,
+}
+
 struct WifiPowerManagement1 {
     proxy: Proxy<'static>,
 }
@@ -492,6 +496,13 @@ impl WifiDebug1 {
     }
 }
 
+#[interface(name = "com.steampowered.SteamOSManager1.WifiDebugDump1")]
+impl WifiDebugDump1 {
+    async fn generate_debug_dump(&self) -> fdo::Result<String> {
+        method!(self, "GenerateDebugDump")
+    }
+}
+
 #[interface(name = "com.steampowered.SteamOSManager1.WifiPowerManagement1")]
 impl WifiPowerManagement1 {
     #[zbus(property(emits_changed_signal = "false"))]
@@ -568,6 +579,9 @@ pub(crate) async fn create_interfaces(
     let wifi_debug = WifiDebug1 {
         proxy: proxy.clone(),
     };
+    let wifi_debug_dump = WifiDebugDump1 {
+        proxy: proxy.clone(),
+    };
     let wifi_power_management = WifiPowerManagement1 {
         proxy: proxy.clone(),
     };
@@ -578,6 +592,9 @@ pub(crate) async fn create_interfaces(
 
     if is_deck().await? {
         object_server.at(MANAGER_PATH, als).await?;
+    }
+    if variant().await? == HardwareVariant::Galileo {
+        object_server.at(MANAGER_PATH, wifi_debug_dump).await?;
     }
 
     object_server.at(MANAGER_PATH, cpu_scaling).await?;
@@ -936,6 +953,15 @@ mod test {
         let test = start(all_config()).await.expect("start");
 
         assert!(test_interface_matches::<WifiDebug1>(&test.connection)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn interface_matches_wifi_debug_dump() {
+        let test = start(all_config()).await.expect("start");
+
+        assert!(test_interface_matches::<WifiDebugDump1>(&test.connection)
             .await
             .unwrap());
     }
