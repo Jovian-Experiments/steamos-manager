@@ -44,7 +44,7 @@ const TRACE_CMD_PATH: &str = "/usr/bin/trace-cmd";
 const MIN_BUFFER_SIZE: u32 = 100;
 
 const WIFI_BACKEND_PATHS: &[&str] = &[
-    "/usr/lib/etc/NetworkManager/conf.d",
+    "/usr/lib/NetworkManager/conf.d",
     "/etc/NetworkManager/conf.d",
 ];
 

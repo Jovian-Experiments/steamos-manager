@@ -30,7 +30,9 @@ use crate::power::{
     get_gpu_clocks_range, get_gpu_performance_level, get_gpu_power_profile, get_max_charge_level,
     get_tdp_limit, get_tdp_limit_range,
 };
-use crate::wifi::{get_wifi_backend, get_wifi_power_management_state, list_wifi_interfaces};
+use crate::wifi::{
+    get_wifi_backend, get_wifi_power_management_state, list_wifi_interfaces, WifiBackend,
+};
 use crate::API_VERSION;
 
 const MANAGER_PATH: &str = "/com/steampowered/SteamOSManager1";
@@ -527,7 +529,11 @@ impl WifiDebug1 {
 
     #[zbus(property)]
     async fn set_wifi_backend(&self, backend: &str) -> zbus::Result<()> {
-        self.proxy.call("SetWifiBackend", &(backend)).await
+        let backend = match WifiBackend::try_from(backend) {
+            Ok(backend) => backend,
+            Err(e) => return Err(fdo::Error::InvalidArgs(e.to_string()).into()),
+        };
+        self.proxy.call("SetWifiBackend", &(backend as u32)).await
     }
 
     async fn capture_debug_trace_output(&self) -> fdo::Result<String> {
