@@ -25,7 +25,7 @@ use tracing::error;
 use udev::{Event, EventType};
 use zbus::Connection;
 
-use crate::process::{run_script, script_output, script_pipe_output};
+use crate::process::{run_script, script_output};
 use crate::systemd::{daemon_reload, SystemdUnit};
 use crate::udev::single_poll;
 use crate::{path, read_config_directory};
@@ -151,16 +151,13 @@ fn make_tempfile(prefix: &str) -> Result<(fs::File, PathBuf)> {
 }
 
 pub async fn extract_wifi_trace() -> Result<PathBuf> {
-    let (mut output, path) = make_tempfile("wifi-trace-")?;
-    let mut pipe = script_pipe_output("trace-cmd", &["extract"]).await?;
-    let mut buf = [0; 4096];
-    loop {
-        let read = pipe.read(&mut buf).await?;
-        if read == 0 {
-            break Ok(path);
-        }
-        output.write_all(&buf[..read]).await?;
-    }
+    let (_, path) = make_tempfile("wifi-trace-")?;
+    run_script(
+        "trace-cmd",
+        &[OsStr::new("extract"), OsStr::new("-o"), path.as_os_str()],
+    )
+    .await?;
+    Ok(path)
 }
 
 pub(crate) async fn set_wifi_debug_mode(
@@ -568,8 +565,11 @@ mod test {
     async fn trace_extract() {
         let h = testing::start();
 
-        fn process_output(_: &OsStr, _: &[&OsStr]) -> Result<(i32, String)> {
-            Ok((0, String::from("output")))
+        fn process_output(_: &OsStr, args: &[&OsStr]) -> Result<(i32, String)> {
+            assert_eq!(args[0], OsStr::new("extract"));
+            assert_eq!(args[1], OsStr::new("-o"));
+            std::fs::write(args[2], b"output").unwrap();
+            Ok((0, String::new()))
         }
         h.test.process_cb.set(process_output);
 

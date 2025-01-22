@@ -7,17 +7,11 @@
 
 use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
-use tokio::process::ChildStdout;
 
 #[cfg(not(test))]
 use std::process::Stdio;
 #[cfg(not(test))]
 use tokio::process::Command;
-
-#[cfg(test)]
-use nix::{fcntl::OFlag, unistd::pipe2};
-#[cfg(test)]
-use std::{fs::File, io::Write};
 
 #[cfg(not(test))]
 pub async fn script_exit_code(
@@ -78,35 +72,6 @@ pub async fn script_output(
     let args: Vec<&OsStr> = args.iter().map(std::convert::AsRef::as_ref).collect();
     let cb = test.process_cb.get();
     cb(executable.as_ref(), args.as_ref()).map(|(_, res)| res)
-}
-
-#[cfg(not(test))]
-pub async fn script_pipe_output(
-    executable: impl AsRef<OsStr>,
-    args: &[impl AsRef<OsStr>],
-) -> Result<ChildStdout> {
-    // Run given command and return the output given, as an fd instead of a String
-    let child = Command::new(executable)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()?;
-
-    child.stdout.ok_or(anyhow!("Failed to get stdout"))
-}
-
-#[cfg(test)]
-pub async fn script_pipe_output(
-    executable: impl AsRef<OsStr>,
-    args: &[impl AsRef<OsStr>],
-) -> Result<ChildStdout> {
-    let test = crate::testing::current();
-    let args: Vec<&OsStr> = args.iter().map(std::convert::AsRef::as_ref).collect();
-    let cb = test.process_cb.get();
-    let string = cb(executable.as_ref(), args.as_ref()).map(|(_, res)| res)?;
-    let (rx, tx) = pipe2(OFlag::O_CLOEXEC)?;
-    File::from(tx).write(string.as_bytes())?;
-    Ok(ChildStdout::from_std(std::process::ChildStdout::from(rx))?)
 }
 
 #[cfg(test)]
