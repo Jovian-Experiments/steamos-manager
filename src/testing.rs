@@ -112,7 +112,11 @@ pub struct TestHandle {
 impl MockDBus {
     pub async fn new() -> Result<MockDBus> {
         let mut process = Command::new("/usr/bin/dbus-daemon")
-            .args(["--nofork", "--print-address", "--config-file=data/test-dbus.conf"])
+            .args([
+                "--nofork",
+                "--print-address",
+                "--config-file=data/test-dbus.conf",
+            ])
             .stdout(Stdio::piped())
             .spawn()?;
 
