@@ -124,12 +124,14 @@ async fn restart_iwd(connection: Connection) -> Result<()> {
 }
 
 async fn stop_tracing() -> Result<()> {
-    run_script(TRACE_CMD_PATH, &["stop"]).await
+    run_script(TRACE_CMD_PATH, &["stop"]).await?;
+    Ok(fs::write(path("/sys/module/ath11k/parameters/debug_mask"), b"0\n").await?)
 }
 
 async fn start_tracing(buffer_size: u32) -> Result<()> {
     // Start tracing
     let size_str = buffer_size.to_string();
+    fs::write(path("/sys/module/ath11k/parameters/debug_mask"), b"0xffffefff\n").await?;
     run_script(
         TRACE_CMD_PATH,
         &["start", "-e", "ath11k_wmi_diag", "-b", &size_str],
