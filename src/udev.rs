@@ -6,19 +6,20 @@
  */
 
 use anyhow::{anyhow, bail, ensure, Result};
-use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
-use nix::unistd::pipe;
-use std::os::fd::{AsFd, AsRawFd, OwnedFd};
+use std::os::fd::AsFd;
 use std::path::PathBuf;
-use std::sync::mpsc::channel;
-use tokio::net::unix::pipe::Sender;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use std::time::Duration;
+use tokio::io::unix::AsyncFd;
+use tokio::io::Interest;
+use tokio::select;
+use tokio::sync::mpsc::{channel, unbounded_channel, Receiver, Sender, UnboundedSender};
+use tokio::task::{spawn, JoinHandle};
+use tokio::time::sleep;
 use tracing::debug;
 use udev::{Event, EventType, MonitorBuilder};
 use zbus::object_server::{InterfaceRef, SignalEmitter};
 use zbus::{self, interface, Connection};
 
-use crate::thread::{spawn, AsyncJoinHandle};
 use crate::Service;
 
 const PATH: &str = "/com/steampowered/SteamOSManager1";
@@ -27,8 +28,8 @@ pub(crate) struct UdevMonitor
 where
     Self: 'static + Send,
 {
-    shutdown_sender: Sender,
-    shutdown_receiver: Option<OwnedFd>,
+    shutdown_sender: Sender<()>,
+    shutdown_receiver: Option<Receiver<()>>,
     udev_object: InterfaceRef<UdevDbusObject>,
 }
 
@@ -54,12 +55,12 @@ impl Service for UdevMonitor {
             .shutdown_receiver
             .take()
             .ok_or(anyhow!("UdevMonitor cannot be run twice"))?;
-        let mut handle = spawn(move || run_udev(&ev_sender, &shutdown_receiver));
+        let mut handle = spawn(run_udev(ev_sender, shutdown_receiver));
 
         loop {
             let handle = &mut handle;
             let ev = tokio::select! {
-                r = handle => break r,
+                r = handle => break r?,
                 r = ev_receiver.recv() => r.ok_or(anyhow!("udev event pipe broke"))?,
             };
             match ev {
@@ -81,7 +82,7 @@ impl Service for UdevMonitor {
     }
 
     async fn shutdown(&mut self) -> Result<()> {
-        self.shutdown_sender.try_write(&[0u8])?;
+        let _ = self.shutdown_sender.send(()).await;
         Ok(())
     }
 }
@@ -94,10 +95,10 @@ impl UdevMonitor {
             "Could not register UdevEvents1"
         );
         let udev_object: InterfaceRef<UdevDbusObject> = object_server.interface(PATH).await?;
-        let (shutdown_receiver, shutdown_sender) = pipe()?;
+        let (shutdown_sender, shutdown_receiver) = channel(1);
         Ok(UdevMonitor {
             udev_object,
-            shutdown_sender: Sender::from_owned_fd(shutdown_sender)?,
+            shutdown_sender,
             shutdown_receiver: Some(shutdown_receiver),
         })
     }
@@ -114,40 +115,23 @@ impl UdevDbusObject {
     ) -> zbus::Result<()>;
 }
 
-fn run_udev(tx: &UnboundedSender<UdevEvent>, rx: &OwnedFd) -> Result<()> {
+async fn run_udev(tx: UnboundedSender<UdevEvent>, mut shutdown_rx: Receiver<()>) -> Result<()> {
     let usb_monitor = MonitorBuilder::new()?
         .match_subsystem_devtype("usb", "usb_interface")?
         .listen()?;
-    let fd = usb_monitor.as_fd();
+    let fd = AsyncFd::new(usb_monitor.as_fd())?;
     let mut iter = usb_monitor.iter();
-    let ev_poller = PollFd::new(fd, PollFlags::POLLIN);
-    let shutdown_poller = PollFd::new(rx.as_fd(), PollFlags::POLLIN);
-    debug!(
-        "Listening on event poller {} and shutdown poller {}",
-        ev_poller.as_fd().as_raw_fd(),
-        shutdown_poller.as_fd().as_raw_fd()
-    );
     loop {
-        let fds = &mut [ev_poller, shutdown_poller];
-        let ret = poll(fds, PollTimeout::NONE)?;
-        if ret < 0 {
-            return Err(std::io::Error::from_raw_os_error(-ret).into());
-        }
-        let [ev_poller, shutdown_poller] = fds;
-        match ev_poller.any() {
-            None => bail!("Event poller encountered unknown flags"),
-            Some(true) => {
-                let ev = iter
-                    .next()
-                    .ok_or(anyhow!("Poller said event was present, but it was not"))?;
-                process_usb_event(&ev, tx)?;
-            }
-            Some(false) => (),
-        }
-        match shutdown_poller.any() {
-            None => bail!("Shutdown poller encountered unknown flags"),
-            Some(true) => break Ok(()),
-            Some(false) => (),
+        select! {
+            guard = fd.ready(Interest::READABLE) => {
+                let mut guard = guard?;
+                for ev in iter.by_ref() {
+                    process_usb_event(&ev, &tx)?;
+                };
+                guard.clear_ready();
+            },
+            _ = shutdown_rx.recv() => break Ok(()),
+            _ = fd.ready(Interest::ERROR) => bail!("Event poller encountered unknown flags"),
         }
     }
 }
@@ -155,46 +139,34 @@ fn run_udev(tx: &UnboundedSender<UdevEvent>, rx: &OwnedFd) -> Result<()> {
 pub(crate) fn single_poll<F>(
     subsystem: &str,
     callback: F,
-    timeout: PollTimeout,
-) -> AsyncJoinHandle<Result<PathBuf>>
+    timeout: Duration,
+) -> Result<JoinHandle<Result<PathBuf>>>
 where
     F: Fn(&Event) -> bool + Send + 'static,
 {
-    let (tx, rx) = channel();
-    let subsystem = subsystem.to_string();
-    let handle = spawn(move || {
-        let monitor = MonitorBuilder::new()?
-            .match_subsystem(subsystem)?
-            .listen()?;
-        let fd = monitor.as_fd();
+    let monitor = MonitorBuilder::new()?
+        .match_subsystem(subsystem)?
+        .listen()?;
+    let handle = spawn(async move {
+        let fd = AsyncFd::new(monitor.as_fd())?;
         let mut iter = monitor.iter();
-        let ev_poller = PollFd::new(fd, PollFlags::POLLIN);
-        let _ = tx.send(());
         loop {
-            let fds = &mut [ev_poller];
-            // TODO: Subtract the time from the last loop, if relevant
-            let ret = poll(fds, timeout)?;
-            if ret < 0 {
-                return Err(std::io::Error::from_raw_os_error(-ret).into());
-            }
-            ensure!(ret == 1, "Udev poller timed out");
-            let [ev_poller] = fds;
-            match ev_poller.any() {
-                None => bail!("Udev poller encountered unknown flags"),
-                Some(true) => {
-                    let ev = iter
-                        .next()
-                        .ok_or(anyhow!("Poller said event was present, but it was not"))?;
-                    if callback(&ev) {
-                        return Ok(ev.syspath().to_path_buf());
-                    }
-                }
-                Some(false) => (),
-            }
+            select! {
+                _ = sleep(timeout) => bail!("Udev poller timed out"),
+                guard = fd.ready(Interest::READABLE) => {
+                    let mut guard = guard?;
+                    for ev in iter.by_ref() {
+                        if callback(&ev) {
+                            return Ok(ev.syspath().to_path_buf());
+                        }
+                    };
+                    guard.clear_ready();
+                },
+                _ = fd.ready(Interest::ERROR) => bail!("Udev poller encountered unknown flags"),
+            };
         }
     });
-    let _ = rx.recv();
-    handle
+    Ok(handle)
 }
 
 fn process_usb_event(ev: &Event, tx: &UnboundedSender<UdevEvent>) -> Result<()> {

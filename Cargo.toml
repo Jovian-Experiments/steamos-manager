@@ -26,7 +26,7 @@ tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tracing = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt"] }
-udev = "0.9"
+udev = { version = "^0.9.3", features = ["send", "sync"] }
 xdg = "2.5"
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 zbus_xml = "5"

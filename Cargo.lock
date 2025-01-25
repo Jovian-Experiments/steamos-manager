@@ -1042,9 +1042,9 @@ dependencies = [
 
 [[package]]
 name = "udev"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e28ba5932aebe14104df97f3c48feba2b6a398ae6b6f4ed91831e5fb059d992e"
+checksum = "af4e37e9ea4401fc841ff54b9ddfc9be1079b1e89434c1a6a865dd68980f7e9f"
 dependencies = [
  "io-lifetimes",
  "libc",

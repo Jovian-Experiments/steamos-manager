@@ -26,7 +26,6 @@ mod platform;
 mod process;
 mod sls;
 mod systemd;
-mod thread;
 mod udev;
 
 pub mod cec;

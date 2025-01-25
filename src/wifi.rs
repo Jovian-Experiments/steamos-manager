@@ -293,13 +293,13 @@ async fn generate_wifi_dump_inner() -> Result<PathBuf> {
         link.file_name() == Some(OsStr::new("ath11k_pci"))
     }
 
-    let poller = single_poll("devcoredump", cb, Duration::from_secs(5).try_into()?);
+    let poller = single_poll("devcoredump", cb, Duration::from_secs(5));
     fs::write(
         path("/sys/kernel/debug/ath11k/pci-0000:03:00.0/simulate_fw_crash"),
         "mhi-rddm\n",
     )
     .await?;
-    let devcd = poller.await?;
+    let devcd = poller?.await??;
     let data = devcd.join("data");
     let (mut output, path) = make_tempfile("wifi-dump-")?;
 
