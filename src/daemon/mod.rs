@@ -132,10 +132,16 @@ impl<C: DaemonContext> Daemon<C> {
                     Ok(Err(e)) => Err(e),
                     Err(e) => Err(e.into())
                 },
-                _ = tokio::signal::ctrl_c() => break Ok(()),
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Got SIGINT, shutting down");
+                    break Ok(());
+                }
                 e = sigterm.recv() => match e {
-                    Some(()) => Ok(()),
-                    None => Err(anyhow!("SIGTERM machine broke")),
+                    Some(()) => {
+                        info!("Got SIGTERM, shutting down");
+                        break Ok(());
+                    }
+                    None => Err(anyhow!("SIGTERM pipe broke")),
                 },
                 e = sighup.recv() => match e {
                     Some(()) => {
@@ -148,7 +154,7 @@ impl<C: DaemonContext> Daemon<C> {
                             }
                         }
                     }
-                    None => Err(anyhow!("SIGHUP machine broke")),
+                    None => Err(anyhow!("SIGHUP pipe broke")),
                 },
                 msg = self.channel.recv() => match msg {
                     Some(msg) => {
